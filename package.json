@@ -1,0 +1,37 @@
+{
+  "name": "oficina-virtual-backend",
+  "version": "1.0.0",
+  "description": "Oficina Virtual de Información Fiscal Municipal",
+  "homepage": "https://github.com/psantueno/ovif-backend#readme",
+  "bugs": {
+    "url": "https://github.com/psantueno/ovif-backend/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/psantueno/ovif-backend.git"
+  },
+  "license": "ISC",
+  "author": "Pablo Sebastian Antueno - Área de Tecnología para Gobiernos Locales - CRFM",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.1",
+    "mysql2": "^3.15.0",
+    "sequelize": "^6.37.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
