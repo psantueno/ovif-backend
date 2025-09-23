@@ -5,6 +5,7 @@ import Rol from "../models/Rol.js";
 // Librerías
 import bcrypt from "bcrypt";
 
+
 // Obtener todos los usuarios
 export const getUsuarios = async (req, res) => {
   try {
@@ -15,6 +16,7 @@ export const getUsuarios = async (req, res) => {
     res.status(500).json({ error: "Error consultando usuarios" });
   }
 };
+
 
 // Obtener un usuario por ID
 export const getUsuarioById = async (req, res) => {
@@ -101,11 +103,6 @@ export const updateUsuario = async (req, res) => {
     if (apellido) user.apellido = apellido;
     if (activo !== undefined) user.activo = activo ? 1 : 0;
 
-    if (password) {
-      const hashed = await bcrypt.hash(password, 10);
-      user.password = hashed;
-    }
-
     await user.save();
 
     return res.json({
@@ -120,7 +117,6 @@ export const updateUsuario = async (req, res) => {
 
 
 // EDIT ROL - Modificar rol del usuario
-
 export const updateUsuarioRoles = async (req, res) => {
   const { id } = req.params;
   const { roles } = req.body;
@@ -168,6 +164,27 @@ export const softDeleteUsuario = async (req, res) => {
   } catch (error) {
     console.error("❌ Error dando de baja usuario:", error);
     return res.status(500).json({ error: "Error dando de baja usuario" });
+  }
+};
+
+
+
+// DELETE - Eliminar usuario permanentemente
+export const deleteUsuario = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await Usuario.findByPk(id);
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    await user.destroy(); // 👈 elimina definitivamente de la DB
+
+    return res.json({ message: "Usuario eliminado permanentemente" });
+  } catch (error) {
+    console.error("❌ Error eliminando usuario:", error);
+    return res.status(500).json({ error: "Error eliminando usuario" });
   }
 };
 

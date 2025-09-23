@@ -3,9 +3,10 @@ import {
     getUsuarios,
     getUsuarioById,
     createUsuario,
-    setPassword,
     updateUsuario,
-    updateUsuarioRoles
+    updateUsuarioRoles,
+    softDeleteUsuario,
+    deleteUsuario
 } from "../controllers/usuarios.controller.js";
 
 const router = Router();
@@ -19,9 +20,6 @@ router.get("/:id", getUsuarioById);
 // Crear usuario (con roles)
 router.post("/", createUsuario);
 
-// Cambiar contraseña de usuario existente
-router.post("/set-password", setPassword);
-
 // Actualizar usuario
 router.put("/:id", updateUsuario);
 
@@ -33,6 +31,10 @@ router.put("/:id/roles", updateUsuarioRoles);
 
 // Soft delete
 router.delete("/:id", softDeleteUsuario);   
+
+// delete permantente
+router.delete("/:id", deleteUsuario);
+
 
 
 export default router;

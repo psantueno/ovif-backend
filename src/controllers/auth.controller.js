@@ -49,32 +49,36 @@ export const login = async (req, res) => {
 
 
 
+// ACTUALIZAR CONTRASEÑA (usuario autenticado)
+export const changePassword = async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
 
-// ACTUALIZAR | BLANQUEAR CONTRASEÑA
-export const setPassword = async (req, res) => {
-  const { usuario_id, password } = req.body;
-
-  if (!usuario_id || !password) {
-    return res.status(400).json({ error: "usuario_id y contraseña son obligatorios" });
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: "Debes enviar contraseña actual y nueva" });
   }
 
   try {
-    const user = await Usuario.findByPk(usuario_id);
+    const user = await Usuario.findByPk(req.user.sub); // ID desde el JWT
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    const hashed = await bcrypt.hash(password, 10);
+    const validPassword = await bcrypt.compare(oldPassword, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: "Contraseña actual incorrecta" });
+    }
 
-    user.password = hashed;
+    user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
 
-    return res.json({ message: `Contraseña actualizada para el usuario_id ${usuario_id}` });
+    return res.json({ message: "Contraseña actualizada correctamente" });
   } catch (error) {
-    console.error("❌ Error en setPassword:", error);
-    return res.status(500).json({ error: "Error actualizando contraseña" });
+    console.error("❌ Error cambiando contraseña:", error);
+    return res.status(500).json({ error: "Error cambiando contraseña" });
   }
 };
+
+
 
 // LOGOUT (invalida el token JWT)
 export const logout = async (req, res) => {
