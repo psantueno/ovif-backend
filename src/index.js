@@ -4,13 +4,19 @@ import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
-import { Sequelize } from "sequelize";
+
+// === DB & Models ===
+import sequelize from "./config/db.js";   // 🔹 Usar la conexión centralizada
+import "./models/index.js";               // 🔹 Importar para cargar asociaciones
 
 // === Importación de Rutas ===
 import usuariosRoutes from "./routes/usuarios.routes.js";
+import rolesRoutes from "./routes/roles.routes.js";
+import municipiosRoutes from "./routes/municipios.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import ejerciciosRoutes from "./routes/ejercicios.routes.js";
 
-// Cargar variables de entorno desde .env
+// Cargar variables de entorno
 dotenv.config();
 
 const app = express();
@@ -18,18 +24,6 @@ const app = express();
 // === Configuración básica ===
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
-
-// Conexión a la base de datos con Sequelize
-const sequelize = new Sequelize(
-  process.env.DB_NAME,   // Nombre de la base (ej: ovif_v2)
-  process.env.DB_USER,   // Usuario MySQL
-  process.env.DB_PASS,   // Password
-  {
-    host: process.env.DB_HOST || "localhost",
-    dialect: "mysql",
-    logging: false,
-  }
-);
 
 // === Middlewares ===
 app.use(helmet());
@@ -45,10 +39,12 @@ app.use(
 
 // === Rutas ===
 app.use("/api/usuarios", usuariosRoutes);
-app.use("/api/auth", authRoutes); // Ruta para autenticación (login)
+app.use("/api/roles", rolesRoutes);
+app.use("/api/municipios", municipiosRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/ejercicios", ejerciciosRoutes);
 
-
-// === Ruta de prueba (healthcheck) ===
+// === Healthcheck ===
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
@@ -56,8 +52,6 @@ app.get("/api/health", (req, res) => {
     ts: new Date().toISOString(),
   });
 });
-
-
 
 // === Arrancar servidor después de conectar a DB ===
 async function start() {

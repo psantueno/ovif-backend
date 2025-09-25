@@ -1,5 +1,11 @@
+// SEQUELIZE
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
+
+// MODELOS
+import Rol from "./Rol.js";
+import Municipio from "./Municipio.js";
+
 
 const Usuario = sequelize.define(
     "Usuario",

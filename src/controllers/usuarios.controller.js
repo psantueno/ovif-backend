@@ -1,6 +1,7 @@
 // Modelos
 import Usuario from "../models/Usuario.js";
 import Rol from "../models/Rol.js";
+import Municipio from "../models/Municipio.js";
 
 // Librerías
 import bcrypt from "bcrypt";
@@ -90,7 +91,7 @@ export const createUsuario = async (req, res) => {
 // EDIT - Actualizar usuario existente
 export const updateUsuario = async (req, res) => {
   const { id } = req.params;
-  const { email, nombre, apellido, activo, password } = req.body;
+  const { email, nombre, apellido, activo } = req.body;
 
   try {
     const user = await Usuario.findByPk(id);
@@ -145,6 +146,41 @@ export const updateUsuarioRoles = async (req, res) => {
     return res.status(500).json({ error: "Error actualizando roles" });
   }
 };
+
+
+// EDIT MUNICIPIO - Modificar municipios asociados al usuario (uno o más)
+export const updateUsuarioMunicipios = async (req, res) => {
+  const { id } = req.params;
+  const { municipios } = req.body;
+
+  if (!municipios || !Array.isArray(municipios)) {
+    return res.status(400).json({ error: "Debes enviar un arreglo de municipios" });
+  }
+
+  try {
+    const user = await Usuario.findByPk(id);
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const municipiosEncontrados = await Municipio.findAll({
+      where: { municipio_id: municipios },
+    });
+
+    await user.setMunicipios(municipiosEncontrados);
+
+    const userWithMunicipios = await Usuario.findByPk(id, { include: Municipio });
+
+    return res.json({
+      message: "Municipios actualizados correctamente",
+      user: userWithMunicipios,
+    });
+  } catch (error) {
+    console.error("❌ Error actualizando municipios:", error);
+    return res.status(500).json({ error: "Error actualizando municipios" });
+  }
+};
+
 
 
 // DELETE - Soft delete para "borrar" usuario => (activo = 0)
