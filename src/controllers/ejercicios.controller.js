@@ -45,16 +45,16 @@ export const updateEjercicio = async (req, res) => {
 
 // Borrar ejercicio
 // DELETE /api/ejercicios/:ejercicio/mes/:mes
-export const deleteEjercicio = async (req, res) => {
-  const { ejercicio, mes } = req.params;
-  try {
-    const deleted = await EjercicioMes.destroy({ where: { ejercicio, mes } });
-    if (!deleted) return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
-    res.json({ message: "Ejercicio/Mes eliminado" });
-  } catch (error) {
-    res.status(500).json({ error: "Error eliminando ejercicio" });
-  }
-};
+// export const deleteEjercicio = async (req, res) => {
+//   const { ejercicio, mes } = req.params;
+//   try {
+//     const deleted = await EjercicioMes.destroy({ where: { ejercicio, mes } });
+//     if (!deleted) return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
+//     res.json({ message: "Ejercicio/Mes eliminado" });
+//   } catch (error) {
+//     res.status(500).json({ error: "Error eliminando ejercicio" });
+//   }
+// };
 
 // Prorrogar cierre para un municipio particular
 // PUT /api/ejercicios/:ejercicio/mes/:mes/municipios/:municipioId/prorroga
@@ -154,55 +154,58 @@ export const getFechaLimite = async (req, res) => {
 export const cerrarMesMunicipio = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
   const { informe_recursos, informe_gastos, informe_personal } = req.body;
-  const fechaHoy = new Date().toISOString().split("T")[0]; // yyyy-mm-dd
+  const fechaHoy = new Date().toISOString().split("T")[0];
 
   try {
-    // 1. Obtener fecha límite efectiva (oficial o prórroga)
+    // === 1. Validar que exista el ejercicio/mes oficial
     const oficial = await EjercicioMes.findOne({ where: { ejercicio, mes } });
     if (!oficial) {
       return res.status(404).json({ error: "Ejercicio/Mes no encontrado en calendario oficial" });
     }
 
+    // === 2. Verificar si hay override de fechas para el municipio
     const override = await EjercicioMesMunicipio.findOne({
       where: { ejercicio, mes, municipio_id: municipioId },
     });
 
     const fechaLimite = override?.fecha_fin || oficial.fecha_fin;
 
-    // 2. Validar si está dentro del plazo
-    if (fechaHoy > fechaLimite.toISOString().split("T")[0]) {
+    // Validar fecha de cierre
+    if (fechaHoy > new Date(fechaLimite).toISOString().split("T")[0]) {
       return res.status(400).json({ error: "El plazo de carga ya venció, no se puede cerrar" });
     }
 
-    // 3. Crear el cierre (o rechazar si ya existe)
+    // === 3. Validar si ya existe un cierre registrado
     const existente = await EjercicioMesCerrado.findOne({
       where: { ejercicio, mes, municipio_id: municipioId },
     });
-
     if (existente) {
       return res.status(400).json({ error: "El municipio ya cerró este ejercicio/mes" });
     }
 
+    // === 4. Registrar el cierre
+    // 📌 IMPORTANTE: no validamos si hay datos en gastos, recursos o personal.
+    // Si no existen registros, simplemente el municipio queda "cerrado en blanco".
     const cierre = await EjercicioMesCerrado.create({
       ejercicio,
       mes,
       municipio_id: municipioId,
       fecha: fechaHoy,
-      informe_recursos,
-      informe_gastos,
-      informe_personal,
+      informe_recursos: informe_recursos || "",
+      informe_gastos: informe_gastos || "",
+      informe_personal: informe_personal || "",
     });
 
     return res.status(201).json({
       message: "✅ Cierre registrado correctamente",
       cierre,
     });
-
   } catch (error) {
     console.error("❌ Error en cerrarMesMunicipio:", error);
     return res.status(500).json({ error: "Error registrando cierre" });
   }
 };
+
 
 // Lista todos los municipios que completaron el cierre para un ejercicio y mes dados
 // GET /api/ejercicios/:ejercicio/mes/:mes/cierres

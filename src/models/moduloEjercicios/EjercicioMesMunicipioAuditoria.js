@@ -1,7 +1,5 @@
 import { DataTypes } from "sequelize";
-import sequelize from "../config/db.js";
-import Usuario from "./Usuario.js";
-import EjercicioMesMunicipio from "./EjercicioMesMunicipio.js";
+import sequelize from "../../config/db.js";
 
 const EjercicioMesMunicipioAuditoria = sequelize.define("EjercicioMesMunicipioAuditoria", {
   auditoria_id: {

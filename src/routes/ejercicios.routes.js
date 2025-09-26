@@ -3,7 +3,6 @@ import {
   listarEjercicios,
   crearEjercicio,
   updateEjercicio,
-  deleteEjercicio,
   prorrogarCierre,
   getFechaLimite,
   cerrarMesMunicipio,
@@ -12,28 +11,32 @@ import {
   listarEstadoMunicipios,
 } from "../controllers/ejercicios.controller.js";
 
-//Middlewares de autenticación
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
 // === CRUD de EjerciciosMes ===
-router.get("/", authenticateToken, listarEjercicios); // listar todos
-router.post("/", authenticateToken, crearEjercicio); // crear un nuevo ejercicio/mes
-router.put("/:ejercicio/mes/:mes", authenticateToken, updateEjercicio); // actualizar fechas oficiales
-router.delete("/:ejercicio/mes/:mes", authenticateToken, deleteEjercicio); // eliminar ejercicio/mes
+router.get("/", authenticateToken, listarEjercicios); 
+router.post("/", authenticateToken, crearEjercicio); 
+router.put("/:ejercicio/mes/:mes", authenticateToken, updateEjercicio); 
+// router.delete("/:ejercicio/mes/:mes", authenticateToken, deleteEjercicio); 
 
 // === Prórroga por municipio ===
 router.put("/:ejercicio/mes/:mes/municipios/:municipioId/prorroga", authenticateToken, prorrogarCierre);
-// Consultar fecha límite efectiva de un municipio
-router.get("/:ejercicio/mes/:mes/municipios/:municipioId", getFechaLimite);
-// Cerrar mes para un municipio (crear registro en ovif_ejercicios_meses_cerrados)
-router.post("/:ejercicio/mes/:mes/municipios/:municipioId/cerrar", cerrarMesMunicipio);
-// Lista de municipios que han cerrado un ejercicio/mes
-router.get("/:ejercicio/mes/:mes/cierres", listarCierres);
-// Detalles del cierre de un municipio (incluye auditoria)
-router.get("/:ejercicio/mes/:mes/municipios/:municipioId/cierre", getCierreMunicipio);
-// Lista todos los municipios de un ejercicio/mes con su estado (cumplió / fuera de plazo / sin cerrar)
-router.get("/:ejercicio/mes/:mes/estado-municipios", listarEstadoMunicipios);
+
+// === Consultar fecha límite efectiva de un municipio ===
+router.get("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, getFechaLimite);
+
+// === Cerrar mes para un municipio (registro en ovif_ejercicios_meses_cerrados) ===
+router.post("/:ejercicio/mes/:mes/municipios/:municipioId/cerrar", authenticateToken, cerrarMesMunicipio);
+
+// === Lista de municipios que han cerrado un ejercicio/mes ===
+router.get("/:ejercicio/mes/:mes/cierres", authenticateToken, listarCierres);
+
+// === Detalle de cierre de un municipio ===
+router.get("/:ejercicio/mes/:mes/municipios/:municipioId/cierre", authenticateToken, getCierreMunicipio);
+
+// === Lista de todos los municipios de un ejercicio/mes con su estado ===
+router.get("/:ejercicio/mes/:mes/estado-municipios", authenticateToken, listarEstadoMunicipios);
 
 export default router;

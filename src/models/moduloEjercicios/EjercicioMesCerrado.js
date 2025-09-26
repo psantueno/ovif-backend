@@ -4,8 +4,8 @@ efectivamente terminó de cargar todos los módulos de datos (recursos, gastos, 
 */
 
 import { DataTypes } from "sequelize";
-import sequelize from "../config/db.js";
-import Municipio from "./Municipio.js";
+import sequelize from "../../config/db.js";
+import Municipio from "../Municipio.js";
 
 const EjercicioMesCerrado = sequelize.define("EjercicioMesCerrado", {
   ejercicio: {

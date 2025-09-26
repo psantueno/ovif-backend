@@ -1,7 +1,6 @@
 import { DataTypes } from "sequelize";
-import sequelize from "../config/db.js";
-import Municipio from "./Municipio.js";
-import EjercicioMes from "./EjercicioMes.js"; // si después definís este modelo base
+import sequelize from "../../config/db.js";
+import Municipio from "../Municipio.js";
 
 const EjercicioMesMunicipio = sequelize.define("EjercicioMesMunicipio", {
   ejercicio: {

@@ -15,6 +15,7 @@ import rolesRoutes from "./routes/roles.routes.js";
 import municipiosRoutes from "./routes/municipios.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import ejerciciosRoutes from "./routes/ejercicios.routes.js";
+import gastosRoutes from "./routes/gastos.routes.js";
 
 // Cargar variables de entorno
 dotenv.config();
@@ -43,6 +44,7 @@ app.use("/api/roles", rolesRoutes);
 app.use("/api/municipios", municipiosRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/ejercicios", ejerciciosRoutes);
+app.use("/api/gastos", gastosRoutes);
 
 // === Healthcheck ===
 app.get("/api/health", (req, res) => {

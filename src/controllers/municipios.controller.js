@@ -134,21 +134,21 @@ export const updateMunicipio = async (req, res) => {
 };
 
 // Eliminar un municipio
-export const deleteMunicipio = async (req, res) => {
-  const { id } = req.params;
+// export const deleteMunicipio = async (req, res) => {
+//   const { id } = req.params;
 
-  try {
-    const municipio = await Municipio.findByPk(id);
+//   try {
+//     const municipio = await Municipio.findByPk(id);
 
-    if (!municipio) {
-      return res.status(404).json({ error: "Municipio no encontrado" });
-    }
+//     if (!municipio) {
+//       return res.status(404).json({ error: "Municipio no encontrado" });
+//     }
 
-    await municipio.destroy();
+//     await municipio.destroy();
 
-    res.json({ message: "Municipio eliminado correctamente" });
-  } catch (error) {
-    console.error("❌ Error eliminando municipio:", error);
-    res.status(500).json({ error: "Error eliminando municipio" });
-  }
-};
+//     res.json({ message: "Municipio eliminado correctamente" });
+//   } catch (error) {
+//     console.error("❌ Error eliminando municipio:", error);
+//     res.status(500).json({ error: "Error eliminando municipio" });
+//   }
+// };

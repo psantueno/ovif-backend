@@ -4,15 +4,21 @@ import {
   getMunicipioById,
   createMunicipio,
   updateMunicipio,
-  deleteMunicipio,
 } from "../controllers/municipios.controller.js";
+
+import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
-router.get("/", getMunicipios);
-router.get("/:id", getMunicipioById);
-router.post("/", createMunicipio);
-router.put("/:id", updateMunicipio);
-router.delete("/:id", deleteMunicipio);
+// Kista todos los municipios
+router.get("/", authenticateToken, getMunicipios);
+// Buscar municipio por ID
+router.get("/:id", authenticateToken, getMunicipioById);
+// Crear municipio 
+router.post("/", authenticateToken, createMunicipio);
+// actualizar municipio
+router.put("/:id", authenticateToken, updateMunicipio);
+// eliminar municipio
+// router.delete("/:id", authenticateToken, deleteMunicipio);
 
 export default router;

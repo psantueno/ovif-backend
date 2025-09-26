@@ -104,6 +104,15 @@ export const deleteRol = async (req, res) => {
       return res.status(404).json({ error: "Rol no encontrado" });
     }
 
+    // Verificar si está asignado a algún usuario
+    const asignado = await UsuarioRol.findOne({ where: { rol_id: id } });
+
+    if (asignado) {
+      return res.status(400).json({
+        error: "El rol no puede eliminarse porque está asignado a uno o más usuarios",
+      });
+    }
+
     await rol.destroy();
 
     res.json({ message: "Rol eliminado correctamente" });
@@ -112,3 +121,4 @@ export const deleteRol = async (req, res) => {
     res.status(500).json({ error: "Error eliminando rol" });
   }
 };
+
