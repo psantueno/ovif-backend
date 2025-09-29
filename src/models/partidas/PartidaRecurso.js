@@ -6,12 +6,15 @@ Cada recurso debe clasificarse en una partida presupuestaria
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/db.js";
 
-const RecursoEconomico = sequelize.define("RecursoEconomico", {
-  cod_partida_recurso: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true },
-  cod_economico: { type: DataTypes.INTEGER, allowNull: false, primaryKey: true },
+const PartidaRecurso = sequelize.define("PartidaRecurso", {
+  partidas_recursos_codigo: { type: DataTypes.INTEGER, primaryKey: true },
+  partidas_recursos_descripcion: { type: DataTypes.TEXT, allowNull: false },
+  partidas_recursos_padre: { type: DataTypes.INTEGER, allowNull: false },
+  partidas_recursos_sl: { type: DataTypes.BOOLEAN, allowNull: false },
+  partidas_recursos_carga: { type: DataTypes.BOOLEAN, allowNull: false }
 }, {
-  tableName: "ovif_recursos_economico",
-  timestamps: false,
+  tableName: "ovif_partidas_recursos",
+  timestamps: false
 });
 
-export default RecursoEconomico;
+export default PartidaRecurso;

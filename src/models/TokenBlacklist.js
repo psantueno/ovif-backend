@@ -31,7 +31,9 @@ const TokenBlacklist = sequelize.define("TokenBlacklist", {
   },
 }, {
   tableName: "ovif_tokens_blacklist",
-  timestamps: false,
+  timestamps: true,
+  createdAt: "fecha_creacion",
+  updatedAt: false,
 });
 
 export default TokenBlacklist;

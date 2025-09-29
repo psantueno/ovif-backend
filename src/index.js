@@ -6,8 +6,8 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 
 // === DB & Models ===
-import sequelize from "./config/db.js";   // 🔹 Usar la conexión centralizada
-import "./models/index.js";               // 🔹 Importar para cargar asociaciones
+import sequelize from "./config/db.js";  
+import "./models/index.js";              
 
 // === Importación de Rutas ===
 import usuariosRoutes from "./routes/usuarios.routes.js";
@@ -16,6 +16,12 @@ import municipiosRoutes from "./routes/municipios.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import ejerciciosRoutes from "./routes/ejercicios.routes.js";
 import gastosRoutes from "./routes/gastos.routes.js";
+import cronRoutes from "./routes/cron.routes.js";
+import recursoRoutes from "./routes/recurso.routes.js";
+
+// === Importación de CRON cierre automático del ejercicio/mes ===
+import "./cron/cierreAutomatico.js";
+
 
 // Cargar variables de entorno
 dotenv.config();
@@ -45,6 +51,8 @@ app.use("/api/municipios", municipiosRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/ejercicios", ejerciciosRoutes);
 app.use("/api/gastos", gastosRoutes);
+app.use("/api/cron-logs", cronRoutes);
+app.use("/api/recursos", recursoRoutes);
 
 // === Healthcheck ===
 app.get("/api/health", (req, res) => {

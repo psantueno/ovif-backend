@@ -5,7 +5,6 @@ efectivamente terminó de cargar todos los módulos de datos (recursos, gastos, 
 
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/db.js";
-import Municipio from "../Municipio.js";
 
 const EjercicioMesCerrado = sequelize.define("EjercicioMesCerrado", {
   ejercicio: {
@@ -24,7 +23,7 @@ const EjercicioMesCerrado = sequelize.define("EjercicioMesCerrado", {
     allowNull: false,
   },
   fecha: {
-    type: DataTypes.STRING, // en tu SQL está como varchar(255)
+    type: DataTypes.STRING, // en db anterior está como varchar(255)
     allowNull: false,
   },
   informe_recursos: {
@@ -43,8 +42,5 @@ const EjercicioMesCerrado = sequelize.define("EjercicioMesCerrado", {
   tableName: "ovif_ejercicios_meses_cerrados",
   timestamps: false,
 });
-
-// Relación con municipios
-EjercicioMesCerrado.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
 export default EjercicioMesCerrado;

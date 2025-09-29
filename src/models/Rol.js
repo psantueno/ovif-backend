@@ -2,9 +2,6 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
-// MODELOS
-import Usuario from "./Usuario.js";
-
 const Rol = sequelize.define("Rol", {
     rol_id: {
         type: DataTypes.INTEGER,
@@ -26,7 +23,9 @@ const Rol = sequelize.define("Rol", {
     },
 }, {
     tableName: "ovif_roles",
-    timestamps: false,
+    timestamps: true, // Habilitar la gestión automática de timestamps
+    createdAt: "fecha_creacion", // Usar 'fecha_creacion' como el campo para la fecha de creación
+    updatedAt: "fecha_actualizacion", // Usar 'fecha_actualizacion' como el campo para la fecha de actualización
 });
 
 export default Rol;

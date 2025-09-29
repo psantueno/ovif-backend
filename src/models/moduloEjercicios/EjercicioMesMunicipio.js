@@ -1,6 +1,5 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/db.js";
-import Municipio from "../Municipio.js";
 
 const EjercicioMesMunicipio = sequelize.define("EjercicioMesMunicipio", {
   ejercicio: {
@@ -29,11 +28,6 @@ const EjercicioMesMunicipio = sequelize.define("EjercicioMesMunicipio", {
 }, {
   tableName: "ovif_ejercicio_mes_municipio",
   timestamps: false,
-});
-
-// 🔹 Relaciones
-EjercicioMesMunicipio.belongsTo(Municipio, {
-  foreignKey: "municipio_id",
 });
 
 export default EjercicioMesMunicipio;

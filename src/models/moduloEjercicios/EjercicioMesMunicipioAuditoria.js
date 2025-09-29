@@ -41,7 +41,9 @@ const EjercicioMesMunicipioAuditoria = sequelize.define("EjercicioMesMunicipioAu
   },
 }, {
   tableName: "ovif_ejercicio_mes_municipio_auditoria",
-  timestamps: false,
+  timestamps: true,
+  createdAt: "fecha_cambio",
+  updatedAt: false,
 });
 
 export default EjercicioMesMunicipioAuditoria;

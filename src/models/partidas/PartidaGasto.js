@@ -7,8 +7,10 @@ import { DataTypes } from "sequelize";
 import sequelize from "../../config/db.js";
 
 const PartidaGasto = sequelize.define("PartidaGasto", {
-  cod_partida_gasto: { type: DataTypes.INTEGER, primaryKey: true, allowNull: false },
-  descripcion: { type: DataTypes.STRING(100), allowNull: false },
+  partidas_gastos_codigo: { type: DataTypes.INTEGER, primaryKey: true, allowNull: false },
+  partidas_gastos_descripcion: { type: DataTypes.TEXT, allowNull: false },
+  partidas_gastos_padre: { type: DataTypes.INTEGER, allowNull: false },
+  partidas_gastos_carga: { type: DataTypes.BOOLEAN, allowNull: false }
 }, {
   tableName: "ovif_partidas_gastos",
   timestamps: false,

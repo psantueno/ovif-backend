@@ -5,18 +5,21 @@ import PartidaEconomico from "../models/puentes/PartidaEconomico.js";
 import EconomicoGasto from "../models/clasificacionEconomica/EconomicoGasto.js";
 
 
-// === Listar todos los gastos de un municipio en un ejercicio/mes ===
+// === Listar gastos ===
 export const listarGastos = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
 
   try {
     const gastos = await Gasto.findAll({
-      where: { ejercicio, mes, municipio_id: municipioId },
+      where: {
+        gastos_ejercicio: ejercicio,
+        gastos_mes: mes,
+        municipio_id: municipioId
+      },
       include: [
         { model: Municipio, attributes: ["municipio_id", "municipio_nombre"] },
-        { model: PartidaGasto, attributes: ["cod_partida_gasto", "descripcion"] },
-      ],
-      order: [["id_gasto", "ASC"]],
+        { model: PartidaGasto, attributes: ["partidas_gastos_codigo", "partidas_gastos_descripcion"] },
+      ]
     });
 
     return res.json(gastos);
@@ -26,19 +29,18 @@ export const listarGastos = async (req, res) => {
   }
 };
 
-// === Crear un gasto ===
+// === Crear gasto ===
 export const crearGasto = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
-  const { cod_partida_gasto, monto, descripcion } = req.body;
+  const { partidas_gastos_codigo, gastos_importe_devengado } = req.body;
 
   try {
     const nuevo = await Gasto.create({
-      ejercicio,
-      mes,
+      gastos_ejercicio: ejercicio,
+      gastos_mes: mes,
       municipio_id: municipioId,
-      cod_partida_gasto,
-      monto,
-      descripcion,
+      partidas_gastos_codigo,
+      gastos_importe_devengado
     });
 
     return res.status(201).json(nuevo);
@@ -48,21 +50,24 @@ export const crearGasto = async (req, res) => {
   }
 };
 
-// === Actualizar un gasto ===
-export const updateGasto = async (req, res) => {
-  const { id } = req.params;
-  const { cod_partida_gasto, monto, descripcion } = req.body;
+// === Actualizar gasto ===
+export const actualizarGasto = async (req, res) => {
+  const { ejercicio, mes, municipioId, partida } = req.params;
+  const { gastos_importe_devengado } = req.body;
 
   try {
-    const gasto = await Gasto.findByPk(id);
-    if (!gasto) {
-      return res.status(404).json({ error: "Gasto no encontrado" });
-    }
+    const gasto = await Gasto.findOne({
+      where: {
+        gastos_ejercicio: ejercicio,
+        gastos_mes: mes,
+        municipio_id: municipioId,
+        partidas_gastos_codigo: partida
+      }
+    });
 
-    gasto.cod_partida_gasto = cod_partida_gasto ?? gasto.cod_partida_gasto;
-    gasto.monto = monto ?? gasto.monto;
-    gasto.descripcion = descripcion ?? gasto.descripcion;
+    if (!gasto) return res.status(404).json({ error: "Gasto no encontrado" });
 
+    gasto.gastos_importe_devengado = gastos_importe_devengado ?? gasto.gastos_importe_devengado;
     await gasto.save();
 
     return res.json(gasto);
@@ -72,17 +77,22 @@ export const updateGasto = async (req, res) => {
   }
 };
 
-// === Eliminar un gasto ===
-export const deleteGasto = async (req, res) => {
-  const { id } = req.params;
+// === Eliminar gasto ===
+export const eliminarGasto = async (req, res) => {
+  const { ejercicio, mes, municipioId, partida } = req.params;
 
   try {
-    const gasto = await Gasto.findByPk(id);
-    if (!gasto) {
-      return res.status(404).json({ error: "Gasto no encontrado" });
-    }
+    const deleted = await Gasto.destroy({
+      where: {
+        gastos_ejercicio: ejercicio,
+        gastos_mes: mes,
+        municipio_id: municipioId,
+        partidas_gastos_codigo: partida
+      }
+    });
 
-    await gasto.destroy();
+    if (deleted === 0) return res.status(404).json({ error: "Gasto no encontrado" });
+
     return res.json({ message: "Gasto eliminado correctamente" });
   } catch (error) {
     console.error("❌ Error eliminando gasto:", error);
@@ -96,13 +106,22 @@ export const reportePorPartida = async (req, res) => {
 
   try {
     const totales = await Gasto.findAll({
-      where: { ejercicio, mes, municipio_id: municipioId },
+      where: {
+        gastos_ejercicio: ejercicio,
+        gastos_mes: mes,
+        municipio_id: municipioId
+      },
       attributes: [
-        "cod_partida_gasto",
-        [Gasto.sequelize.fn("SUM", Gasto.sequelize.col("monto")), "total_monto"],
+        "partidas_gastos_codigo",
+        [Gasto.sequelize.fn("SUM", Gasto.sequelize.col("gastos_importe_devengado")), "total_monto"],
       ],
-      include: [{ model: PartidaGasto, attributes: ["descripcion"] }],
-      group: ["cod_partida_gasto", "PartidaGasto.cod_partida_gasto"],
+      include: [
+        {
+          model: PartidaGasto,
+          attributes: ["partidas_gastos_descripcion"]
+        }
+      ],
+      group: ["partidas_gastos_codigo", "PartidaGasto.partidas_gastos_codigo", "PartidaGasto.partidas_gastos_descripcion"],
     });
 
     return res.json(totales);
@@ -121,31 +140,41 @@ export const reportePorEconomico = async (req, res) => {
     const sequelize = Gasto.sequelize;
 
     const totales = await Gasto.findAll({
-      where: { ejercicio, mes, municipio_id: municipioId },
+      where: {
+        gastos_ejercicio: ejercicio,
+        gastos_mes: mes,
+        municipio_id: municipioId
+      },
       attributes: [
-        [sequelize.col("EconomicoGasto.cod_economico"), "cod_economico"],
-        [sequelize.col("EconomicoGasto.descripcion"), "descripcion"],
-        [sequelize.fn("SUM", sequelize.col("monto")), "total_monto"],
+        [sequelize.col("PartidaGasto->PartidaEconomico->EconomicoGasto.cod_economico"), "cod_economico"],
+        [sequelize.col("PartidaGasto->PartidaEconomico->EconomicoGasto.descripcion"), "descripcion"],
+        [sequelize.fn("SUM", sequelize.col("gastos_importe_devengado")), "total_monto"],
       ],
       include: [
         {
           model: PartidaGasto,
           attributes: [],
+          required: true, // INNER JOIN (cambiá a false si querés conservar partidas sin clasificar)
           include: [
             {
               model: PartidaEconomico,
               attributes: [],
+              required: true, // idem
               include: [
                 {
                   model: EconomicoGasto,
                   attributes: [],
+                  required: true // idem
                 },
               ],
             },
           ],
         },
       ],
-      group: ["EconomicoGasto.cod_economico", "EconomicoGasto.descripcion"],
+      group: [
+        sequelize.col("PartidaGasto->PartidaEconomico->EconomicoGasto.cod_economico"),
+        sequelize.col("PartidaGasto->PartidaEconomico->EconomicoGasto.descripcion"),
+      ],
       raw: true,
     });
 

@@ -2,8 +2,6 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
-// MODELOS
-import Usuario from "./Usuario.js";
 
 const Municipio = sequelize.define('Municipio', {
   municipio_id: {

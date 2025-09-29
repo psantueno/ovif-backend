@@ -2,16 +2,31 @@ import { DataTypes } from "sequelize";
 import sequelize from "../../config/db.js";
 
 const Gasto = sequelize.define("Gasto", {
-  id_gasto: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-  ejercicio: { type: DataTypes.INTEGER, allowNull: false },
-  mes: { type: DataTypes.INTEGER, allowNull: false },
-  municipio_id: { type: DataTypes.INTEGER, allowNull: false },
-  cod_partida_gasto: { type: DataTypes.INTEGER, allowNull: false },
-  monto: { type: DataTypes.DECIMAL(15,2), allowNull: false },
-  descripcion: { type: DataTypes.STRING(255), allowNull: true },
-}, {
+  gastos_ejercicio: {
+    type: DataTypes.INTEGER,
+    primaryKey: true
+  },
+  gastos_mes: {
+    type: DataTypes.INTEGER,
+    primaryKey: true
+  },
+  partidas_gastos_codigo: {
+    type: DataTypes.INTEGER,
+    primaryKey: true
+  },
+  municipio_id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true
+  },
+  gastos_importe_devengado: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: false
+  }},
+  {
   tableName: "ovif_gastos",
-  timestamps: false,
+  timestamps: true,
+  createdAt: "fecha_creacion",
+  updatedAt: "fecha_actualizacion"
 });
 
 export default Gasto;

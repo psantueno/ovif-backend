@@ -1,9 +1,8 @@
 /* 
-========== IMPORTANTE ========== 
+============================================== IMPORTANTE ==================================================
 En este archivo se definen las relaciones entre los modelos Usuario, Rol y Municipio utilizando Sequelize.
-================================= 
+============================================================================================================
 */
-
 import Usuario from './Usuario.js';
 import Rol from './Rol.js';
 import Municipio from './Municipio.js';
@@ -20,6 +19,10 @@ import SituacionRevista from './moduloCargaDatos/SituacionRevista.js';
 import Poblacion from './moduloCargaDatos/Poblacion.js';
 import PartidaEconomico from './puentes/PartidaEconomico.js';
 import EconomicoGasto from './clasificacionEconomica/EconomicoGasto.js';
+import EjercicioMesCerrado from './moduloEjercicios/EjercicioMesCerrado.js';
+import CronLog from './moduloEjercicios/CronLog.js';
+import RecursoEconomico from './puentes/RecursoEconomico.js';
+import EconomicoRecurso from './clasificacionEconomica/EconomicoRecurso.js';
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
@@ -54,12 +57,13 @@ EjercicioMesMunicipioAuditoria.belongsTo(Usuario, {
 });
 
 Gasto.belongsTo(Municipio, { foreignKey: "municipio_id" });
-Gasto.belongsTo(PartidaGasto, { foreignKey: "cod_partida_gasto" });
+Gasto.belongsTo(PartidaGasto, {
+  foreignKey: "partidas_gastos_codigo",
+  targetKey: "partidas_gastos_codigo"
+});
 
 Recurso.belongsTo(Municipio, { foreignKey: "municipio_id" });
-Recurso.belongsTo(PartidaRecurso, { foreignKey: "cod_partida_recurso" });
-
-Personal.belongsTo(Municipio, { foreignKey: "municipio_id" });
+Recurso.belongsTo(PartidaRecurso, { foreignKey: "partidas_recursos_codigo", targetKey: "partidas_recursos_codigo" });
 
 Archivo.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
@@ -69,12 +73,45 @@ Personal.belongsTo(SituacionRevista, { foreignKey: "id_situacion_revista" });
 Poblacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
 // PartidaGasto ↔ PartidaEconomico
-PartidaGasto.hasMany(PartidaEconomico, { foreignKey: "cod_partida_gasto" });
-PartidaEconomico.belongsTo(PartidaGasto, { foreignKey: "cod_partida_gasto" });
+PartidaGasto.hasMany(PartidaEconomico, {
+  foreignKey: "cod_partida",
+  sourceKey: "partidas_gastos_codigo"
+});
+PartidaEconomico.belongsTo(PartidaGasto, {
+  foreignKey: "cod_partida",
+  targetKey: "partidas_gastos_codigo"
+});
 
 // PartidaEconomico ↔ EconomicoGasto
-PartidaEconomico.belongsTo(EconomicoGasto, { foreignKey: "cod_economico" });
-EconomicoGasto.hasMany(PartidaEconomico, { foreignKey: "cod_economico" });
+PartidaEconomico.belongsTo(EconomicoGasto, {
+  foreignKey: "cod_economico",
+  targetKey: "cod_economico"
+});
+EconomicoGasto.hasMany(PartidaEconomico, {
+  foreignKey: "cod_economico",
+  sourceKey: "cod_economico"
+});
+
+EjercicioMesMunicipio.belongsTo(Municipio, { foreignKey: "municipio_id"});
+EjercicioMesCerrado.belongsTo(Municipio, { foreignKey: "municipio_id" });
+
+PartidaRecurso.hasOne(RecursoEconomico, {
+  foreignKey: "cod_recurso",                 // en ovif_recursos_economico
+  sourceKey: "partidas_recursos_codigo"      // en ovif_partidas_recursos
+});
+RecursoEconomico.belongsTo(PartidaRecurso, {
+  foreignKey: "cod_recurso",
+  targetKey: "partidas_recursos_codigo"
+});
+
+RecursoEconomico.belongsTo(EconomicoRecurso, {
+  foreignKey: "cod_economico",
+  targetKey: "cod_economico"
+});
+EconomicoRecurso.hasMany(RecursoEconomico, {
+  foreignKey: "cod_economico",
+  sourceKey: "cod_economico"
+});
 
 
 
@@ -94,5 +131,7 @@ export {
   SituacionRevista,
   PartidaEconomico,
   EconomicoGasto,
-  Poblacion 
+  Poblacion,
+  EjercicioMesCerrado,
+  CronLog 
 };
