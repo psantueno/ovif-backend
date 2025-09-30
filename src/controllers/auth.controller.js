@@ -5,7 +5,6 @@ import jwt from "jsonwebtoken";
 import Usuario from "../models/Usuario.js";
 import TokenBlacklist from "../models/TokenBlacklist.js";
 
-
 // LOGIN (usuario y contraseña)
 export const login = async (req, res) => {
   const { usuario, password } = req.body;
@@ -27,8 +26,9 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
 
+    // 👇 Ahora guardamos usuario_id directamente
     const payload = {
-      sub: user.usuario_id,
+      usuario_id: user.usuario_id,
       usuario: user.usuario,
     };
 
@@ -47,8 +47,6 @@ export const login = async (req, res) => {
   }
 };
 
-
-
 // ACTUALIZAR CONTRASEÑA (usuario autenticado)
 export const changePassword = async (req, res) => {
   const { oldPassword, newPassword } = req.body;
@@ -58,7 +56,8 @@ export const changePassword = async (req, res) => {
   }
 
   try {
-    const user = await Usuario.findByPk(req.user.sub); // ID desde el JWT
+    // 👇 Ahora usamos req.user.usuario_id
+    const user = await Usuario.findByPk(req.user.usuario_id);
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
@@ -78,8 +77,6 @@ export const changePassword = async (req, res) => {
   }
 };
 
-
-
 // LOGOUT (invalida el token JWT)
 export const logout = async (req, res) => {
   const authHeader = req.headers["authorization"];
@@ -95,7 +92,7 @@ export const logout = async (req, res) => {
 
     await TokenBlacklist.create({
       token,
-      usuario_id: decoded.sub,
+      usuario_id: decoded.usuario_id, // 👈 ahora consistente
       fecha_expiracion: new Date(exp),
     });
 
