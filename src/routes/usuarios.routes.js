@@ -29,7 +29,6 @@ router.put("/:id/roles", authenticateToken, updateUsuarioRoles);
 router.delete("/:id", authenticateToken, softDeleteUsuario);   
 // Delete permanente
 router.delete("/:id", authenticateToken, deleteUsuario);
-// Municipios del usuario autenticado
-router.get("/me/municipios", authenticateToken, obtenerMisMunicipios);
+
 
 export default router;
