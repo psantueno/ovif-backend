@@ -225,3 +225,27 @@ export const deleteUsuario = async (req, res) => {
 };
 
 
+// Municipios del usuario autenticado (según JWT)
+export const obtenerMisMunicipios = async (req, res) => {
+  try {
+    // Asumiendo que authenticateToken setea req.user.usuario_id
+    const usuarioId = Number(req.user?.usuario_id);
+    if (!usuarioId) return res.status(401).json({ error: "No autenticado" });
+
+    const usuario = await Usuario.findByPk(usuarioId, {
+      include: [{
+        model: Municipio,
+        attributes: ["municipio_id", "municipio_nombre"],
+        through: { attributes: [] }
+      }],
+    });
+
+    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
+    return res.json(usuario.Municipios);
+  } catch (err) {
+    console.error("❌ obtenerMisMunicipios:", err);
+    return res.status(500).json({ error: "Error obteniendo municipios" });
+  }
+};
+
+
