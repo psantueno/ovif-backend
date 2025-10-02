@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 // Modelos
 import Usuario from "../models/Usuario.js";
 import Rol from "../models/Rol.js";
@@ -5,18 +6,6 @@ import Municipio from "../models/Municipio.js";
 
 // Librerías
 import bcrypt from "bcrypt";
-
-
-// Obtener todos los usuarios
-export const getUsuarios = async (req, res) => {
-  try {
-    const usuarios = await Usuario.findAll();
-    res.json(usuarios);
-  } catch (err) {
-    console.error("❌ Error consultando usuarios:", err);
-    res.status(500).json({ error: "Error consultando usuarios" });
-  }
-};
 
 
 // Obtener un usuario por ID
@@ -249,3 +238,75 @@ export const obtenerMisMunicipios = async (req, res) => {
 };
 
 
+// GET /api/usuarios?pagina=1&limite=10&nombre=...&apellido=...&rol=1&municipio=5&activo=true
+export const getUsuarios = async (req, res) => {
+  try {
+    let { pagina = 1, limite = 10, search, rol, municipio, activo } = req.query;
+    pagina = parseInt(pagina);
+    limite = parseInt(limite);
+
+    // WHERE dinámico
+    const where = {};
+
+    // 🔎 búsqueda global (usuario, nombre, apellido, email)
+    if (search) {
+      where[Op.or] = [
+        { usuario: { [Op.like]: `%${search}%` } },
+        { nombre: { [Op.like]: `%${search}%` } },
+        { apellido: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    // 🔹 activo / inactivo
+    if (activo !== undefined && activo !== "") {
+      where.activo = activo === "true";
+    }
+
+    // Includes dinámicos
+    const include = [];
+
+    // 🔹 Rol
+    if (rol) {
+      include.push({
+        model: Rol,
+        through: { attributes: [] },
+        where: { rol_id: rol },
+        required: true,
+      });
+    } else {
+      include.push({ model: Rol, through: { attributes: [] } });
+    }
+
+    // 🔹 Municipio
+    if (municipio) {
+      include.push({
+        model: Municipio,
+        through: { attributes: [] },
+        where: { municipio_id: municipio },
+        required: true,
+      });
+    } else {
+      include.push({ model: Municipio, through: { attributes: [] } });
+    }
+
+    // Consulta con Sequelize
+    const { count, rows } = await Usuario.findAndCountAll({
+      where,
+      include,
+      offset: (pagina - 1) * limite,
+      limit: limite,
+      order: [["apellido", "ASC"]],
+    });
+
+    return res.json({
+      total: count,
+      pagina,
+      limite,
+      data: rows,
+    });
+  } catch (error) {
+    console.error("❌ Error en getUsuarios:", error);
+    return res.status(500).json({ error: "Error listando usuarios" });
+  }
+};

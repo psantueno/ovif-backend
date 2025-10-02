@@ -12,6 +12,22 @@ export const getRoles = async (req, res) => {
   }
 };
 
+
+// 📌 Endpoint liviano para selects
+// GET /api/roles/select
+export const getRolesSelect = async (req, res) => {
+  try {
+    const roles = await Rol.findAll({
+      attributes: ["rol_id", "nombre"],
+      order: [["nombre", "ASC"]],
+    });
+    res.json(roles);
+  } catch (error) {
+    console.error("❌ Error consultando roles:", error);
+    res.status(500).json({ error: "Error consultando roles" });
+  }
+};
+
 // Obtener un rol por ID
 export const getRolById = async (req, res) => {
   const { id } = req.params;

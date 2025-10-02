@@ -12,6 +12,22 @@ export const getMunicipios = async (req, res) => {
   }
 };
 
+
+// 📌 Endpoint liviano para selects
+// GET /api/municipios/select
+export const getMunicipiosSelect = async (req, res) => {
+  try {
+    const municipios = await Municipio.findAll({
+      attributes: ["municipio_id", "municipio_nombre"],
+      order: [["municipio_nombre", "ASC"]],
+    });
+    res.json(municipios);
+  } catch (error) {
+    console.error("❌ Error consultando municipios:", error);
+    res.status(500).json({ error: "Error consultando municipios" });
+  }
+};
+
 // Obtener un municipio por ID
 export const getMunicipioById = async (req, res) => {
   const { id } = req.params;

@@ -4,14 +4,17 @@ import {
   getMunicipioById,
   createMunicipio,
   updateMunicipio,
+  getMunicipiosSelect,
 } from "../controllers/municipios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
-// Kista todos los municipios
+// Lista todos los municipios
 router.get("/", authenticateToken, getMunicipios);
+// Lista municipios (id y nombre unicamente)
+router.get("/select", authenticateToken, getMunicipiosSelect); 
 // Buscar municipio por ID
 router.get("/:id", authenticateToken, getMunicipioById);
 // Crear municipio 
