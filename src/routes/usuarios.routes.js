@@ -7,7 +7,8 @@ import {
     updateUsuarioRoles,
     softDeleteUsuario,
     deleteUsuario,
-    obtenerMisMunicipios
+    obtenerMisMunicipios,
+    toggleUsuarioActivo,
 } from "../controllers/usuarios.controller.js";
 
 // Middleware de autenticación
@@ -31,6 +32,8 @@ router.delete("/:id", authenticateToken, softDeleteUsuario);
 router.delete("/:id", authenticateToken, deleteUsuario);
 // Lista los municipios asociados al usuario
 router.get("/me/municipios", authenticateToken, obtenerMisMunicipios);
+// Cambiar estado activo/inactivo
+router.patch("/:id/toggle", toggleUsuarioActivo);
 
 
 

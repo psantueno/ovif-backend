@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, literal  } from "sequelize";
 // Modelos
 import Usuario from "../models/Usuario.js";
 import Rol from "../models/Rol.js";
@@ -217,7 +217,6 @@ export const deleteUsuario = async (req, res) => {
 // Municipios del usuario autenticado (según JWT)
 export const obtenerMisMunicipios = async (req, res) => {
   try {
-    // Asumiendo que authenticateToken setea req.user.usuario_id
     const usuarioId = Number(req.user?.usuario_id);
     if (!usuarioId) return res.status(401).json({ error: "No autenticado" });
 
@@ -230,7 +229,10 @@ export const obtenerMisMunicipios = async (req, res) => {
     });
 
     if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
-    return res.json(usuario.Municipios);
+
+    // Si no tiene municipios, mando {}
+    const municipios = usuario.Municipios || [];
+    return res.json(municipios);
   } catch (err) {
     console.error("❌ obtenerMisMunicipios:", err);
     return res.status(500).json({ error: "Error obteniendo municipios" });
@@ -238,75 +240,155 @@ export const obtenerMisMunicipios = async (req, res) => {
 };
 
 
+
 // GET /api/usuarios?pagina=1&limite=10&nombre=...&apellido=...&rol=1&municipio=5&activo=true
+// controllers/usuarios.controller.js
+// controllers/usuarios.controller.js
 export const getUsuarios = async (req, res) => {
   try {
     let { pagina = 1, limite = 10, search, rol, municipio, activo } = req.query;
-    pagina = parseInt(pagina);
-    limite = parseInt(limite);
+    pagina = Math.max(parseInt(pagina) || 1, 1);
+    limite = Math.max(parseInt(limite) || 10, 1);
 
-    // WHERE dinámico
     const where = {};
-
-    // 🔎 búsqueda global (usuario, nombre, apellido, email)
     if (search) {
       where[Op.or] = [
-        { usuario: { [Op.like]: `%${search}%` } },
-        { nombre: { [Op.like]: `%${search}%` } },
+        { usuario:  { [Op.like]: `%${search}%` } },
+        { nombre:   { [Op.like]: `%${search}%` } },
         { apellido: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } },
+        { email:    { [Op.like]: `%${search}%` } },
       ];
     }
-
-    // 🔹 activo / inactivo
     if (activo !== undefined && activo !== "") {
       where.activo = activo === "true";
     }
 
-    // Includes dinámicos
-    const include = [];
-
-    // 🔹 Rol
+    // 🔹 Includes sólo para aplicar filtros (no traen datos)
+    const includeFilters = [];
     if (rol) {
-      include.push({
+      includeFilters.push({
         model: Rol,
         through: { attributes: [] },
         where: { rol_id: rol },
         required: true,
+        attributes: []
       });
-    } else {
-      include.push({ model: Rol, through: { attributes: [] } });
     }
-
-    // 🔹 Municipio
     if (municipio) {
-      include.push({
+      includeFilters.push({
         model: Municipio,
         through: { attributes: [] },
         where: { municipio_id: municipio },
         required: true,
+        attributes: []
       });
-    } else {
-      include.push({ model: Municipio, through: { attributes: [] } });
     }
 
-    // Consulta con Sequelize
-    const { count, rows } = await Usuario.findAndCountAll({
+    // 1️⃣ IDs únicos (paginación real)
+    const offset = (pagina - 1) * limite;
+    const usuariosIds = await Usuario.findAll({
+      attributes: ["usuario_id"],
       where,
-      include,
-      offset: (pagina - 1) * limite,
+      include: includeFilters,
+      group: ["Usuario.usuario_id"],
+      order: [["apellido", "ASC"], ["usuario_id", "ASC"]],
       limit: limite,
-      order: [["apellido", "ASC"]],
+      offset,
+      raw: true,
+      subQuery: false,
+    });
+    const ids = usuariosIds.map(u => u.usuario_id);
+
+    // 2️⃣ Conteo total exacto (con filtros)
+    const total = await Usuario.count({
+      where,
+      include: includeFilters,
+      distinct: true,
+      col: "usuario_id",
     });
 
+    if (ids.length === 0) {
+      return res.json({ total, pagina, limite, totalPaginas: 0, data: [] });
+    }
+
+    // 3️⃣ Usuarios básicos de la página (sin includes)
+    const usuariosBase = await Usuario.findAll({
+      where: { usuario_id: ids },
+      order: [[literal(`FIELD(Usuario.usuario_id, ${ids.join(",")})`), "ASC"]],
+      raw: true,
+      nest: true,
+    });
+
+    // 4️⃣ Cargar Roles y Municipios en consultas separadas
+    const rolesPorUsuario = await Usuario.findAll({
+      where: { usuario_id: ids },
+      include: [{ model: Rol, through: { attributes: [] } }],
+    });
+    const municipiosPorUsuario = await Usuario.findAll({
+      where: { usuario_id: ids },
+      include: [{ model: Municipio, through: { attributes: [] } }],
+    });
+
+    // 5️⃣ Armar maps de relaciones
+    const rolesMap = {};
+    rolesPorUsuario.forEach(u => {
+      rolesMap[u.usuario_id] = u.Rols?.map(r => ({
+        rol_id: r.rol_id,
+        nombre: r.nombre
+      })) || [];
+    });
+
+    const municipiosMap = {};
+    municipiosPorUsuario.forEach(u => {
+      municipiosMap[u.usuario_id] = u.Municipios?.map(m => ({
+        municipio_id: m.municipio_id,
+        municipio_nombre: m.municipio_nombre
+      })) || [];
+    });
+
+    // 6️⃣ Combinar usuarios con sus relaciones
+    const data = usuariosBase.map(u => ({
+      ...u,
+      Roles: rolesMap[u.usuario_id] || [],
+      Municipios: municipiosMap[u.usuario_id] || [],
+    }));
+
+    const totalPaginas = Math.ceil(total / limite);
+
     return res.json({
-      total: count,
+      total,
       pagina,
       limite,
-      data: rows,
+      totalPaginas,
+      data,
     });
+
   } catch (error) {
     console.error("❌ Error en getUsuarios:", error);
     return res.status(500).json({ error: "Error listando usuarios" });
+  }
+};
+
+
+// Cambiar estado activo/inactivo al user
+export const toggleUsuarioActivo = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await Usuario.findByPk(id);
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    user.activo = !user.activo;
+    await user.save();
+
+    return res.json({
+      message: `Usuario ${user.activo ? "habilitado" : "deshabilitado"} correctamente`,
+      user,
+    });
+  } catch (error) {
+    console.error("❌ Error cambiando estado de usuario:", error);
+    return res.status(500).json({ error: "Error cambiando estado de usuario" });
   }
 };
