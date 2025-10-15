@@ -23,6 +23,7 @@ import EjercicioMesCerrado from './moduloEjercicios/EjercicioMesCerrado.js';
 import CronLog from './moduloEjercicios/CronLog.js';
 import RecursoEconomico from './puentes/RecursoEconomico.js';
 import EconomicoRecurso from './clasificacionEconomica/EconomicoRecurso.js';
+import PasswordReset from './PasswordReset.js';
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
@@ -133,5 +134,5 @@ export {
   EconomicoGasto,
   Poblacion,
   EjercicioMesCerrado,
-  CronLog 
+  PasswordReset
 };

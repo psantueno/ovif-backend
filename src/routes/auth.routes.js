@@ -1,7 +1,7 @@
 import { Router } from "express";
 
 // === Controllers ===
-import { changePassword, login, logout } from "../controllers/auth.controller.js";
+import { changePassword, login, logout, forgotPassword, resetPassword  } from "../controllers/auth.controller.js";
 
 // === Middlewares ===
 import { authenticateToken } from "../middlewares/auth.js";
@@ -22,6 +22,12 @@ router.post("/logout", authenticateToken, logout);
 router.get("/profile", authenticateToken, (req, res) => {
   res.json({ message: "Perfil de usuario", user: req.user });
 });
+
+// Solicitar restablecimiento de contraseña
+router.post("/auth/forgot-password", forgotPassword);
+
+// Restablecer contraseña con token
+router.post("/auth/reset-password", resetPassword);
 
 
 export default router;

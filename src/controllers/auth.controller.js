@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { sendResetMail } from "../utils/mail.js";
 
 // === Modelos ===
 import Usuario from "../models/Usuario.js";
@@ -21,6 +22,14 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: "Usuario sin contraseña configurada" });
     }
 
+    // 🚫 verificar usuario activo
+    if (!user.activo) {
+      return res.status(403).json({
+        error: "El usuario se encuentra deshabilitado. Contacte al administrador.",
+        code: "USER_DISABLED",
+      });
+    }
+
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
       return res.status(401).json({ error: "Contraseña incorrecta" });
@@ -39,6 +48,7 @@ export const login = async (req, res) => {
       user: {
         id: user.usuario_id,
         usuario: user.usuario,
+        activo: user.activo,
       },
     });
   } catch (error) {
@@ -100,5 +110,91 @@ export const logout = async (req, res) => {
   } catch (err) {
     console.error("❌ Error en logout:", err);
     return res.status(500).json({ error: "Error cerrando sesión" });
+  }
+};
+
+
+
+// ==================================================
+//  FORGOT PASSWORD (reset link con token temporal)
+// ==================================================
+export const forgotPassword = async (req, res) => {
+  const { usuario } = req.body;
+  const neutralMsg = {
+    message: "Si existe una cuenta con ese correo, se enviará un mail con instrucciones.",
+  };
+
+  if (!email) return res.status(400).json({ error: "Email requerido" });
+
+  try {
+    const user = await Usuario.findOne({ where: { usuario } });
+    if (!user) return res.json(neutralMsg);
+
+    // Eliminar tokens viejos no usados
+    await PasswordReset.destroy({
+      where: { usuario_id: user.usuario_id, used_at: null },
+    });
+
+    // Generar token temporal
+    const tokenRaw = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(tokenRaw).digest("hex");
+    const expiresAt = new Date(Date.now() + RESET_EXP_MINUTES * 60 * 1000);
+
+    // Guardar en tabla ovif_password_resets
+    await PasswordReset.create({
+      usuario_id: user.usuario_id,
+      token_hash: tokenHash,
+      expires_at: expiresAt,
+    });
+
+    // Crear enlace al frontend
+    const resetLink = `${FRONTEND_URL}/reset-password?token=${tokenRaw}`;
+
+    // Enviar correo con Resend
+    await sendResetMail(user.email, user.nombre || user.usuario, resetLink);
+
+    return res.json(neutralMsg);
+  } catch (error) {
+    console.error("❌ Error en forgotPassword:", error);
+    return res.status(500).json({ error: "Error procesando solicitud de reseteo" });
+  }
+};
+
+
+
+// ==================================================
+//  RESET PASSWORD (desde enlace)
+// ==================================================
+export const resetPassword = async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword)
+    return res.status(400).json({ error: "Datos incompletos" });
+
+  try {
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const pr = await PasswordReset.findOne({ where: { token_hash: tokenHash } });
+
+    if (!pr)
+      return res.status(400).json({ error: "Token inválido", code: "INVALID_TOKEN" });
+    if (pr.used_at)
+      return res.status(400).json({ error: "Enlace ya utilizado", code: "TOKEN_USED" });
+    if (new Date(pr.expires_at) < new Date())
+      return res.status(400).json({ error: "El enlace expiró", code: "TOKEN_EXPIRED" });
+
+    const user = await Usuario.findByPk(pr.usuario_id);
+    if (!user)
+      return res.status(404).json({ error: "Usuario no encontrado", code: "USER_NOT_FOUND" });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    user.password = hash;
+    await user.save();
+
+    pr.used_at = new Date();
+    await pr.save();
+
+    return res.json({ message: "Contraseña actualizada correctamente" });
+  } catch (error) {
+    console.error("❌ Error en resetPassword:", error);
+    return res.status(500).json({ error: "Error restableciendo la contraseña" });
   }
 };

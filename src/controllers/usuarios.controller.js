@@ -1,8 +1,6 @@
 import { Op, literal  } from "sequelize";
 // Modelos
-import Usuario from "../models/Usuario.js";
-import Rol from "../models/Rol.js";
-import Municipio from "../models/Municipio.js";
+import { Usuario, Rol, Municipio, EjercicioMesMunicipioAuditoria } from "../models/index.js";
 
 // Librerías
 import bcrypt from "bcrypt";
@@ -194,24 +192,64 @@ export const softDeleteUsuario = async (req, res) => {
 
 
 
-// DELETE - Eliminar usuario permanentemente
+// DELETE - Eliminar usuario permanentemente (con verificación de auditorías)
 export const deleteUsuario = async (req, res) => {
   const { id } = req.params;
 
   try {
+    // 1️⃣ Verificar si el usuario existe
     const user = await Usuario.findByPk(id);
     if (!user) {
-      return res.status(404).json({ error: "Usuario no encontrado" });
+      return res.status(404).json({
+        error: "Usuario no encontrado",
+        code: "USER_NOT_FOUND",
+      });
     }
 
-    await user.destroy(); // 👈 elimina definitivamente de la DB
+    // 2️⃣ Verificar si tiene registros en auditorías
+    const auditorias = await EjercicioMesMunicipioAuditoria.count({
+      where: { usuario_id: id },
+    });
 
-    return res.json({ message: "Usuario eliminado permanentemente" });
+    if (auditorias > 0) {
+      return res.status(409).json({
+        error:
+          "No se puede eliminar el usuario debido a restricciones de integridad de la base de datos.",
+        code: "USER_HAS_AUDIT_LOGS",
+        details: {
+          auditorias_vinculadas: auditorias,
+        },
+      });
+    }
+
+    // 3️⃣ Eliminar usuario (y sus relaciones en cascada)
+    await user.destroy();
+
+    return res.json({
+      message: "Usuario eliminado permanentemente.",
+      code: "USER_DELETED",
+    });
+
   } catch (error) {
     console.error("❌ Error eliminando usuario:", error);
-    return res.status(500).json({ error: "Error eliminando usuario" });
+
+    // 4️⃣ Captura de errores por restricciones FK o errores de BD
+    if (error.name === "SequelizeForeignKeyConstraintError") {
+      return res.status(409).json({
+        error:
+          "El usuario tiene registros asociados en otras tablas y no puede eliminarse.",
+        code: "USER_HAS_DEPENDENCIES",
+      });
+    }
+
+    // 5️⃣ Error genérico
+    return res.status(500).json({
+      error: "Error eliminando usuario",
+      code: "USER_DELETE_ERROR",
+    });
   }
 };
+
 
 
 // Municipios del usuario autenticado (según JWT)
@@ -242,7 +280,6 @@ export const obtenerMisMunicipios = async (req, res) => {
 
 
 // GET /api/usuarios?pagina=1&limite=10&nombre=...&apellido=...&rol=1&municipio=5&activo=true
-// controllers/usuarios.controller.js
 // controllers/usuarios.controller.js
 export const getUsuarios = async (req, res) => {
   try {

@@ -27,7 +27,7 @@ router.put("/:id", authenticateToken, updateUsuario);
 // Editar roles del usuario
 router.put("/:id/roles", authenticateToken, updateUsuarioRoles);
 // Soft delete
-router.delete("/:id", authenticateToken, softDeleteUsuario);   
+// router.delete("/:id", authenticateToken, softDeleteUsuario);   
 // Delete permanente
 router.delete("/:id", authenticateToken, deleteUsuario);
 // Lista los municipios asociados al usuario
