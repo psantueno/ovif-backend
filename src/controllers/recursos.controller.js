@@ -1,5 +1,5 @@
 // controllers/recurso.controller.js
-import Recurso from "../models/moduloCargaDatos/Recurso.js";
+import { Recurso } from "../models/index.js";
 
 // CREATE
 export const crearRecurso = async (req, res) => {

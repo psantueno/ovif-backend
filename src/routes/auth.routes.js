@@ -24,10 +24,10 @@ router.get("/profile", authenticateToken, (req, res) => {
 });
 
 // Solicitar restablecimiento de contraseña
-router.post("/auth/forgot-password", forgotPassword);
+router.post("/forgot-password", forgotPassword);
 
 // Restablecer contraseña con token
-router.post("/auth/reset-password", resetPassword);
+router.post("/reset-password", resetPassword);
 
 
 export default router;

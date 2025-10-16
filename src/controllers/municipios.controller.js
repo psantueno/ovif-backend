@@ -1,5 +1,5 @@
 // Modelo
-import Municipio from "../models/Municipio.js";
+import { Municipio } from "../models/index.js";
 
 // Obtener todos los municipios
 export const getMunicipios = async (req, res) => {

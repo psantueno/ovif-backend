@@ -1,4 +1,4 @@
-import CronLog from "../models/moduloEjercicios/CronLog.js";
+import { CronLog } from "../models/index.js";
 
 // Listar todos los logs (paginados opcionalmente)
 export const listarCronLogs = async (req, res) => {

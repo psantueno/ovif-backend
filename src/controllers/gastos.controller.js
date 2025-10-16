@@ -1,8 +1,4 @@
-import Gasto from "../models/moduloCargaDatos/Gasto.js";
-import Municipio from "../models/Municipio.js";
-import PartidaGasto from "../models/partidas/PartidaGasto.js";
-import PartidaEconomico from "../models/puentes/PartidaEconomico.js";
-import EconomicoGasto from "../models/clasificacionEconomica/EconomicoGasto.js";
+import { Gasto, Municipio, PartidaGasto, PartidaEconomico, EconomicoGasto } from "../models/index.js";
 
 
 // === Listar gastos ===
