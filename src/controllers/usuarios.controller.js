@@ -79,6 +79,7 @@ export const createUsuario = async (req, res) => {
 export const updateUsuario = async (req, res) => {
   const { id } = req.params;
   const { email, nombre, apellido, activo } = req.body;
+  console.log("Body recibido", req.body)
 
   try {
     const user = await Usuario.findByPk(id);
@@ -135,11 +136,40 @@ export const updateUsuarioRoles = async (req, res) => {
 };
 
 
+export const getUsuarioMunicipios = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const usuario = await Usuario.findByPk(id, {
+      include: [{
+        model: Municipio,
+        attributes: ["municipio_id", "municipio_nombre"],
+        through: { attributes: [] }
+      }],
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const municipios = (usuario.Municipios || []).map((municipio) => ({
+      municipio_id: municipio.municipio_id,
+      municipio_nombre: municipio.municipio_nombre,
+    }));
+
+    return res.json({ municipios });
+  } catch (error) {
+    console.error("❌ Error obteniendo municipios del usuario:", error);
+    return res.status(500).json({ error: "Error obteniendo municipios del usuario" });
+  }
+};
+
 // EDIT MUNICIPIO - Modificar municipios asociados al usuario (uno o más)
 export const updateUsuarioMunicipios = async (req, res) => {
   const { id } = req.params;
   const { municipios } = req.body;
 
+  console.log("Body recibido", req.body)
   if (!municipios || !Array.isArray(municipios)) {
     return res.status(400).json({ error: "Debes enviar un arreglo de municipios" });
   }
@@ -150,17 +180,45 @@ export const updateUsuarioMunicipios = async (req, res) => {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    const municipiosEncontrados = await Municipio.findAll({
-      where: { municipio_id: municipios },
-    });
+    const uniqueMunicipios = [...new Set(municipios)]
+      .map((mun) => Number(mun))
+      .filter((mun) => !Number.isNaN(mun));
+
+    if (municipios.length > 0 && uniqueMunicipios.length === 0) {
+      return res.status(400).json({ error: "Debes enviar IDs válidos de municipios" });
+    }
+
+    const municipiosEncontrados = uniqueMunicipios.length > 0
+      ? await Municipio.findAll({ where: { municipio_id: uniqueMunicipios } })
+      : [];
+
+    if (uniqueMunicipios.length > 0 && municipiosEncontrados.length !== uniqueMunicipios.length) {
+      const encontrados = new Set(municipiosEncontrados.map((municipio) => municipio.municipio_id));
+      const faltantes = uniqueMunicipios.filter((munId) => !encontrados.has(munId));
+      return res.status(400).json({
+        error: "Uno o más municipios no existen",
+        faltantes,
+      });
+    }
 
     await user.setMunicipios(municipiosEncontrados);
 
-    const userWithMunicipios = await Usuario.findByPk(id, { include: Municipio });
+    await user.reload({
+      include: [{
+        model: Municipio,
+        attributes: ["municipio_id", "municipio_nombre"],
+        through: { attributes: [] }
+      }],
+    });
+
+    const municipiosAsignados = (user.Municipios || []).map((municipio) => ({
+      municipio_id: municipio.municipio_id,
+      municipio_nombre: municipio.municipio_nombre,
+    }));
 
     return res.json({
       message: "Municipios actualizados correctamente",
-      user: userWithMunicipios,
+      municipios: municipiosAsignados,
     });
   } catch (error) {
     console.error("❌ Error actualizando municipios:", error);

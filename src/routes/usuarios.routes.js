@@ -5,6 +5,8 @@ import {
     createUsuario,
     updateUsuario,
     updateUsuarioRoles,
+    getUsuarioMunicipios,
+    updateUsuarioMunicipios,
     softDeleteUsuario,
     deleteUsuario,
     obtenerMisMunicipios,
@@ -18,8 +20,14 @@ const router = Router();
 
 // Listar todos los usuarios
 router.get("/", authenticateToken, getUsuarios);
+// Lista los municipios asociados al usuario
+router.get("/me/municipios", authenticateToken, obtenerMisMunicipios);
 // Buscar por ID
 router.get("/:id", authenticateToken, getUsuarioById);
+// Municipios asignados a un usuario específico
+router.get("/:id/municipios", authenticateToken, getUsuarioMunicipios);
+// Actualizar municipios asignados a un usuario
+router.put("/:id/municipios", authenticateToken, updateUsuarioMunicipios);
 // Crear usuario (con roles)
 router.post("/", authenticateToken, createUsuario);
 // Actualizar usuario
@@ -30,8 +38,6 @@ router.put("/:id/roles", authenticateToken, updateUsuarioRoles);
 // router.delete("/:id", authenticateToken, softDeleteUsuario);   
 // Delete permanente
 router.delete("/:id", authenticateToken, deleteUsuario);
-// Lista los municipios asociados al usuario
-router.get("/me/municipios", authenticateToken, obtenerMisMunicipios);
 // Cambiar estado activo/inactivo
 router.patch("/:id/toggle", toggleUsuarioActivo);
 
