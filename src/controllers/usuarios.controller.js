@@ -1,6 +1,7 @@
 import { Op, literal  } from "sequelize";
 // Modelos
-import { Usuario, Rol, Municipio, EjercicioMesMunicipioAuditoria } from "../models/index.js";
+import { Usuario, Rol, Municipio, EjercicioMesMunicipioAuditoria, UsuarioMunicipio, UsuarioRol } from "../models/index.js";
+
 
 // Librerías
 import bcrypt from "bcrypt";
@@ -115,19 +116,50 @@ export const updateUsuarioRoles = async (req, res) => {
   }
 
   try {
+    // 🔐 Usuario autenticado (desde el middleware JWT)
+    const usuarioLogueadoId = req.user?.usuario_id;
+    if (!usuarioLogueadoId) {
+      return res.status(401).json({ error: "Usuario autenticado no identificado" });
+    }
+
     const user = await Usuario.findByPk(id);
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
+    // Validar roles
     const rolesEncontrados = await Rol.findAll({ where: { rol_id: roles } });
-    await user.setRoles(rolesEncontrados);
+    if (rolesEncontrados.length !== roles.length) {
+      const encontradosIds = rolesEncontrados.map(r => r.rol_id);
+      const faltantes = roles.filter(id => !encontradosIds.includes(id));
+      return res.status(400).json({
+        error: "Uno o más roles no existen",
+        faltantes,
+      });
+    }
 
-    const userWithRoles = await Usuario.findByPk(id, { include: Rol });
+    // 🧹 Eliminar roles previos
+    await user.setRoles([]);
+
+    // 🧾 Crear nuevas asignaciones con auditoría
+    const nuevasAsignaciones = roles.map((rol_id) => ({
+      usuario_id: id,
+      rol_id,
+      asignado_por: usuarioLogueadoId,
+    }));
+
+    // Inserta directamente en la tabla intermedia
+    await UsuarioRol.bulkCreate(nuevasAsignaciones);
+
+    // 🔁 Recargar usuario con roles actualizados
+    const userWithRoles = await Usuario.findByPk(id, {
+      include: [{ model: Rol, as: 'Roles' }],
+    });
 
     return res.json({
       message: "Roles actualizados correctamente",
       user: userWithRoles,
+      asignado_por: usuarioLogueadoId,
     });
   } catch (error) {
     console.error("❌ Error actualizando roles:", error);
@@ -135,6 +167,35 @@ export const updateUsuarioRoles = async (req, res) => {
   }
 };
 
+
+export const getUsuarioRoles = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const usuario = await Usuario.findByPk(id, {
+      include: [{
+        model: Rol,
+        as: "Roles",
+        attributes: ["rol_id", "nombre"],
+        through: { attributes: [] }
+      }],
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const roles = (usuario.Roles || []).map((rol) => ({
+      rol_id: rol.rol_id,
+      nombre: rol.nombre,
+    }));
+
+    return res.json({ roles });
+  } catch (error) {
+    console.error("❌ Error obteniendo roles del usuario:", error);
+    return res.status(500).json({ error: "Error obteniendo roles del usuario" });
+  }
+};
 
 export const getUsuarioMunicipios = async (req, res) => {
   const { id } = req.params;
@@ -169,12 +230,20 @@ export const updateUsuarioMunicipios = async (req, res) => {
   const { id } = req.params;
   const { municipios } = req.body;
 
-  console.log("Body recibido", req.body)
+  console.log("📩 Body recibido:", req.body);
+
   if (!municipios || !Array.isArray(municipios)) {
     return res.status(400).json({ error: "Debes enviar un arreglo de municipios" });
   }
 
   try {
+    // 🔐 Usuario logueado (desde el token JWT)
+    const usuarioLogueadoId = req.user?.usuario_id; // depende de tu middleware de auth
+
+    if (!usuarioLogueadoId) {
+      return res.status(401).json({ error: "No se pudo identificar el usuario autenticado" });
+    }
+
     const user = await Usuario.findByPk(id);
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
@@ -201,8 +270,20 @@ export const updateUsuarioMunicipios = async (req, res) => {
       });
     }
 
-    await user.setMunicipios(municipiosEncontrados);
+    // 🧹 Borramos asignaciones anteriores
+    await user.setMunicipios([]);
 
+    // 🧾 Creamos nuevas asignaciones incluyendo quién las hizo
+    const nuevasAsignaciones = uniqueMunicipios.map((municipio_id) => ({
+      usuario_id: id,
+      municipio_id,
+      asignado_por: usuarioLogueadoId,
+    }));
+
+    // Inserta directamente en la tabla intermedia
+    await UsuarioMunicipio.bulkCreate(nuevasAsignaciones);
+
+    // 🔁 Recargamos datos actualizados
     await user.reload({
       include: [{
         model: Municipio,
@@ -219,12 +300,14 @@ export const updateUsuarioMunicipios = async (req, res) => {
     return res.json({
       message: "Municipios actualizados correctamente",
       municipios: municipiosAsignados,
+      asignado_por: usuarioLogueadoId
     });
   } catch (error) {
     console.error("❌ Error actualizando municipios:", error);
     return res.status(500).json({ error: "Error actualizando municipios" });
   }
 };
+
 
 
 
@@ -363,6 +446,7 @@ export const getUsuarios = async (req, res) => {
     if (rol) {
       includeFilters.push({
         model: Rol,
+        as: "Roles",
         through: { attributes: [] },
         where: { rol_id: rol },
         required: true,
@@ -417,7 +501,7 @@ export const getUsuarios = async (req, res) => {
     // 4️⃣ Cargar Roles y Municipios en consultas separadas
     const rolesPorUsuario = await Usuario.findAll({
       where: { usuario_id: ids },
-      include: [{ model: Rol, through: { attributes: [] } }],
+      include: [{ model: Rol, as: "Roles", through: { attributes: [] } }],
     });
     const municipiosPorUsuario = await Usuario.findAll({
       where: { usuario_id: ids },
@@ -427,7 +511,7 @@ export const getUsuarios = async (req, res) => {
     // 5️⃣ Armar maps de relaciones
     const rolesMap = {};
     rolesPorUsuario.forEach(u => {
-      rolesMap[u.usuario_id] = u.Rols?.map(r => ({
+      rolesMap[u.usuario_id] = u.Roles?.map(r => ({
         rol_id: r.rol_id,
         nombre: r.nombre
       })) || [];

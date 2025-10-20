@@ -25,9 +25,13 @@ import RecursoEconomico from './puentes/RecursoEconomico.js';
 import EconomicoRecurso from './clasificacionEconomica/EconomicoRecurso.js';
 import PasswordReset from './PasswordReset.js';
 import TokenBlacklist from './TokenBlacklist.js';
+import UsuarioMunicipio from './UsuarioMunicipio.js';
+import UsuarioRol from './UsuarioRol.js';
+
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
+  as: 'Roles',
   through: 'ovif_usuario_rol',
   foreignKey: 'usuario_id',
   otherKey: 'rol_id'
@@ -42,6 +46,7 @@ Usuario.belongsToMany(Municipio, {
 
 // Relación muchos a muchos con Usuario
 Rol.belongsToMany(Usuario, {
+  as: 'Usuarios',
   through: 'ovif_usuario_rol',
   foreignKey: 'rol_id',
   otherKey: 'usuario_id'
@@ -137,5 +142,7 @@ export {
   EjercicioMesCerrado,
   PasswordReset,
   TokenBlacklist,
-  CronLog
+  CronLog,
+  UsuarioMunicipio,
+  UsuarioRol
 };

@@ -5,6 +5,7 @@ import {
     createUsuario,
     updateUsuario,
     updateUsuarioRoles,
+    getUsuarioRoles,
     getUsuarioMunicipios,
     updateUsuarioMunicipios,
     softDeleteUsuario,
@@ -26,6 +27,8 @@ router.get("/me/municipios", authenticateToken, obtenerMisMunicipios);
 router.get("/:id", authenticateToken, getUsuarioById);
 // Municipios asignados a un usuario específico
 router.get("/:id/municipios", authenticateToken, getUsuarioMunicipios);
+// Roles asignados a un usuario específico
+router.get("/:id/roles", authenticateToken, getUsuarioRoles);
 // Actualizar municipios asignados a un usuario
 router.put("/:id/municipios", authenticateToken, updateUsuarioMunicipios);
 // Crear usuario (con roles)
