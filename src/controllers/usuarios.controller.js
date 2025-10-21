@@ -80,7 +80,6 @@ export const createUsuario = async (req, res) => {
 export const updateUsuario = async (req, res) => {
   const { id } = req.params;
   const { email, nombre, apellido, activo } = req.body;
-  console.log("Body recibido", req.body)
 
   try {
     const user = await Usuario.findByPk(id);
@@ -229,8 +228,6 @@ export const getUsuarioMunicipios = async (req, res) => {
 export const updateUsuarioMunicipios = async (req, res) => {
   const { id } = req.params;
   const { municipios } = req.body;
-
-  console.log("📩 Body recibido:", req.body);
 
   if (!municipios || !Array.isArray(municipios)) {
     return res.status(400).json({ error: "Debes enviar un arreglo de municipios" });

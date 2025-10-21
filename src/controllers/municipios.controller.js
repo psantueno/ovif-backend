@@ -1,5 +1,12 @@
 // Modelo
-import { Municipio } from "../models/index.js";
+import { Municipio, EjercicioMes, EjercicioMesMunicipio, EjercicioMesCerrado } from "../models/index.js";
+
+const toISODate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().split("T")[0];
+};
 
 // Obtener todos los municipios
 export const getMunicipios = async (req, res) => {
@@ -9,6 +16,92 @@ export const getMunicipios = async (req, res) => {
   } catch (error) {
     console.error("❌ Error consultando municipios:", error);
     res.status(500).json({ error: "Error consultando municipios" });
+  }
+};
+
+export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
+  const municipioId = Number(req.params.id || req.params.municipioId);
+  console.log(req.params)
+  if (Number.isNaN(municipioId)) {
+    return res.status(400).json({ error: "municipioId inválido" });
+  }
+
+  try {
+    const municipio = await Municipio.findByPk(municipioId, {
+      attributes: ["municipio_id", "municipio_nombre"],
+    });
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const ejercicios = await EjercicioMes.findAll({
+      order: [
+        ["ejercicio", "ASC"],
+        ["mes", "ASC"],
+      ],
+    });
+
+    if (ejercicios.length === 0) {
+      return res.json({
+        municipio: municipio.get(),
+        ejercicios: [],
+      });
+    }
+
+    const overrides = await EjercicioMesMunicipio.findAll({
+      where: { municipio_id: municipioId },
+    });
+    const cierres = await EjercicioMesCerrado.findAll({
+      where: { municipio_id: municipioId },
+    });
+
+    const overrideMap = new Map(
+      overrides.map((o) => [`${o.ejercicio}-${o.mes}`, o])
+    );
+    const cierreMap = new Map(
+      cierres.map((c) => [`${c.ejercicio}-${c.mes}`, c])
+    );
+
+    const hoy = toISODate(new Date());
+    const disponibles = ejercicios
+      .map((em) => {
+        const key = `${em.ejercicio}-${em.mes}`;
+        const override = overrideMap.get(key);
+        const cierre = cierreMap.get(key);
+
+        const fechaInicio = override?.fecha_inicio || em.fecha_inicio;
+        const fechaFin = override?.fecha_fin || em.fecha_fin;
+        const fechaCierre = cierre?.fecha || null;
+
+        const fechaFinStr = toISODate(fechaFin);
+        const fechaCierreStr = toISODate(fechaCierre);
+
+        const vencido = fechaFinStr ? hoy > fechaFinStr : false;
+        const cerrado = Boolean(cierre);
+        const disponible = !vencido && !cerrado;
+
+        return {
+          ejercicio: em.ejercicio,
+          mes: em.mes,
+          fecha_inicio: toISODate(fechaInicio),
+          fecha_fin: fechaFinStr,
+          fecha_fin_oficial: toISODate(em.fecha_fin),
+          tiene_prorroga: Boolean(override),
+          fecha_cierre: fechaCierreStr,
+          vencido,
+          cerrado,
+          disponible,
+        };
+      })
+      .filter((item) => item.disponible);
+
+    return res.json({
+      municipio: municipio.get(),
+      ejercicios: disponibles,
+    });
+  } catch (error) {
+    console.error("❌ Error listando ejercicios disponibles:", error);
+    return res.status(500).json({ error: "Error listando ejercicios disponibles" });
   }
 };
 

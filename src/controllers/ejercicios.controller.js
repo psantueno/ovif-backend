@@ -1,5 +1,12 @@
 // Modelos
-import { EjercicioMes, EjercicioMesMunicipio, EjercicioMesMunicipioAuditoria } from "../models/index.js";
+import {
+  EjercicioMes,
+  EjercicioMesMunicipio,
+  EjercicioMesMunicipioAuditoria,
+  EjercicioMesCerrado,
+  Municipio,
+} from "../models/index.js";
+
 
 // Listar todos los ejercicios
 // GET /api/ejercicios
