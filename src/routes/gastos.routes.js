@@ -7,28 +7,33 @@ import {
   actualizarGasto,
   eliminarGasto,
 } from "../controllers/gastos.controller.js";
+import { obtenerPartidasGastos } from "../controllers/partidasGastos.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
+import { validarMunicipioAsignado } from "../middlewares/validarMunicipioAsignado.js";
 import { validarFechaLimiteDeCarga } from "../middlewares/validarFechaLimiteDeCarga.js";
 
 const router = Router();
 
+router.get("/partidas", authenticateToken, obtenerPartidasGastos);
+
 // Listar
-router.get("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, listarGastos);
+router.get("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarMunicipioAsignado, listarGastos);
 
 // Crear
-router.post("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarFechaLimiteDeCarga, crearGasto);
+router.post("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, crearGasto);
 
 // Actualizar
-router.put("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarFechaLimiteDeCarga, actualizarGasto);
+router.put("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, actualizarGasto);
 
 // Eliminar
-router.delete("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarFechaLimiteDeCarga, eliminarGasto);
+router.delete("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarGasto);
 
 // Reporte por partida
 router.get(
   "/:ejercicio/mes/:mes/municipios/:municipioId/reporte/partidas",
   authenticateToken,
+  validarMunicipioAsignado,
   reportePorPartida
 );
 
@@ -36,7 +41,9 @@ router.get(
 router.get(
   "/:ejercicio/mes/:mes/municipios/:municipioId/reporte/economico",
   authenticateToken,
+  validarMunicipioAsignado,
   reportePorEconomico
 );
 
 export default router;
+
