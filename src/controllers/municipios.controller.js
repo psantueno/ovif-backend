@@ -1,5 +1,6 @@
 // Modelo
-import { Municipio, EjercicioMes, EjercicioMesMunicipio, EjercicioMesCerrado } from "../models/index.js";
+import { Municipio, EjercicioMes, EjercicioMesMunicipio, EjercicioMesCerrado, Gasto } from "../models/index.js";
+import PartidaGasto from "../models/partidas/PartidaGasto.js";
 
 const toISODate = (value) => {
   if (!value) return null;
@@ -261,3 +262,208 @@ export const updateMunicipio = async (req, res) => {
 //     res.status(500).json({ error: "Error eliminando municipio" });
 //   }
 // };
+
+// === Partidas de gastos del municipio (con importes cargados) ===
+export const obtenerPartidasGastosMunicipio = async (req, res) => {
+  const { ejercicio, mes, municipioId } = req.params;
+
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+  const municipioNum = Number(municipioId);
+
+  if ([ejercicioNum, mesNum, municipioNum].some((value) => Number.isNaN(value))) {
+    return res.status(400).json({ error: "Ejercicio, mes y municipio deben ser numéricos" });
+  }
+
+  try {
+    const municipio = await Municipio.findByPk(municipioNum, { attributes: ["municipio_id"] });
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const [partidas, gastosGuardados] = await Promise.all([
+      PartidaGasto.findAll({
+        order: [
+          ["partidas_gastos_padre", "ASC"],
+          ["partidas_gastos_codigo", "ASC"],
+        ],
+      }),
+      Gasto.findAll({
+        where: {
+          gastos_ejercicio: ejercicioNum,
+          gastos_mes: mesNum,
+          municipio_id: municipioNum,
+        },
+      }),
+    ]);
+
+    console.log('gastos_ejercicio:', ejercicioNum, 'gastos_mes:', mesNum, 'municipio_id:', municipioNum);
+
+    const gastosMap = new Map();
+    gastosGuardados.forEach((gasto) => {
+      const importe = gasto.gastos_importe_devengado;
+      gastosMap.set(
+        gasto.partidas_gastos_codigo,
+        importe === null ? null : parseFloat(importe)
+      );
+    });
+
+    const partidasMap = new Map();
+    partidas.forEach((partida) => {
+      const codigo = partida.partidas_gastos_codigo;
+      partidasMap.set(codigo, {
+        ...partida.toJSON(),
+        partidas_gastos_padre_descripcion: null,
+        puede_cargar: Boolean(partida.partidas_gastos_carga),
+        importe_devengado: gastosMap.has(codigo) ? gastosMap.get(codigo) : null,
+        children: [],
+      });
+    });
+
+    const jerarquia = [];
+
+    partidasMap.forEach((partida) => {
+      const parentId = partida.partidas_gastos_padre;
+      const esRaiz =
+        parentId === null ||
+        parentId === undefined ||
+        parentId === 0 ||
+        parentId === partida.partidas_gastos_codigo ||
+        !partidasMap.has(parentId);
+
+      if (esRaiz) {
+        jerarquia.push(partida);
+        return;
+      }
+
+      const padre = partidasMap.get(parentId);
+      if (padre) {
+        partida.partidas_gastos_padre_descripcion = padre.partidas_gastos_descripcion;
+        padre.children.push(partida);
+      } else {
+        jerarquia.push(partida);
+      }
+    });
+
+    return res.json(jerarquia);
+  } catch (error) {
+    console.error("❌ Error obteniendo partidas de gastos del municipio:", error);
+    return res.status(500).json({ error: "Error obteniendo partidas de gastos" });
+  }
+};
+
+// === Upsert masivo de gastos por municipio ===
+export const upsertGastosMunicipio = async (req, res) => {
+  const { ejercicio, mes, municipioId } = req.params;
+  const { partidas } = req.body ?? {};
+
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+  const municipioNum = Number(municipioId);
+
+  if ([ejercicioNum, mesNum, municipioNum].some((value) => Number.isNaN(value))) {
+    return res.status(400).json({ error: "Ejercicio, mes y municipio deben ser numéricos" });
+  }
+
+  if (!Array.isArray(partidas) || partidas.length === 0) {
+    return res.status(400).json({ error: "Debe enviar un arreglo 'partidas' con al menos un elemento" });
+  }
+
+  const sequelize = Gasto.sequelize;
+  const transaction = await sequelize.transaction();
+
+  try {
+    const municipio = await Municipio.findByPk(municipioNum, { attributes: ["municipio_id"] });
+    if (!municipio) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+    let creados = 0;
+    let actualizados = 0;
+    let sinCambios = 0;
+
+    for (const item of partidas) {
+      const codigo = Number(item?.partidas_gastos_codigo);
+
+      if (Number.isNaN(codigo)) {
+        await transaction.rollback();
+        return res.status(400).json({ error: "Cada partida debe incluir 'partidas_gastos_codigo' numérico" });
+      }
+
+      const tieneImporte = Object.prototype.hasOwnProperty.call(item, "gastos_importe_devengado");
+      const importeValor = item?.gastos_importe_devengado;
+      let importeParsed;
+
+      if (tieneImporte) {
+        const normalizado = importeValor === null || importeValor === "" ? 0 : importeValor;
+        importeParsed = Number(normalizado);
+        if (Number.isNaN(importeParsed)) {
+          await transaction.rollback();
+          return res.status(400).json({ error: `El importe para la partida ${codigo} debe ser numérico` });
+        }
+      }
+
+      const where = {
+        gastos_ejercicio: ejercicioNum,
+        gastos_mes: mesNum,
+        municipio_id: municipioNum,
+        partidas_gastos_codigo: codigo,
+      };
+
+      const existente = await Gasto.findOne({ where, transaction });
+
+      if (!existente) {
+        if (!tieneImporte) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `La partida ${codigo} no existe y requiere 'gastos_importe_devengado' para crearla`,
+          });
+        }
+
+        await Gasto.create(
+          {
+            ...where,
+            gastos_importe_devengado: importeParsed,
+          },
+          { transaction }
+        );
+        creados += 1;
+        continue;
+      }
+
+      if (!tieneImporte) {
+        sinCambios += 1;
+        continue;
+      }
+
+      const importeActual = Number(existente.gastos_importe_devengado);
+      if (!Number.isNaN(importeActual) && importeActual === importeParsed) {
+        sinCambios += 1;
+        continue;
+      }
+
+      await existente.update(
+        {
+          gastos_importe_devengado: importeParsed,
+        },
+        { transaction }
+      );
+      actualizados += 1;
+    }
+
+    await transaction.commit();
+
+    return res.json({
+      message: "Gastos procesados correctamente",
+      resumen: {
+        creados,
+        actualizados,
+        sinCambios,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error("❌ Error realizando upsert de gastos del municipio:", error);
+    return res.status(500).json({ error: "Error guardando los gastos" });
+  }
+};
