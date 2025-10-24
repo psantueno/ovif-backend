@@ -1,12 +1,99 @@
 // Modelo
 import { Municipio, EjercicioMes, EjercicioMesMunicipio, EjercicioMesCerrado, Gasto } from "../models/index.js";
 import PartidaGasto from "../models/partidas/PartidaGasto.js";
+import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 
 const toISODate = (value) => {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString().split("T")[0];
+};
+
+const construirJerarquiaPartidas = async (municipioId, ejercicio, mes) => {
+  const [partidas, gastosGuardados] = await Promise.all([
+    PartidaGasto.findAll({
+      order: [
+        ["partidas_gastos_padre", "ASC"],
+        ["partidas_gastos_codigo", "ASC"],
+      ],
+    }),
+    Gasto.findAll({
+      where: {
+        gastos_ejercicio: ejercicio,
+        gastos_mes: mes,
+        municipio_id: municipioId,
+      },
+    }),
+  ]);
+
+  const gastosMap = new Map();
+  gastosGuardados.forEach((gasto) => {
+    const importe = gasto.gastos_importe_devengado;
+    gastosMap.set(
+      gasto.partidas_gastos_codigo,
+      importe === null ? null : Number(importe)
+    );
+  });
+
+  const partidasMap = new Map();
+  partidas.forEach((partida) => {
+    const codigo = partida.partidas_gastos_codigo;
+    partidasMap.set(codigo, {
+      ...partida.toJSON(),
+      partidas_gastos_padre_descripcion: null,
+      puede_cargar: Boolean(partida.partidas_gastos_carga),
+      importe_devengado: gastosMap.has(codigo) ? gastosMap.get(codigo) : null,
+      children: [],
+    });
+  });
+
+  const jerarquia = [];
+
+  partidasMap.forEach((partida) => {
+    const parentId = partida.partidas_gastos_padre;
+    const esRaiz =
+      parentId === null ||
+      parentId === undefined ||
+      parentId === 0 ||
+      parentId === partida.partidas_gastos_codigo ||
+      !partidasMap.has(parentId);
+
+    if (esRaiz) {
+      jerarquia.push(partida);
+      return;
+    }
+
+    const padre = partidasMap.get(parentId);
+    if (padre) {
+      partida.partidas_gastos_padre_descripcion = padre.partidas_gastos_descripcion;
+      padre.children.push(partida);
+    } else {
+      jerarquia.push(partida);
+    }
+  });
+
+  return { jerarquia, gastosGuardados };
+};
+
+const aplanarJerarquiaPartidas = (nodos, nivel = 0) => {
+  const resultado = [];
+
+  nodos.forEach((nodo) => {
+    resultado.push({
+      codigo: nodo.partidas_gastos_codigo,
+      descripcion: nodo.partidas_gastos_descripcion,
+      nivel,
+      puedeCargar: nodo.puede_cargar,
+      importe: nodo.importe_devengado,
+    });
+
+    if (Array.isArray(nodo.children) && nodo.children.length > 0) {
+      resultado.push(...aplanarJerarquiaPartidas(nodo.children, nivel + 1));
+    }
+  });
+
+  return resultado;
 };
 
 // Obtener todos los municipios
@@ -22,7 +109,6 @@ export const getMunicipios = async (req, res) => {
 
 export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
   const municipioId = Number(req.params.id || req.params.municipioId);
-  console.log(req.params)
   if (Number.isNaN(municipioId)) {
     return res.status(400).json({ error: "municipioId inválido" });
   }
@@ -281,69 +367,7 @@ export const obtenerPartidasGastosMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const [partidas, gastosGuardados] = await Promise.all([
-      PartidaGasto.findAll({
-        order: [
-          ["partidas_gastos_padre", "ASC"],
-          ["partidas_gastos_codigo", "ASC"],
-        ],
-      }),
-      Gasto.findAll({
-        where: {
-          gastos_ejercicio: ejercicioNum,
-          gastos_mes: mesNum,
-          municipio_id: municipioNum,
-        },
-      }),
-    ]);
-
-    console.log('gastos_ejercicio:', ejercicioNum, 'gastos_mes:', mesNum, 'municipio_id:', municipioNum);
-
-    const gastosMap = new Map();
-    gastosGuardados.forEach((gasto) => {
-      const importe = gasto.gastos_importe_devengado;
-      gastosMap.set(
-        gasto.partidas_gastos_codigo,
-        importe === null ? null : parseFloat(importe)
-      );
-    });
-
-    const partidasMap = new Map();
-    partidas.forEach((partida) => {
-      const codigo = partida.partidas_gastos_codigo;
-      partidasMap.set(codigo, {
-        ...partida.toJSON(),
-        partidas_gastos_padre_descripcion: null,
-        puede_cargar: Boolean(partida.partidas_gastos_carga),
-        importe_devengado: gastosMap.has(codigo) ? gastosMap.get(codigo) : null,
-        children: [],
-      });
-    });
-
-    const jerarquia = [];
-
-    partidasMap.forEach((partida) => {
-      const parentId = partida.partidas_gastos_padre;
-      const esRaiz =
-        parentId === null ||
-        parentId === undefined ||
-        parentId === 0 ||
-        parentId === partida.partidas_gastos_codigo ||
-        !partidasMap.has(parentId);
-
-      if (esRaiz) {
-        jerarquia.push(partida);
-        return;
-      }
-
-      const padre = partidasMap.get(parentId);
-      if (padre) {
-        partida.partidas_gastos_padre_descripcion = padre.partidas_gastos_descripcion;
-        padre.children.push(partida);
-      } else {
-        jerarquia.push(partida);
-      }
-    });
+    const { jerarquia } = await construirJerarquiaPartidas(municipioNum, ejercicioNum, mesNum);
 
     return res.json(jerarquia);
   } catch (error) {
@@ -465,5 +489,80 @@ export const upsertGastosMunicipio = async (req, res) => {
     await transaction.rollback();
     console.error("❌ Error realizando upsert de gastos del municipio:", error);
     return res.status(500).json({ error: "Error guardando los gastos" });
+  }
+};
+
+
+export const generarInformeGastosMunicipio = async (req, res) => {
+  const { municipioId, ejercicio, mes } = req.params;
+
+  const municipioNum = Number(municipioId);
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+
+  if ([municipioNum, ejercicioNum, mesNum].some((value) => Number.isNaN(value))) {
+    return res.status(400).json({ error: "Ejercicio, mes y municipio deben ser numéricos" });
+  }
+
+  try {
+    const municipio = await Municipio.findByPk(municipioNum, {
+      attributes: ["municipio_id", "municipio_nombre"],
+    });
+
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const { jerarquia, gastosGuardados } = await construirJerarquiaPartidas(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
+
+    if (!gastosGuardados || gastosGuardados.length === 0) {
+      return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
+    }
+
+    const partidasPlanas = aplanarJerarquiaPartidas(jerarquia);
+
+    const totalImporte = partidasPlanas.reduce((acumulado, partida) => {
+      if (!partida.puedeCargar) {
+        return acumulado;
+      }
+
+      if (partida.importe === null || partida.importe === undefined) {
+        return acumulado;
+      }
+
+      const importeNumerico = Number(partida.importe);
+      if (!Number.isFinite(importeNumerico)) {
+        return acumulado;
+      }
+
+      return acumulado + importeNumerico;
+    }, 0);
+
+    const buffer = await buildInformeGastos({
+      municipioNombre: municipio.municipio_nombre,
+      ejercicio: ejercicioNum,
+      mes: mesNum,
+      partidas: partidasPlanas,
+      totalImporte,
+    });
+
+    const nombreMunicipioSlug = (municipio.municipio_nombre || `Municipio_${municipioNum}`)
+      .normalize("NFD")
+      .replace(/[^0-9a-zA-Z]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase() || `municipio_${municipioNum}`;
+
+    const fileName = `InformeGastos_${nombreMunicipioSlug}_${ejercicioNum}_${mesNum}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error("❌ Error generando informe de gastos:", error);
+    return res.status(500).json({ error: "Error generando el informe de gastos" });
   }
 };

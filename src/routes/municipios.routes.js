@@ -8,6 +8,7 @@ import {
   listarEjerciciosDisponiblesPorMunicipio,
   obtenerPartidasGastosMunicipio,
   upsertGastosMunicipio,
+  generarInformeGastosMunicipio,
 } from "../controllers/municipios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
@@ -31,6 +32,13 @@ router.get(
   authenticateToken,
   validarMunicipioAsignado,
   obtenerPartidasGastosMunicipio
+);
+
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/gastos/informe",
+  authenticateToken,
+  validarMunicipioAsignado,
+  generarInformeGastosMunicipio
 );
 
 // Upsert de gastos del municipio
