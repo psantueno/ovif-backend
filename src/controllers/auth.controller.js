@@ -4,7 +4,7 @@ import { sendResetMail } from "../utils/mail.js";
 import * as crypto from "crypto";
 
 // === Modelos ===
-import {PasswordReset, Usuario, TokenBlacklist } from "../models/index.js";
+import { PasswordReset, Usuario, TokenBlacklist, Rol } from "../models/index.js";
 // ============ Variables de entorno ============
 const RESET_EXP_MINUTES = process.env.RESET_EXP_MINUTES || 60; // default 60 min
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:4200";
@@ -18,7 +18,18 @@ export const login = async (req, res) => {
   }
 
   try {
-    const user = await Usuario.findOne({ where: { usuario } });
+    const user = await Usuario.findOne({
+      where: { usuario },
+      attributes: ["usuario_id", "usuario", "password", "activo"],
+      include: [
+        {
+          model: Rol,
+          as: "Roles",
+          attributes: ["rol_id", "nombre"],
+          through: { attributes: [] },
+        },
+      ],
+    });
 
     if (!user) return res.status(401).json({ error: "Usuario no encontrado" });
     if (!user.password || user.password.trim() === "") {
@@ -46,12 +57,20 @@ export const login = async (req, res) => {
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "4h" });
 
+    const roles = Array.isArray(user.Roles)
+      ? user.Roles.map((rol) => ({
+          id: rol.rol_id,
+          nombre: rol.nombre,
+        }))
+      : [];
+
     return res.json({
       token,
       user: {
         id: user.usuario_id,
         usuario: user.usuario,
         activo: user.activo,
+        Roles: roles,
       },
     });
   } catch (error) {

@@ -1,7 +1,7 @@
 // Modelo
-import { Municipio, EjercicioMes, EjercicioMesMunicipio, EjercicioMesCerrado, Gasto } from "../models/index.js";
-import PartidaGasto from "../models/partidas/PartidaGasto.js";
+import { Municipio, EjercicioMes, EjercicioMesMunicipio, EjercicioMesCerrado, Gasto, PartidaGasto, PartidaRecurso, Recurso } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
+import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 
 const toISODate = (value) => {
   if (!value) return null;
@@ -90,6 +90,108 @@ const aplanarJerarquiaPartidas = (nodos, nivel = 0) => {
 
     if (Array.isArray(nodo.children) && nodo.children.length > 0) {
       resultado.push(...aplanarJerarquiaPartidas(nodo.children, nivel + 1));
+    }
+  });
+
+  return resultado;
+};
+
+const construirJerarquiaPartidasRecursos = async (municipioId, ejercicio, mes) => {
+  const [partidas, recursosGuardados] = await Promise.all([
+    PartidaRecurso.findAll({
+      order: [
+        ["partidas_recursos_padre", "ASC"],
+        ["partidas_recursos_codigo", "ASC"],
+      ],
+    }),
+    Recurso.findAll({
+      where: {
+        recursos_ejercicio: ejercicio,
+        recursos_mes: mes,
+        municipio_id: municipioId,
+      },
+    }),
+  ]);
+
+  const recursosMap = new Map();
+  recursosGuardados.forEach((recurso) => {
+    const importe = recurso.recursos_importe_percibido;
+    const contribuyentes = recurso.recursos_cantidad_contribuyentes;
+    const pagaron = recurso.recursos_cantidad_pagaron;
+
+    recursosMap.set(recurso.partidas_recursos_codigo, {
+      importe: importe === null ? null : Number(importe),
+      contribuyentes:
+        contribuyentes === null || contribuyentes === undefined
+          ? null
+          : Number(contribuyentes),
+      pagaron:
+        pagaron === null || pagaron === undefined ? null : Number(pagaron),
+    });
+  });
+
+  const partidasMap = new Map();
+  partidas.forEach((partida) => {
+    const codigo = partida.partidas_recursos_codigo;
+    const valoresGuardados = recursosMap.get(codigo);
+
+    partidasMap.set(codigo, {
+      ...partida.toJSON(),
+      partidas_recursos_padre_descripcion: null,
+      puede_cargar: Boolean(partida.partidas_recursos_carga),
+      es_sin_liquidacion: Boolean(partida.partidas_recursos_sl),
+      recursos_importe_percibido: valoresGuardados?.importe ?? null,
+      recursos_cantidad_contribuyentes: valoresGuardados?.contribuyentes ?? null,
+      recursos_cantidad_pagaron: valoresGuardados?.pagaron ?? null,
+      children: [],
+    });
+  });
+
+  const jerarquia = [];
+
+  partidasMap.forEach((partida) => {
+    const parentId = partida.partidas_recursos_padre;
+    const esRaiz =
+      parentId === null ||
+      parentId === undefined ||
+      parentId === 0 ||
+      parentId === partida.partidas_recursos_codigo ||
+      !partidasMap.has(parentId);
+
+    if (esRaiz) {
+      jerarquia.push(partida);
+      return;
+    }
+
+    const padre = partidasMap.get(parentId);
+    if (padre) {
+      partida.partidas_recursos_padre_descripcion = padre.partidas_recursos_descripcion;
+      padre.children.push(partida);
+    } else {
+      jerarquia.push(partida);
+    }
+  });
+
+  return { jerarquia, recursosGuardados };
+};
+
+const aplanarJerarquiaPartidasRecursos = (nodos, nivel = 0) => {
+  const resultado = [];
+
+  nodos.forEach((nodo) => {
+    resultado.push({
+      codigo: nodo.partidas_recursos_codigo,
+      descripcion: nodo.partidas_recursos_descripcion,
+      nivel,
+      puedeCargar: nodo.puede_cargar,
+      esSinLiquidacion: nodo.es_sin_liquidacion,
+      importePercibido: nodo.recursos_importe_percibido,
+      totalContribuyentes: nodo.recursos_cantidad_contribuyentes,
+      contribuyentesPagaron: nodo.recursos_cantidad_pagaron,
+    });
+
+    if (Array.isArray(nodo.children) && nodo.children.length > 0) {
+      resultado.push(...aplanarJerarquiaPartidasRecursos(nodo.children, nivel + 1));
     }
   });
 
@@ -376,6 +478,40 @@ export const obtenerPartidasGastosMunicipio = async (req, res) => {
   }
 };
 
+export const obtenerPartidasRecursosMunicipio = async (req, res) => {
+  const { ejercicio, mes, municipioId } = req.params;
+
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+  const municipioNum = Number(municipioId);
+
+  if ([ejercicioNum, mesNum, municipioNum].some((value) => Number.isNaN(value))) {
+    return res
+      .status(400)
+      .json({ error: "Ejercicio, mes y municipio deben ser numéricos" });
+  }
+
+  try {
+    const municipio = await Municipio.findByPk(municipioNum, {
+      attributes: ["municipio_id"],
+    });
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const { jerarquia } = await construirJerarquiaPartidasRecursos(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
+
+    return res.json(jerarquia);
+  } catch (error) {
+    console.error("❌ Error obteniendo partidas de recursos del municipio:", error);
+    return res.status(500).json({ error: "Error obteniendo partidas de recursos" });
+  }
+};
+
 // === Upsert masivo de gastos por municipio ===
 export const upsertGastosMunicipio = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
@@ -492,6 +628,212 @@ export const upsertGastosMunicipio = async (req, res) => {
   }
 };
 
+export const upsertRecursosMunicipio = async (req, res) => {
+  const { ejercicio, mes, municipioId } = req.params;
+  const { partidas } = req.body ?? {};
+
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+  const municipioNum = Number(municipioId);
+
+  if ([ejercicioNum, mesNum, municipioNum].some((value) => Number.isNaN(value))) {
+    return res.status(400).json({ error: "Ejercicio, mes y municipio deben ser numéricos" });
+  }
+
+  if (!Array.isArray(partidas) || partidas.length === 0) {
+    return res.status(400).json({ error: "Debe enviar un arreglo 'partidas' con al menos un elemento" });
+  }
+
+  const sequelize = Recurso.sequelize;
+  const transaction = await sequelize.transaction();
+
+  try {
+    const municipio = await Municipio.findByPk(municipioNum, { attributes: ["municipio_id"] });
+    if (!municipio) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    let creados = 0;
+    let actualizados = 0;
+    let sinCambios = 0;
+
+    const parseDecimal = (valor, codigo, campo) => {
+      const normalizado = valor === null || valor === "" ? 0 : valor;
+      const parsed = Number(normalizado);
+      if (Number.isNaN(parsed) || !Number.isFinite(parsed)) {
+        throw new Error(`El campo ${campo} para la partida ${codigo} debe ser numérico`);
+      }
+      return parsed;
+    };
+
+    const parseEntero = (valor, codigo, campo) => {
+      const normalizado = valor === null || valor === "" ? 0 : valor;
+      const parsed = Number(normalizado);
+      if (Number.isNaN(parsed) || !Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+        throw new Error(`El campo ${campo} para la partida ${codigo} debe ser un número entero`);
+      }
+      return parsed;
+    };
+
+    for (const item of partidas) {
+      const codigo = Number(item?.partidas_recursos_codigo);
+      if (Number.isNaN(codigo)) {
+        await transaction.rollback();
+        return res.status(400).json({
+          error: "Cada partida debe incluir 'partidas_recursos_codigo' numérico",
+        });
+      }
+
+      const tieneImporte = Object.prototype.hasOwnProperty.call(item, "recursos_importe_percibido");
+      const tieneContribuyentes = Object.prototype.hasOwnProperty.call(
+        item,
+        "recursos_cantidad_contribuyentes"
+      );
+      const tienePagaron = Object.prototype.hasOwnProperty.call(
+        item,
+        "recursos_cantidad_pagaron"
+      );
+
+      const where = {
+        recursos_ejercicio: ejercicioNum,
+        recursos_mes: mesNum,
+        municipio_id: municipioNum,
+        partidas_recursos_codigo: codigo,
+      };
+
+      const existente = await Recurso.findOne({ where, transaction });
+
+      if (!existente) {
+        if (!tieneImporte) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `La partida ${codigo} no existe y requiere 'recursos_importe_percibido' para crearla`,
+          });
+        }
+
+        let importeParsed;
+        let contribuyentesParsed = 0;
+        let pagaronParsed = 0;
+
+        try {
+          importeParsed = parseDecimal(item.recursos_importe_percibido, codigo, "recursos_importe_percibido");
+          if (tieneContribuyentes) {
+            contribuyentesParsed = parseEntero(
+              item.recursos_cantidad_contribuyentes,
+              codigo,
+              "recursos_cantidad_contribuyentes"
+            );
+          }
+          if (tienePagaron) {
+            pagaronParsed = parseEntero(
+              item.recursos_cantidad_pagaron,
+              codigo,
+              "recursos_cantidad_pagaron"
+            );
+          }
+        } catch (error) {
+          await transaction.rollback();
+          return res.status(400).json({ error: error.message });
+        }
+
+        await Recurso.create(
+          {
+            ...where,
+            recursos_importe_percibido: importeParsed,
+            recursos_cantidad_contribuyentes: contribuyentesParsed,
+            recursos_cantidad_pagaron: pagaronParsed,
+          },
+          { transaction }
+        );
+        creados += 1;
+        continue;
+      }
+
+      let huboCambios = false;
+
+      if (tieneImporte) {
+        let importeParsed;
+        try {
+          importeParsed = parseDecimal(item.recursos_importe_percibido, codigo, "recursos_importe_percibido");
+        } catch (error) {
+          await transaction.rollback();
+          return res.status(400).json({ error: error.message });
+        }
+
+        const importeActual = Number(existente.recursos_importe_percibido);
+        if (!Number.isNaN(importeActual) && importeActual !== importeParsed) {
+          existente.recursos_importe_percibido = importeParsed;
+          huboCambios = true;
+        }
+      }
+
+      if (tieneContribuyentes) {
+        let contribuyentesParsed;
+        try {
+          contribuyentesParsed = parseEntero(
+            item.recursos_cantidad_contribuyentes,
+            codigo,
+            "recursos_cantidad_contribuyentes"
+          );
+        } catch (error) {
+          await transaction.rollback();
+          return res.status(400).json({ error: error.message });
+        }
+
+        const contribuyentesActual = Number(existente.recursos_cantidad_contribuyentes);
+        if (!Number.isNaN(contribuyentesActual) && contribuyentesActual !== contribuyentesParsed) {
+          existente.recursos_cantidad_contribuyentes = contribuyentesParsed;
+          huboCambios = true;
+        }
+      }
+
+      if (tienePagaron) {
+        let pagaronParsed;
+        try {
+          pagaronParsed = parseEntero(
+            item.recursos_cantidad_pagaron,
+            codigo,
+            "recursos_cantidad_pagaron"
+          );
+        } catch (error) {
+          await transaction.rollback();
+          return res.status(400).json({ error: error.message });
+        }
+
+        const pagaronActual = Number(existente.recursos_cantidad_pagaron);
+        if (!Number.isNaN(pagaronActual) && pagaronActual !== pagaronParsed) {
+          existente.recursos_cantidad_pagaron = pagaronParsed;
+          huboCambios = true;
+        }
+      }
+
+      if (!huboCambios) {
+        sinCambios += 1;
+        continue;
+      }
+
+      await existente.save({ transaction });
+      actualizados += 1;
+    }
+
+    await transaction.commit();
+
+    return res.json({
+      message: "Recursos procesados correctamente",
+      resumen: {
+        creados,
+        actualizados,
+        sinCambios,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error("❌ Error realizando upsert de recursos del municipio:", error);
+    return res.status(500).json({ error: "Error guardando los recursos" });
+  }
+};
+
 
 export const generarInformeGastosMunicipio = async (req, res) => {
   const { municipioId, ejercicio, mes } = req.params;
@@ -564,5 +906,81 @@ export const generarInformeGastosMunicipio = async (req, res) => {
   } catch (error) {
     console.error("❌ Error generando informe de gastos:", error);
     return res.status(500).json({ error: "Error generando el informe de gastos" });
+  }
+};
+
+export const generarInformeRecursosMunicipio = async (req, res) => {
+  const { municipioId, ejercicio, mes } = req.params;
+
+  const municipioNum = Number(municipioId);
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+
+  if ([municipioNum, ejercicioNum, mesNum].some((value) => Number.isNaN(value))) {
+    return res
+      .status(400)
+      .json({ error: "Ejercicio, mes y municipio deben ser numéricos" });
+  }
+
+  try {
+    const municipio = await Municipio.findByPk(municipioNum, {
+      attributes: ["municipio_id", "municipio_nombre"],
+    });
+
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const { jerarquia, recursosGuardados } = await construirJerarquiaPartidasRecursos(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
+
+    if (!recursosGuardados || recursosGuardados.length === 0) {
+      return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
+    }
+
+    const partidasPlanas = aplanarJerarquiaPartidasRecursos(jerarquia);
+
+    const totalImporte = partidasPlanas.reduce((acumulado, partida) => {
+      if (!partida.puedeCargar) {
+        return acumulado;
+      }
+
+      if (partida.importePercibido === null || partida.importePercibido === undefined) {
+        return acumulado;
+      }
+
+      const importeNumerico = Number(partida.importePercibido);
+      if (!Number.isFinite(importeNumerico)) {
+        return acumulado;
+      }
+
+      return acumulado + importeNumerico;
+    }, 0);
+
+    const buffer = await buildInformeRecursos({
+      municipioNombre: municipio.municipio_nombre,
+      ejercicio: ejercicioNum,
+      mes: mesNum,
+      partidas: partidasPlanas,
+      totalImporte,
+    });
+
+    const nombreMunicipioSlug = (municipio.municipio_nombre || `Municipio_${municipioNum}`)
+      .normalize("NFD")
+      .replace(/[^0-9a-zA-Z]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .toLowerCase() || `municipio_${municipioNum}`;
+
+    const fileName = `InformeRecursos_${nombreMunicipioSlug}_${ejercicioNum}_${mesNum}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error("❌ Error generando informe de recursos:", error);
+    return res.status(500).json({ error: "Error generando el informe de recursos" });
   }
 };

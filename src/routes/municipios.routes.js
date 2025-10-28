@@ -7,8 +7,11 @@ import {
   getMunicipiosSelect,
   listarEjerciciosDisponiblesPorMunicipio,
   obtenerPartidasGastosMunicipio,
+  obtenerPartidasRecursosMunicipio,
   upsertGastosMunicipio,
+  upsertRecursosMunicipio,
   generarInformeGastosMunicipio,
+  generarInformeRecursosMunicipio,
 } from "../controllers/municipios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
@@ -41,6 +44,20 @@ router.get(
   generarInformeGastosMunicipio
 );
 
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recursos/partidas",
+  authenticateToken,
+  validarMunicipioAsignado,
+  obtenerPartidasRecursosMunicipio
+);
+
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recursos/informe",
+  authenticateToken,
+  validarMunicipioAsignado,
+  generarInformeRecursosMunicipio
+);
+
 // Upsert de gastos del municipio
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/gastos",
@@ -48,6 +65,14 @@ router.put(
   validarMunicipioAsignado,
   validarFechaLimiteDeCarga,
   upsertGastosMunicipio
+);
+
+router.put(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recursos",
+  authenticateToken,
+  validarMunicipioAsignado,
+  validarFechaLimiteDeCarga,
+  upsertRecursosMunicipio
 );
 
 // Buscar municipio por ID
