@@ -9,6 +9,7 @@ import {
   listarCierres,
   getCierreMunicipio,
   listarEstadoMunicipios,
+  deleteEjercicio,
 } from "../controllers/ejercicios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
@@ -20,6 +21,7 @@ router.get("/", authenticateToken, listarEjercicios);
 router.post("/", authenticateToken, crearEjercicio); 
 router.put("/:ejercicio/mes/:mes", authenticateToken, updateEjercicio); 
 // router.delete("/:ejercicio/mes/:mes", authenticateToken, deleteEjercicio); 
+router.delete("/:ejercicio/mes/:mes", authenticateToken, deleteEjercicio);
 
 // === Prórroga por municipio ===
 router.put("/:ejercicio/mes/:mes/municipios/:municipioId/prorroga", authenticateToken, prorrogarCierre);

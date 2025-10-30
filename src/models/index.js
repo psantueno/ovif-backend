@@ -27,6 +27,7 @@ import PasswordReset from './PasswordReset.js';
 import TokenBlacklist from './TokenBlacklist.js';
 import UsuarioMunicipio from './UsuarioMunicipio.js';
 import UsuarioRol from './UsuarioRol.js';
+import Parametro from './Parametro.js';
 
 
 // Relación muchos a muchos con Rol
@@ -144,5 +145,6 @@ export {
   TokenBlacklist,
   CronLog,
   UsuarioMunicipio,
-  UsuarioRol
+  UsuarioRol,
+  Parametro
 };

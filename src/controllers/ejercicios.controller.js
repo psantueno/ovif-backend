@@ -7,13 +7,53 @@ import {
   Municipio,
 } from "../models/index.js";
 
+const isValidISODate = (value) => {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return false;
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.toISOString().slice(0, 10) === trimmed;
+};
+
 
 // Listar todos los ejercicios
 // GET /api/ejercicios
 export const listarEjercicios = async (req, res) => {
   try {
-    const ejercicios = await EjercicioMes.findAll();
-    res.json(ejercicios);
+    const page = Number.parseInt(req.query.page, 10) || 1;
+    const limit = Number.parseInt(req.query.limit, 10) || 12;
+    const yearRaw = req.query.year;
+
+    const sanitizedPage = Number.isFinite(page) && page > 0 ? page : 1;
+    const sanitizedLimit = Number.isFinite(limit) && limit > 0 ? limit : 12;
+    const offset = (sanitizedPage - 1) * sanitizedLimit;
+
+    const where = {};
+    if (yearRaw !== undefined) {
+      const yearParsed = Number.parseInt(yearRaw, 10);
+      if (!Number.isFinite(yearParsed) || yearParsed < 0 || yearParsed > 9999) {
+        return res.status(400).json({ error: "El parámetro 'year' debe ser un número de hasta 4 dígitos." });
+      }
+      where.ejercicio = yearParsed;
+    }
+
+    const { rows, count } = await EjercicioMes.findAndCountAll({
+      where,
+      order: [
+        ["ejercicio", "DESC"],
+        ["mes", "DESC"],
+      ],
+      offset,
+      limit: sanitizedLimit,
+    });
+
+    res.json({
+      data: rows,
+      total: count,
+      page: sanitizedPage,
+      limit: sanitizedLimit,
+    });
   } catch (error) {
     res.status(500).json({ error: "Error listando ejercicios" });
   }
@@ -23,9 +63,86 @@ export const listarEjercicios = async (req, res) => {
 // Crear nuevo ejercicio
 // POST /api/ejercicios
 export const crearEjercicio = async (req, res) => {
+  const { ejercicio, mes, fecha_inicio, fecha_fin } = req.body;
+  const errores = [];
+  const usuarioId = req.user?.usuario_id;
+
+  if (!usuarioId) {
+    return res.status(401).json({ error: "Usuario autenticado requerido para registrar el ejercicio." });
+  }
+
+  let ejercicioParsed;
+  if (ejercicio === undefined || ejercicio === null || String(ejercicio).trim() === "") {
+    errores.push("El campo 'ejercicio' es obligatorio.");
+  } else {
+    const ejercicioStr = String(ejercicio).trim();
+    if (!/^\d{1,4}$/.test(ejercicioStr)) {
+      errores.push("El campo 'ejercicio' debe ser numérico y tener hasta 4 dígitos.");
+    } else {
+      ejercicioParsed = Number.parseInt(ejercicioStr, 10);
+    }
+  }
+
+  let mesParsed;
+  if (mes === undefined || mes === null || String(mes).trim() === "") {
+    errores.push("El campo 'mes' es obligatorio.");
+  } else {
+    const mesStr = String(mes).trim();
+    if (!/^\d+$/.test(mesStr)) {
+      errores.push("El campo 'mes' debe ser numérico.");
+    } else {
+      mesParsed = Number.parseInt(mesStr, 10);
+      if (mesParsed < 1 || mesParsed > 12) {
+        errores.push("El campo 'mes' debe estar entre 1 y 12.");
+      }
+    }
+  }
+
+  let fechaInicioDate;
+  if (!fecha_inicio) {
+    errores.push("El campo 'fecha_inicio' es obligatorio.");
+  } else if (!isValidISODate(fecha_inicio)) {
+    errores.push("El campo 'fecha_inicio' debe tener formato YYYY-MM-DD y ser una fecha válida.");
+  } else {
+    fechaInicioDate = new Date(fecha_inicio);
+  }
+
+  let fechaFinDate;
+  if (!fecha_fin) {
+    errores.push("El campo 'fecha_fin' es obligatorio.");
+  } else if (!isValidISODate(fecha_fin)) {
+    errores.push("El campo 'fecha_fin' debe tener formato YYYY-MM-DD y ser una fecha válida.");
+  } else {
+    fechaFinDate = new Date(fecha_fin);
+  }
+
+  if (fechaInicioDate && fechaFinDate && fechaFinDate < fechaInicioDate) {
+    errores.push("La 'fecha_fin' no puede ser anterior a 'fecha_inicio'.");
+  }
+
+  if (errores.length > 0) {
+    return res.status(400).json({
+      error: "Datos inválidos",
+      detalles: errores,
+    });
+  }
+
   try {
-    const { ejercicio, mes, fecha_inicio, fecha_fin } = req.body;
-    const nuevo = await EjercicioMes.create({ ejercicio, mes, fecha_inicio, fecha_fin });
+    const existente = await EjercicioMes.findOne({
+      where: { ejercicio: ejercicioParsed, mes: mesParsed },
+    });
+
+    if (existente) {
+      return res.status(409).json({ error: "Ya existe un ejercicio/mes con esos valores." });
+    }
+
+    const nuevo = await EjercicioMes.create({
+      ejercicio: ejercicioParsed,
+      mes: mesParsed,
+      fecha_inicio: fechaInicioDate,
+      fecha_fin: fechaFinDate,
+      creado_por: usuarioId,
+    });
     res.status(201).json(nuevo);
   } catch (error) {
     res.status(500).json({ error: "Error creando ejercicio" });
@@ -38,11 +155,18 @@ export const crearEjercicio = async (req, res) => {
 export const updateEjercicio = async (req, res) => {
   const { ejercicio, mes } = req.params;
   const { fecha_inicio, fecha_fin } = req.body;
+  const usuarioId = req.user?.usuario_id;
+
+  if (!usuarioId) {
+    return res.status(401).json({ error: "Usuario autenticado requerido para modificar el ejercicio." });
+  }
+
   try {
     const em = await EjercicioMes.findOne({ where: { ejercicio, mes } });
     if (!em) return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
     em.fecha_inicio = fecha_inicio;
     em.fecha_fin = fecha_fin;
+    em.modificado_por = usuarioId;
     await em.save();
     res.json(em);
   } catch (error) {
@@ -50,18 +174,23 @@ export const updateEjercicio = async (req, res) => {
   }
 };
 
-// Borrar ejercicio
-// DELETE /api/ejercicios/:ejercicio/mes/:mes
-// export const deleteEjercicio = async (req, res) => {
-//   const { ejercicio, mes } = req.params;
-//   try {
-//     const deleted = await EjercicioMes.destroy({ where: { ejercicio, mes } });
-//     if (!deleted) return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
-//     res.json({ message: "Ejercicio/Mes eliminado" });
-//   } catch (error) {
-//     res.status(500).json({ error: "Error eliminando ejercicio" });
-//   }
-// };
+// Borrar ejercicio: DELETE /api/ejercicios/:ejercicio/mes/:mes
+export const deleteEjercicio = async (req, res) => {
+  const { ejercicio, mes } = req.params;
+  try {
+    const deleted = await EjercicioMes.destroy({ where: { ejercicio, mes } });
+    if (!deleted) return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
+    res.json({ message: "Ejercicio/Mes eliminado" });
+  } catch (error) {
+    if (error.name === "SequelizeForeignKeyConstraintError") {
+      return res.status(409).json({
+        error: "No se puede eliminar el ejercicio/mes porque está referenciado por otros registros.",
+      });
+    }
+    console.error("Error eliminando ejercicio:", error);
+    res.status(500).json({ error: "Error eliminando ejercicio" });
+  }
+};
 
 // Prorrogar cierre para un municipio particular
 // PUT /api/ejercicios/:ejercicio/mes/:mes/municipios/:municipioId/prorroga
