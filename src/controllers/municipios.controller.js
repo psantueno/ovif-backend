@@ -1,5 +1,5 @@
 // Modelo
-import { Municipio, EjercicioMes, EjercicioMesMunicipio, EjercicioMesCerrado, Gasto, PartidaGasto, PartidaRecurso, Recurso } from "../models/index.js";
+import { Municipio, EjercicioMes, EjercicioMesMunicipio, EjercicioMesCerrado, EjercicioMesMunicipioAuditoria, Gasto, PartidaGasto, PartidaRecurso, Recurso } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 
@@ -295,6 +295,115 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
 };
 
 
+export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
+  const municipioId = Number(req.params.municipioId || req.params.id);
+  if (Number.isNaN(municipioId)) {
+    return res.status(400).json({ error: "municipioId inválido" });
+  }
+
+  const currentYear = new Date().getFullYear();
+  const normalizeQueryValue = (value) => (Array.isArray(value) ? value[0] : value);
+  const ejercicioParam = normalizeQueryValue(
+    req.query?.anio ?? req.query?.ejercicio ?? req.query?.year
+  );
+  const ejercicio = ejercicioParam === undefined ? currentYear : Number(ejercicioParam);
+
+  if (Number.isNaN(ejercicio)) {
+    return res.status(400).json({ error: "El año del ejercicio es inválido" });
+  }
+
+  try {
+    const municipio = await Municipio.findByPk(municipioId, {
+      attributes: ["municipio_id", "municipio_nombre"],
+    });
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const cierres = await EjercicioMesCerrado.findAll({
+      where: {
+        municipio_id: municipioId,
+        ejercicio,
+      },
+      order: [["mes", "ASC"]],
+    });
+
+    if (cierres.length === 0) {
+      return res.json({
+        municipio: municipio.get(),
+        ejercicio,
+        cierres: [],
+      });
+    }
+
+    const oficiales = await EjercicioMes.findAll({
+      where: { ejercicio },
+    });
+    const overrides = await EjercicioMesMunicipio.findAll({
+      where: {
+        ejercicio,
+        municipio_id: municipioId,
+      },
+    });
+
+    const oficialMap = new Map(
+      oficiales.map((item) => [`${item.ejercicio}-${item.mes}`, item])
+    );
+    const overrideMap = new Map(
+      overrides.map((item) => [`${item.ejercicio}-${item.mes}`, item])
+    );
+
+    const respuesta = cierres.map((cierre) => {
+      const key = `${cierre.ejercicio}-${cierre.mes}`;
+      const oficial = oficialMap.get(key);
+      const override = overrideMap.get(key);
+
+      return {
+        ejercicio: cierre.ejercicio,
+        mes: cierre.mes,
+        fechas: {
+          inicio_oficial: toISODate(oficial?.fecha_inicio),
+          fin_oficial: toISODate(oficial?.fecha_fin),
+          inicio_prorroga: toISODate(override?.fecha_inicio),
+          fin_prorroga: toISODate(override?.fecha_fin),
+          fin_vigente: toISODate(override?.fecha_fin || oficial?.fecha_fin),
+          fecha_cierre: toISODate(cierre.fecha),
+        },
+        datosOficiales: oficial
+          ? {
+              fecha_inicio: toISODate(oficial.fecha_inicio),
+              fecha_fin: toISODate(oficial.fecha_fin),
+            }
+          : null,
+        prorroga: override
+          ? {
+              fecha_inicio: toISODate(override.fecha_inicio),
+              fecha_fin: toISODate(override.fecha_fin),
+            }
+          : null,
+        cierre: {
+          municipio_id: cierre.municipio_id,
+          fecha: toISODate(cierre.fecha),
+          informe_recursos: cierre.informe_recursos,
+          informe_gastos: cierre.informe_gastos,
+          informe_personal: cierre.informe_personal,
+        },
+        tiene_prorroga: Boolean(override),
+      };
+    });
+
+    return res.json({
+      municipio: municipio.get(),
+      ejercicio,
+      cierres: respuesta,
+    });
+  } catch (error) {
+    console.error("❌ Error listando ejercicios cerrados:", error);
+    return res.status(500).json({ error: "Error listando ejercicios cerrados" });
+  }
+};
+
+
 // 📌 Endpoint liviano para selects
 // GET /api/municipios/select
 export const getMunicipiosSelect = async (req, res) => {
@@ -513,6 +622,111 @@ export const obtenerPartidasRecursosMunicipio = async (req, res) => {
 };
 
 // === Upsert masivo de gastos por municipio ===
+
+export const crearProrrogaMunicipio = async (req, res) => {
+  const municipioId = Number(req.params.municipioId || req.params.id);
+  const ejercicio = Number(req.params.ejercicio);
+  const mes = Number(req.params.mes);
+  const { fecha_inicio, fecha_fin, comentario } = req.body ?? {};
+  const usuarioId = req.user?.usuario_id;
+
+  if ([municipioId, ejercicio, mes].some((value) => Number.isNaN(value))) {
+    return res
+      .status(400)
+      .json({ error: "municipioId, ejercicio y mes deben ser numéricos" });
+  }
+
+  if (!fecha_fin) {
+    return res.status(400).json({ error: "Debe enviar fecha_fin" });
+  }
+
+  const fechaFinNormalizada = toISODate(fecha_fin);
+  if (!fechaFinNormalizada) {
+    return res.status(400).json({ error: "fecha_fin inválida" });
+  }
+
+  const hoy = toISODate(new Date());
+  if (fechaFinNormalizada < hoy) {
+    return res
+      .status(400)
+      .json({ error: "La nueva fecha de prórroga no puede ser anterior al día actual" });
+  }
+
+  if (!usuarioId) {
+    return res.status(401).json({ error: "Usuario no autenticado" });
+  }
+
+  try {
+    const municipio = await Municipio.findByPk(municipioId, {
+      attributes: ["municipio_id"],
+    });
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const oficial = await EjercicioMes.findOne({
+      where: { ejercicio, mes },
+    });
+    if (!oficial) {
+      return res
+        .status(404)
+        .json({ error: "Ejercicio/Mes no encontrado en calendario oficial" });
+    }
+
+    let override = await EjercicioMesMunicipio.findOne({
+      where: { ejercicio, mes, municipio_id: municipioId },
+    });
+
+    if (!override) {
+      override = await EjercicioMesMunicipio.create({
+        ejercicio,
+        mes,
+        municipio_id: municipioId,
+        fecha_inicio: fecha_inicio || oficial.fecha_inicio,
+        fecha_fin: oficial.fecha_fin,
+      });
+    }
+
+    const fechaAnterior = override.fecha_fin;
+    if (fecha_inicio) {
+      override.fecha_inicio = fecha_inicio;
+    }
+    override.fecha_fin = fecha_fin;
+    await override.save();
+
+    await EjercicioMesMunicipioAuditoria.create({
+      ejercicio,
+      mes,
+      municipio_id: municipioId,
+      usuario_id: usuarioId,
+      fecha_cierre_old: fechaAnterior,
+      fecha_cierre_new: fecha_fin,
+      comentario,
+    });
+
+    return res.json({
+      message: "✅ Prórroga aplicada",
+      ejercicio,
+      mes,
+      municipio_id: municipioId,
+      fechas: {
+        inicio_oficial: toISODate(oficial.fecha_inicio),
+        fin_oficial: toISODate(oficial.fecha_fin),
+        inicio_prorroga: toISODate(override.fecha_inicio),
+        fin_prorroga: toISODate(override.fecha_fin),
+      },
+      override: {
+        fecha_inicio: toISODate(override.fecha_inicio),
+        fecha_fin: toISODate(override.fecha_fin),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error creando prórroga para municipio:", error);
+    return res.status(500).json({ error: "Error creando prórroga" });
+  }
+};
+
+
 export const upsertGastosMunicipio = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
   const { partidas } = req.body ?? {};

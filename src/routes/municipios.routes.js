@@ -6,12 +6,14 @@ import {
   updateMunicipio,
   getMunicipiosSelect,
   listarEjerciciosDisponiblesPorMunicipio,
+  listarEjerciciosCerradosPorMunicipio,
   obtenerPartidasGastosMunicipio,
   obtenerPartidasRecursosMunicipio,
   upsertGastosMunicipio,
   upsertRecursosMunicipio,
   generarInformeGastosMunicipio,
   generarInformeRecursosMunicipio,
+  crearProrrogaMunicipio,
 } from "../controllers/municipios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
@@ -28,6 +30,12 @@ router.get("/select", authenticateToken, getMunicipiosSelect);
 
 // Ejercicios abiertos para el municipio
 router.get("/:id/ejercicios/disponibles", authenticateToken, listarEjerciciosDisponiblesPorMunicipio);
+
+router.get(
+  "/:municipioId/ejercicios/cerrados",
+  authenticateToken,
+  listarEjerciciosCerradosPorMunicipio
+);
 
 // Partidas de gastos del municipio
 router.get(
@@ -73,6 +81,12 @@ router.put(
   validarMunicipioAsignado,
   validarFechaLimiteDeCarga,
   upsertRecursosMunicipio
+);
+
+router.put(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/prorroga",
+  authenticateToken,
+  crearProrrogaMunicipio
 );
 
 // Buscar municipio por ID
