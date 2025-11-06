@@ -1,5 +1,5 @@
 // Modelo
-import { Municipio, EjercicioMes, EjercicioMesMunicipio, EjercicioMesCerrado, EjercicioMesMunicipioAuditoria, Gasto, PartidaGasto, PartidaRecurso, Recurso } from "../models/index.js";
+import { Municipio, EjercicioMes, ProrrogaMunicipio, EjercicioMesCerrado, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 
@@ -237,15 +237,15 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
       });
     }
 
-    const overrides = await EjercicioMesMunicipio.findAll({
+    const prorrogas = await ProrrogaMunicipio.findAll({
       where: { municipio_id: municipioId },
     });
     const cierres = await EjercicioMesCerrado.findAll({
       where: { municipio_id: municipioId },
     });
 
-    const overrideMap = new Map(
-      overrides.map((o) => [`${o.ejercicio}-${o.mes}`, o])
+    const prorrogaMap = new Map(
+      prorrogas.map((p) => [`${p.ejercicio}-${p.mes}`, p])
     );
     const cierreMap = new Map(
       cierres.map((c) => [`${c.ejercicio}-${c.mes}`, c])
@@ -255,11 +255,11 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
     const disponibles = ejercicios
       .map((em) => {
         const key = `${em.ejercicio}-${em.mes}`;
-        const override = overrideMap.get(key);
+        const prorroga = prorrogaMap.get(key);
         const cierre = cierreMap.get(key);
 
-        const fechaInicio = override?.fecha_inicio || em.fecha_inicio;
-        const fechaFin = override?.fecha_fin || em.fecha_fin;
+        const fechaInicio = em.fecha_inicio;
+        const fechaFin = prorroga?.fecha_fin_nueva || em.fecha_fin;
         const fechaCierre = cierre?.fecha || null;
 
         const fechaFinStr = toISODate(fechaFin);
@@ -275,7 +275,10 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
           fecha_inicio: toISODate(fechaInicio),
           fecha_fin: fechaFinStr,
           fecha_fin_oficial: toISODate(em.fecha_fin),
-          tiene_prorroga: Boolean(override),
+          tiene_prorroga: Boolean(prorroga),
+          fecha_fin_prorroga: toISODate(prorroga?.fecha_fin_nueva) ?? null,
+          convenio_id: prorroga?.convenio_id ?? null,
+          pauta_id: prorroga?.pauta_id ?? null,
           fecha_cierre: fechaCierreStr,
           vencido,
           cerrado,
@@ -339,7 +342,7 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
     const oficiales = await EjercicioMes.findAll({
       where: { ejercicio },
     });
-    const overrides = await EjercicioMesMunicipio.findAll({
+    const prorrogas = await ProrrogaMunicipio.findAll({
       where: {
         ejercicio,
         municipio_id: municipioId,
@@ -349,14 +352,16 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
     const oficialMap = new Map(
       oficiales.map((item) => [`${item.ejercicio}-${item.mes}`, item])
     );
-    const overrideMap = new Map(
-      overrides.map((item) => [`${item.ejercicio}-${item.mes}`, item])
+    const prorrogaMap = new Map(
+      prorrogas.map((item) => [`${item.ejercicio}-${item.mes}`, item])
     );
 
     const respuesta = cierres.map((cierre) => {
       const key = `${cierre.ejercicio}-${cierre.mes}`;
       const oficial = oficialMap.get(key);
-      const override = overrideMap.get(key);
+      const prorroga = prorrogaMap.get(key);
+      const fechaProrroga = prorroga?.fecha_fin_nueva || null;
+      const fechaVigente = fechaProrroga ?? oficial?.fecha_fin ?? null;
 
       return {
         ejercicio: cierre.ejercicio,
@@ -364,9 +369,9 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
         fechas: {
           inicio_oficial: toISODate(oficial?.fecha_inicio),
           fin_oficial: toISODate(oficial?.fecha_fin),
-          inicio_prorroga: toISODate(override?.fecha_inicio),
-          fin_prorroga: toISODate(override?.fecha_fin),
-          fin_vigente: toISODate(override?.fecha_fin || oficial?.fecha_fin),
+          inicio_prorroga: null,
+          fin_prorroga: toISODate(fechaProrroga),
+          fin_vigente: toISODate(fechaVigente),
           fecha_cierre: toISODate(cierre.fecha),
         },
         datosOficiales: oficial
@@ -375,10 +380,13 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
               fecha_fin: toISODate(oficial.fecha_fin),
             }
           : null,
-        prorroga: override
+        prorroga: prorroga
           ? {
-              fecha_inicio: toISODate(override.fecha_inicio),
-              fecha_fin: toISODate(override.fecha_fin),
+              fecha_inicio: null,
+              fecha_fin: toISODate(prorroga.fecha_fin_nueva),
+              fecha_fin_nueva: toISODate(prorroga.fecha_fin_nueva),
+              convenio_id: prorroga.convenio_id,
+              pauta_id: prorroga.pauta_id,
             }
           : null,
         cierre: {
@@ -388,7 +396,7 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
           informe_gastos: cierre.informe_gastos,
           informe_personal: cierre.informe_personal,
         },
-        tiene_prorroga: Boolean(override),
+        tiene_prorroga: Boolean(prorroga),
       };
     });
 
@@ -627,7 +635,7 @@ export const crearProrrogaMunicipio = async (req, res) => {
   const municipioId = Number(req.params.municipioId || req.params.id);
   const ejercicio = Number(req.params.ejercicio);
   const mes = Number(req.params.mes);
-  const { fecha_inicio, fecha_fin, comentario } = req.body ?? {};
+  const { fecha_fin, comentario, convenio_id, pauta_id, motivo, observaciones, tipo } = req.body ?? {};
   const usuarioId = req.user?.usuario_id;
 
   if ([municipioId, ejercicio, mes].some((value) => Number.isNaN(value))) {
@@ -673,35 +681,56 @@ export const crearProrrogaMunicipio = async (req, res) => {
         .json({ error: "Ejercicio/Mes no encontrado en calendario oficial" });
     }
 
-    let override = await EjercicioMesMunicipio.findOne({
+    let prorroga = await ProrrogaMunicipio.findOne({
       where: { ejercicio, mes, municipio_id: municipioId },
     });
 
-    if (!override) {
-      override = await EjercicioMesMunicipio.create({
+    const fechaAnterior = prorroga ? prorroga.fecha_fin_nueva : oficial.fecha_fin;
+
+    if (!prorroga) {
+      if (convenio_id === undefined || pauta_id === undefined) {
+        return res.status(400).json({
+          error: "Debe enviar convenio_id y pauta_id para crear una prórroga.",
+        });
+      }
+
+      prorroga = await ProrrogaMunicipio.create({
         ejercicio,
         mes,
         municipio_id: municipioId,
-        fecha_inicio: fecha_inicio || oficial.fecha_inicio,
-        fecha_fin: oficial.fecha_fin,
+        convenio_id,
+        pauta_id,
+        fecha_fin_nueva: fecha_fin,
       });
+    } else {
+      const nuevoConvenio = convenio_id ?? prorroga.convenio_id;
+      const nuevaPauta = pauta_id ?? prorroga.pauta_id;
+
+      if (nuevoConvenio === undefined || nuevaPauta === undefined) {
+        return res.status(400).json({
+          error: "Debe especificar convenio_id y pauta_id válidos para la prórroga.",
+        });
+      }
+
+      prorroga.convenio_id = nuevoConvenio;
+      prorroga.pauta_id = nuevaPauta;
+      prorroga.fecha_fin_nueva = fecha_fin;
+      await prorroga.save();
     }
 
-    const fechaAnterior = override.fecha_fin;
-    if (fecha_inicio) {
-      override.fecha_inicio = fecha_inicio;
-    }
-    override.fecha_fin = fecha_fin;
-    await override.save();
-
-    await EjercicioMesMunicipioAuditoria.create({
+    await AuditoriaProrrogaMunicipio.create({
+      prorroga_id: prorroga.prorroga_id,
       ejercicio,
       mes,
       municipio_id: municipioId,
-      usuario_id: usuarioId,
-      fecha_cierre_old: fechaAnterior,
-      fecha_cierre_new: fecha_fin,
-      comentario,
+      convenio_id: prorroga.convenio_id,
+      pauta_id: prorroga.pauta_id,
+      fecha_fin_anterior: fechaAnterior,
+      fecha_fin_prorrogada: fecha_fin,
+      tipo: tipo || "PRORROGA",
+      motivo: motivo || comentario || null,
+      gestionado_por: usuarioId,
+      observaciones: observaciones ?? null,
     });
 
     return res.json({
@@ -709,16 +738,10 @@ export const crearProrrogaMunicipio = async (req, res) => {
       ejercicio,
       mes,
       municipio_id: municipioId,
-      fechas: {
-        inicio_oficial: toISODate(oficial.fecha_inicio),
-        fin_oficial: toISODate(oficial.fecha_fin),
-        inicio_prorroga: toISODate(override.fecha_inicio),
-        fin_prorroga: toISODate(override.fecha_fin),
-      },
-      override: {
-        fecha_inicio: toISODate(override.fecha_inicio),
-        fecha_fin: toISODate(override.fecha_fin),
-      },
+      fecha_fin_anterior: toISODate(fechaAnterior),
+      fecha_fin_prorrogada: fechaFinNormalizada,
+      convenio_id: prorroga.convenio_id,
+      pauta_id: prorroga.pauta_id,
     });
   } catch (error) {
     console.error("❌ Error creando prórroga para municipio:", error);

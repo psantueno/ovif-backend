@@ -1,8 +1,8 @@
 // Modelos
 import {
   EjercicioMes,
-  EjercicioMesMunicipio,
-  EjercicioMesMunicipioAuditoria,
+  ProrrogaMunicipio,
+  AuditoriaProrrogaMunicipio,
   EjercicioMesCerrado,
   Municipio,
 } from "../models/index.js";
@@ -196,53 +196,93 @@ export const deleteEjercicio = async (req, res) => {
 // PUT /api/ejercicios/:ejercicio/mes/:mes/municipios/:municipioId/prorroga
 export const prorrogarCierre = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
-  const { fecha_fin, comentario } = req.body;
-  const usuarioId = req.user?.usuario_id; // authMiddleware lo setea
+  const {
+    fecha_fin,
+    comentario,
+    convenio_id,
+    pauta_id,
+    motivo,
+    observaciones,
+    tipo,
+  } = req.body;
+  const usuarioId = req.user?.usuario_id;
 
-  if (!fecha_fin) return res.status(400).json({ error: "Debe enviar fecha_fin" });
+  if (!fecha_fin) {
+    return res.status(400).json({ error: "Debe enviar fecha_fin" });
+  }
+
+  if (!usuarioId) {
+    return res.status(401).json({
+      error: "Usuario autenticado requerido para registrar la prórroga.",
+    });
+  }
 
   try {
-    // buscar oficial
     const oficial = await EjercicioMes.findOne({ where: { ejercicio, mes } });
-    if (!oficial) return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
+    if (!oficial) {
+      return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
+    }
 
-    // buscar override o crear
-    let override = await EjercicioMesMunicipio.findOne({ where: { ejercicio, mes, municipio_id: municipioId } });
-    if (!override) {
-      override = await EjercicioMesMunicipio.create({
+    let prorroga = await ProrrogaMunicipio.findOne({
+      where: { ejercicio, mes, municipio_id: municipioId },
+    });
+
+    const fechaAnterior = prorroga?.fecha_fin_nueva || oficial.fecha_fin;
+
+    if (!prorroga) {
+      if (convenio_id === undefined || pauta_id === undefined) {
+        return res.status(400).json({
+          error: "Debe enviar convenio_id y pauta_id para crear una prórroga.",
+        });
+      }
+
+      prorroga = await ProrrogaMunicipio.create({
         ejercicio,
         mes,
         municipio_id: municipioId,
-        fecha_inicio: oficial.fecha_inicio,
-        fecha_fin: oficial.fecha_fin,
+        convenio_id,
+        pauta_id,
+        fecha_fin_nueva: fecha_fin,
       });
+    } else {
+      if (convenio_id !== undefined) {
+        prorroga.convenio_id = convenio_id;
+      }
+      if (pauta_id !== undefined) {
+        prorroga.pauta_id = pauta_id;
+      }
+      prorroga.fecha_fin_nueva = fecha_fin;
+      await prorroga.save();
     }
 
-    const fechaVieja = override.fecha_fin;
-    override.fecha_fin = fecha_fin;
-    await override.save();
-
-    await EjercicioMesMunicipioAuditoria.create({
+    await AuditoriaProrrogaMunicipio.create({
+      prorroga_id: prorroga.prorroga_id,
       ejercicio,
       mes,
-      municipio_id: municipioId,
-      usuario_id: usuarioId,
-      fecha_cierre_old: fechaVieja,
-      fecha_cierre_new: fecha_fin,
-      comentario,
+      municipio_id: Number(municipioId),
+      convenio_id: prorroga.convenio_id,
+      pauta_id: prorroga.pauta_id,
+      fecha_fin_anterior: fechaAnterior,
+      fecha_fin_prorrogada: fecha_fin,
+      tipo: tipo || "PRORROGA",
+      motivo: motivo || comentario || null,
+      gestionado_por: usuarioId,
+      observaciones: observaciones ?? null,
     });
 
-    res.json({
+    return res.json({
       message: "✅ Prórroga aplicada",
       ejercicio,
       mes,
       municipio_id: municipioId,
-      fecha_cierre_old: fechaVieja,
-      fecha_cierre_new: fecha_fin,
+      fecha_fin_anterior: fechaAnterior,
+      fecha_fin_prorrogada: fecha_fin,
+      convenio_id: prorroga.convenio_id,
+      pauta_id: prorroga.pauta_id,
     });
-
   } catch (error) {
-    res.status(500).json({ error: "Error aplicando prórroga" });
+    console.error("❌ Error aplicando prórroga:", error);
+    return res.status(500).json({ error: "Error aplicando prórroga" });
   }
 };
 
@@ -260,13 +300,13 @@ export const getFechaLimite = async (req, res) => {
     }
 
     // 2. Buscar override del municipio (si existe)
-    const override = await EjercicioMesMunicipio.findOne({
+    const prorroga = await ProrrogaMunicipio.findOne({
       where: { ejercicio, mes, municipio_id: municipioId },
     });
 
     // 3. Calcular fechas efectivas
-    const fecha_inicio = override?.fecha_inicio || oficial.fecha_inicio;
-    const fecha_fin = override?.fecha_fin || oficial.fecha_fin;
+    const fecha_inicio = oficial.fecha_inicio;
+    const fecha_fin = prorroga?.fecha_fin_nueva || oficial.fecha_fin;
 
     // 4. Devolver resultado
     return res.json({
@@ -275,7 +315,7 @@ export const getFechaLimite = async (req, res) => {
       municipio_id: municipioId,
       fecha_inicio,
       fecha_fin,
-      override: !!override, // true si hubo prórroga
+      override: !!prorroga, // true si hubo prórroga
     });
 
   } catch (error) {
@@ -300,11 +340,11 @@ export const cerrarMesMunicipio = async (req, res) => {
     }
 
     // === 2. Verificar si hay override de fechas para el municipio
-    const override = await EjercicioMesMunicipio.findOne({
+    const prorroga = await ProrrogaMunicipio.findOne({
       where: { ejercicio, mes, municipio_id: municipioId },
     });
 
-    const fechaLimite = override?.fecha_fin || oficial.fecha_fin;
+    const fechaLimite = prorroga?.fecha_fin_nueva || oficial.fecha_fin;
 
     // Validar fecha de cierre
     if (fechaHoy > new Date(fechaLimite).toISOString().split("T")[0]) {
@@ -394,11 +434,11 @@ export const getCierreMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Ejercicio/Mes no encontrado en calendario oficial" });
     }
 
-    const override = await EjercicioMesMunicipio.findOne({
+    const prorroga = await ProrrogaMunicipio.findOne({
       where: { ejercicio, mes, municipio_id: municipioId },
     });
 
-    const fechaLimite = override?.fecha_fin || oficial.fecha_fin;
+    const fechaLimite = prorroga?.fecha_fin_nueva || oficial.fecha_fin;
 
     // 3. Comparar estado
     const fechaCierre = new Date(cierre.fecha);
@@ -443,7 +483,7 @@ export const listarEstadoMunicipios = async (req, res) => {
     const municipios = await Municipio.findAll();
 
     // 3. Traer overrides y cierres de golpe
-    const overrides = await EjercicioMesMunicipio.findAll({
+    const prorrogas = await ProrrogaMunicipio.findAll({
       where: { ejercicio, mes },
     });
 
@@ -452,8 +492,8 @@ export const listarEstadoMunicipios = async (req, res) => {
     });
 
     // 4. Mapear para lookup rápido
-    const overridesMap = new Map(
-      overrides.map(o => [`${o.municipio_id}`, o])
+    const prorrogaMap = new Map(
+      prorrogas.map((p) => [`${p.municipio_id}`, p])
     );
     const cierresMap = new Map(
       cierres.map(c => [`${c.municipio_id}`, c])
@@ -461,10 +501,10 @@ export const listarEstadoMunicipios = async (req, res) => {
 
     // 5. Armar resultado
     const resultado = municipios.map(m => {
-      const override = overridesMap.get(`${m.municipio_id}`);
+      const prorroga = prorrogaMap.get(`${m.municipio_id}`);
       const cierre = cierresMap.get(`${m.municipio_id}`);
 
-      const fechaLimite = override?.fecha_fin || oficial.fecha_fin;
+      const fechaLimite = prorroga?.fecha_fin_nueva || oficial.fecha_fin;
       let estado;
       let fechaCierre = null;
 

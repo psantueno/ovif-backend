@@ -6,8 +6,6 @@ En este archivo se definen las relaciones entre los modelos Usuario, Rol y Munic
 import Usuario from './Usuario.js';
 import Rol from './Rol.js';
 import Municipio from './Municipio.js';
-import EjercicioMesMunicipioAuditoria from './moduloEjercicios/EjercicioMesMunicipioAuditoria.js';
-import EjercicioMesMunicipio from './moduloEjercicios/EjercicioMesMunicipio.js';
 import EjercicioMes from './moduloEjercicios/EjercicioMes.js';
 import PartidaGasto from './partidas/PartidaGasto.js';
 import PartidaRecurso from './partidas/PartidaRecurso.js';
@@ -28,6 +26,10 @@ import TokenBlacklist from './TokenBlacklist.js';
 import UsuarioMunicipio from './UsuarioMunicipio.js';
 import UsuarioRol from './UsuarioRol.js';
 import Parametro from './Parametro.js';
+import Convenio from './Convenio.js';
+import PautaConvenio from './PautaConvenio.js';
+import ProrrogaMunicipio from './ProrrogaMunicipio.js';
+import AuditoriaProrrogaMunicipio from './AuditoriaProrrogaMunicipio.js';
 
 
 // Relación muchos a muchos con Rol
@@ -60,9 +62,20 @@ Municipio.belongsToMany(Usuario, {
   otherKey: 'usuario_id'
 });
 
-EjercicioMesMunicipioAuditoria.belongsTo(Usuario, {
-  foreignKey: "usuario_id",
-});
+Convenio.hasMany(ProrrogaMunicipio, { foreignKey: "convenio_id" });
+PautaConvenio.hasMany(ProrrogaMunicipio, { foreignKey: "pauta_id" });
+Municipio.hasMany(ProrrogaMunicipio, { foreignKey: "municipio_id" });
+
+ProrrogaMunicipio.belongsTo(Municipio, { foreignKey: "municipio_id" });
+ProrrogaMunicipio.belongsTo(Convenio, { foreignKey: "convenio_id" });
+ProrrogaMunicipio.belongsTo(PautaConvenio, { foreignKey: "pauta_id" });
+
+AuditoriaProrrogaMunicipio.belongsTo(ProrrogaMunicipio, { foreignKey: "prorroga_id" });
+AuditoriaProrrogaMunicipio.belongsTo(Municipio, { foreignKey: "municipio_id" });
+AuditoriaProrrogaMunicipio.belongsTo(Convenio, { foreignKey: "convenio_id" });
+AuditoriaProrrogaMunicipio.belongsTo(PautaConvenio, { foreignKey: "pauta_id" });
+AuditoriaProrrogaMunicipio.belongsTo(Usuario, { foreignKey: "gestionado_por" });
+ProrrogaMunicipio.hasMany(AuditoriaProrrogaMunicipio, { foreignKey: "prorroga_id" });
 
 Gasto.belongsTo(Municipio, { foreignKey: "municipio_id" });
 Gasto.belongsTo(PartidaGasto, {
@@ -100,7 +113,6 @@ EconomicoGasto.hasMany(PartidaEconomico, {
   sourceKey: "cod_economico"
 });
 
-EjercicioMesMunicipio.belongsTo(Municipio, { foreignKey: "municipio_id"});
 EjercicioMesCerrado.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
 PartidaRecurso.hasOne(RecursoEconomico, {
@@ -127,8 +139,6 @@ export {
   Usuario, 
   Rol, 
   Municipio, 
-  EjercicioMesMunicipioAuditoria, 
-  EjercicioMesMunicipio, 
   EjercicioMes,
   Gasto,
   Recurso,
@@ -146,5 +156,9 @@ export {
   CronLog,
   UsuarioMunicipio,
   UsuarioRol,
-  Parametro
+  Parametro,
+  Convenio,
+  PautaConvenio,
+  ProrrogaMunicipio,
+  AuditoriaProrrogaMunicipio
 };

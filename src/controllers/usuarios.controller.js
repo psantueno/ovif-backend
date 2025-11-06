@@ -1,6 +1,6 @@
 import { Op, literal  } from "sequelize";
 // Modelos
-import { Usuario, Rol, Municipio, EjercicioMesMunicipioAuditoria, UsuarioMunicipio, UsuarioRol } from "../models/index.js";
+import { Usuario, Rol, Municipio, AuditoriaProrrogaMunicipio, UsuarioMunicipio, UsuarioRol } from "../models/index.js";
 
 
 // Librerías
@@ -345,8 +345,8 @@ export const deleteUsuario = async (req, res) => {
     }
 
     // 2️⃣ Verificar si tiene registros en auditorías
-    const auditorias = await EjercicioMesMunicipioAuditoria.count({
-      where: { usuario_id: id },
+    const auditorias = await AuditoriaProrrogaMunicipio.count({
+      where: { gestionado_por: id },
     });
 
     if (auditorias > 0) {

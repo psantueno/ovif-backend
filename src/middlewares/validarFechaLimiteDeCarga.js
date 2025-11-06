@@ -5,7 +5,7 @@ Si la fecha límite ha pasado, responde con un error 400.
 Si está dentro del plazo, llama a next() para continuar.
 */
 
-import { EjercicioMes, EjercicioMesMunicipio } from "../models/index.js";
+import { EjercicioMes, ProrrogaMunicipio } from "../models/index.js";
 
 export const validarFechaLimiteDeCarga = async (req, res, next) => {
   const { ejercicio, mes, municipioId } = req.params;
@@ -19,11 +19,11 @@ export const validarFechaLimiteDeCarga = async (req, res, next) => {
     }
 
     // 2. Buscar prórroga del municipio (si existe)
-    const override = await EjercicioMesMunicipio.findOne({
+    const prorroga = await ProrrogaMunicipio.findOne({
       where: { ejercicio, mes, municipio_id: municipioId },
     });
 
-    const fechaLimite = override?.fecha_fin || oficial.fecha_fin;
+    const fechaLimite = prorroga?.fecha_fin_nueva || oficial.fecha_fin;
 
     // 3. Validar contra fecha actual
     if (fechaHoy > new Date(fechaLimite).toISOString().split("T")[0]) {

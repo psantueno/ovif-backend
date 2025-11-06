@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import EjercicioMes from "../models/moduloEjercicios/EjercicioMes.js";
-import EjercicioMesMunicipio from "../models/moduloEjercicios/EjercicioMesMunicipio.js";
+import ProrrogaMunicipio from "../models/ProrrogaMunicipio.js";
 import EjercicioMesCerrado from "../models/moduloEjercicios/EjercicioMesCerrado.js";
 import CronLog from "../models/moduloEjercicios/CronLog.js";
 
@@ -22,12 +22,12 @@ cron.schedule(
 
         // Si la fecha oficial ya venció
         if (hoy > new Date(fecha_fin).toISOString().split("T")[0]) {
-          const municipios = await EjercicioMesMunicipio.findAll({
+          const prorrogas = await ProrrogaMunicipio.findAll({
             where: { ejercicio, mes },
           });
 
-          for (const mun of municipios) {
-            const fechaLimite = mun.fecha_fin || fecha_fin;
+          for (const mun of prorrogas) {
+            const fechaLimite = mun.fecha_fin_nueva || fecha_fin;
 
             // Si también venció la prórroga o fecha final del municipio
             if (hoy > new Date(fechaLimite).toISOString().split("T")[0]) {
