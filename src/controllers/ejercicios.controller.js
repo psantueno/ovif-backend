@@ -5,6 +5,8 @@ import {
   AuditoriaProrrogaMunicipio,
   EjercicioMesCerrado,
   Municipio,
+  Convenio,
+  PautaConvenio,
 } from "../models/index.js";
 
 const isValidISODate = (value) => {
@@ -40,6 +42,16 @@ export const listarEjercicios = async (req, res) => {
 
     const { rows, count } = await EjercicioMes.findAndCountAll({
       where,
+      include: [
+        {
+          model: Convenio,
+          attributes: ["convenio_id", "nombre"],
+        },
+        {
+          model: PautaConvenio,
+          attributes: ["pauta_id", "descripcion"],
+        },
+      ],
       order: [
         ["ejercicio", "DESC"],
         ["mes", "DESC"],
@@ -63,7 +75,7 @@ export const listarEjercicios = async (req, res) => {
 // Crear nuevo ejercicio
 // POST /api/ejercicios
 export const crearEjercicio = async (req, res) => {
-  const { ejercicio, mes, fecha_inicio, fecha_fin } = req.body;
+  const { ejercicio, mes, fecha_inicio, fecha_fin, convenio_id, pauta_id } = req.body;
   const errores = [];
   const usuarioId = req.user?.usuario_id;
 
@@ -98,6 +110,24 @@ export const crearEjercicio = async (req, res) => {
     }
   }
 
+  let convenioIdParsed;
+  if (convenio_id === undefined || convenio_id === null || String(convenio_id).trim() === "") {
+    errores.push("El campo 'convenio_id' es obligatorio.");
+  } else if (!/^\d+$/.test(String(convenio_id).trim())) {
+    errores.push("El campo 'convenio_id' debe ser numérico.");
+  } else {
+    convenioIdParsed = Number.parseInt(String(convenio_id).trim(), 10);
+  }
+
+  let pautaIdParsed;
+  if (pauta_id === undefined || pauta_id === null || String(pauta_id).trim() === "") {
+    errores.push("El campo 'pauta_id' es obligatorio.");
+  } else if (!/^\d+$/.test(String(pauta_id).trim())) {
+    errores.push("El campo 'pauta_id' debe ser numérico.");
+  } else {
+    pautaIdParsed = Number.parseInt(String(pauta_id).trim(), 10);
+  }
+
   let fechaInicioDate;
   if (!fecha_inicio) {
     errores.push("El campo 'fecha_inicio' es obligatorio.");
@@ -129,21 +159,46 @@ export const crearEjercicio = async (req, res) => {
 
   try {
     const existente = await EjercicioMes.findOne({
-      where: { ejercicio: ejercicioParsed, mes: mesParsed },
+      where: {
+        ejercicio: ejercicioParsed,
+        mes: mesParsed,
+        convenio_id: convenioIdParsed,
+        pauta_id: pautaIdParsed,
+      },
     });
 
     if (existente) {
-      return res.status(409).json({ error: "Ya existe un ejercicio/mes con esos valores." });
+      return res.status(409).json({ error: "Ya existe un ejercicio/mes para el convenio y pauta que intenta crear." });
     }
 
     const nuevo = await EjercicioMes.create({
       ejercicio: ejercicioParsed,
       mes: mesParsed,
+      convenio_id: convenioIdParsed,
+      pauta_id: pautaIdParsed,
       fecha_inicio: fechaInicioDate,
       fecha_fin: fechaFinDate,
       creado_por: usuarioId,
     });
-    res.status(201).json(nuevo);
+    const nuevoConDetalles = await EjercicioMes.findOne({
+      where: {
+        ejercicio: ejercicioParsed,
+        mes: mesParsed,
+        convenio_id: convenioIdParsed,
+        pauta_id: pautaIdParsed,
+      },
+      include: [
+        {
+          model: Convenio,
+          attributes: ["convenio_id", "nombre"],
+        },
+        {
+          model: PautaConvenio,
+          attributes: ["pauta_id", "descripcion", "dia_vto", "plazo_vto"],
+        },
+      ],
+    });
+    res.status(201).json(nuevoConDetalles);
   } catch (error) {
     res.status(500).json({ error: "Error creando ejercicio" });
   }
@@ -154,7 +209,7 @@ export const crearEjercicio = async (req, res) => {
 // PUT /api/ejercicios/:ejercicio/mes/:mes
 export const updateEjercicio = async (req, res) => {
   const { ejercicio, mes } = req.params;
-  const { fecha_inicio, fecha_fin } = req.body;
+  const { fecha_inicio, fecha_fin, convenio_id, pauta_id } = req.body;
   const usuarioId = req.user?.usuario_id;
 
   if (!usuarioId) {
@@ -164,10 +219,38 @@ export const updateEjercicio = async (req, res) => {
   try {
     const em = await EjercicioMes.findOne({ where: { ejercicio, mes } });
     if (!em) return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
-    em.fecha_inicio = fecha_inicio;
-    em.fecha_fin = fecha_fin;
+    if (fecha_inicio !== undefined) {
+      em.fecha_inicio = fecha_inicio;
+    }
+    if (fecha_fin !== undefined) {
+      em.fecha_fin = fecha_fin;
+    }
+    if (convenio_id !== undefined) {
+      if (!/^\d+$/.test(String(convenio_id).trim())) {
+        return res.status(400).json({ error: "El campo 'convenio_id' debe ser numérico." });
+      }
+      em.convenio_id = Number.parseInt(String(convenio_id).trim(), 10);
+    }
+    if (pauta_id !== undefined) {
+      if (!/^\d+$/.test(String(pauta_id).trim())) {
+        return res.status(400).json({ error: "El campo 'pauta_id' debe ser numérico." });
+      }
+      em.pauta_id = Number.parseInt(String(pauta_id).trim(), 10);
+    }
     em.modificado_por = usuarioId;
     await em.save();
+    await em.reload({
+      include: [
+        {
+          model: Convenio,
+          attributes: ["convenio_id", "nombre"],
+        },
+        {
+          model: PautaConvenio,
+          attributes: ["pauta_id", "descripcion", "dia_vto", "plazo_vto"],
+        },
+      ],
+    });
     res.json(em);
   } catch (error) {
     res.status(500).json({ error: "Error actualizando ejercicio" });

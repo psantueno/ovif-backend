@@ -25,7 +25,6 @@ import PasswordReset from './PasswordReset.js';
 import TokenBlacklist from './TokenBlacklist.js';
 import UsuarioMunicipio from './UsuarioMunicipio.js';
 import UsuarioRol from './UsuarioRol.js';
-import Parametro from './Parametro.js';
 import Convenio from './Convenio.js';
 import PautaConvenio from './PautaConvenio.js';
 import ProrrogaMunicipio from './ProrrogaMunicipio.js';
@@ -62,10 +61,16 @@ Municipio.belongsToMany(Usuario, {
   otherKey: 'usuario_id'
 });
 
+Convenio.hasMany(PautaConvenio, { foreignKey: "convenio_id" });
+PautaConvenio.belongsTo(Convenio, { foreignKey: "convenio_id" });
+Convenio.hasMany(EjercicioMes, { foreignKey: "convenio_id" });
+PautaConvenio.hasMany(EjercicioMes, { foreignKey: "pauta_id" });
 Convenio.hasMany(ProrrogaMunicipio, { foreignKey: "convenio_id" });
 PautaConvenio.hasMany(ProrrogaMunicipio, { foreignKey: "pauta_id" });
 Municipio.hasMany(ProrrogaMunicipio, { foreignKey: "municipio_id" });
 
+EjercicioMes.belongsTo(Convenio, { foreignKey: "convenio_id" });
+EjercicioMes.belongsTo(PautaConvenio, { foreignKey: "pauta_id" });
 ProrrogaMunicipio.belongsTo(Municipio, { foreignKey: "municipio_id" });
 ProrrogaMunicipio.belongsTo(Convenio, { foreignKey: "convenio_id" });
 ProrrogaMunicipio.belongsTo(PautaConvenio, { foreignKey: "pauta_id" });
@@ -156,7 +161,6 @@ export {
   CronLog,
   UsuarioMunicipio,
   UsuarioRol,
-  Parametro,
   Convenio,
   PautaConvenio,
   ProrrogaMunicipio,
