@@ -1,5 +1,5 @@
 // Modelo
-import { Municipio, EjercicioMes, ProrrogaMunicipio, EjercicioMesCerrado, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso } from "../models/index.js";
+import { Municipio, EjercicioMes, ProrrogaMunicipio, EjercicioMesCerrado, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 
@@ -230,6 +230,13 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
       ],
     });
 
+    const convenioIds = new Set();
+    const pautaIds = new Set();
+    ejercicios.forEach((em) => {
+      if (em.convenio_id) convenioIds.add(em.convenio_id);
+      if (em.pauta_id) pautaIds.add(em.pauta_id);
+    });
+
     if (ejercicios.length === 0) {
       return res.json({
         municipio: municipio.get(),
@@ -239,6 +246,10 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
 
     const prorrogas = await ProrrogaMunicipio.findAll({
       where: { municipio_id: municipioId },
+    });
+    prorrogas.forEach((p) => {
+      if (p.convenio_id) convenioIds.add(p.convenio_id);
+      if (p.pauta_id) pautaIds.add(p.pauta_id);
     });
     const cierres = await EjercicioMesCerrado.findAll({
       where: { municipio_id: municipioId },
@@ -251,12 +262,28 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
       cierres.map((c) => [`${c.ejercicio}-${c.mes}`, c])
     );
 
+    const [convenios, pautas] = await Promise.all([
+      convenioIds.size
+        ? Convenio.findAll({ where: { convenio_id: [...convenioIds] } })
+        : [],
+      pautaIds.size
+        ? PautaConvenio.findAll({ where: { pauta_id: [...pautaIds] } })
+        : [],
+    ]);
+
+    const convenioMap = new Map(convenios.map((c) => [c.convenio_id, c]));
+    const pautaMap = new Map(pautas.map((p) => [p.pauta_id, p]));
+
     const hoy = toISODate(new Date());
     const disponibles = ejercicios
       .map((em) => {
         const key = `${em.ejercicio}-${em.mes}`;
         const prorroga = prorrogaMap.get(key);
         const cierre = cierreMap.get(key);
+        const resolvedConvenioId = prorroga?.convenio_id ?? em.convenio_id ?? null;
+        const resolvedPautaId = prorroga?.pauta_id ?? em.pauta_id ?? null;
+        const convenio = resolvedConvenioId ? convenioMap.get(resolvedConvenioId) : null;
+        const pauta = resolvedPautaId ? pautaMap.get(resolvedPautaId) : null;
 
         const fechaInicio = em.fecha_inicio;
         const fechaFin = prorroga?.fecha_fin_nueva || em.fecha_fin;
@@ -277,8 +304,11 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
           fecha_fin_oficial: toISODate(em.fecha_fin),
           tiene_prorroga: Boolean(prorroga),
           fecha_fin_prorroga: toISODate(prorroga?.fecha_fin_nueva) ?? null,
-          convenio_id: prorroga?.convenio_id ?? null,
-          pauta_id: prorroga?.pauta_id ?? null,
+          convenio_id: resolvedConvenioId,
+          pauta_id: resolvedPautaId,
+          convenio_nombre: convenio?.nombre ?? null,
+          pauta_descripcion: pauta?.descripcion ?? null,
+          tipo_pauta: pauta?.tipo_pauta ?? null,
           fecha_cierre: fechaCierreStr,
           vencido,
           cerrado,
