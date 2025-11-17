@@ -1,17 +1,27 @@
 // utils/mail.js
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const sender = process.env.EMAIL_SENDER || "no-reply@ovif.neuquen.gob.ar";
+const smtpPort = Number(process.env.SMTP_PORT || 25);
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: smtpPort,
+  secure: process.env.SMTP_SECURE === "true" || smtpPort === 465,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+const sender = process.env.EMAIL_FROM || "OVIF <ovif@haciendanqn.gob.ar>";
 
 /**
  * Envía correo con enlace de restablecimiento de contraseña.
  */
 export async function sendResetMail(to, nombre, resetLink) {
   try {
-    const response = await resend.emails.send({
-      from: "OVIF <onboarding@resend.dev>",
-      to: 'seba.antueno@gmail.com',
+    const response = await transporter.sendMail({
+      from: sender,
+      to,
       subject: "Restablecer contraseña",
       html: `
         <!--  Banner institucional OVIF -->
@@ -63,11 +73,10 @@ export async function sendResetMail(to, nombre, resetLink) {
       `,
     });
 
-    console.log("✅ Correo enviado:", response);
+    console.log("✅ Correo enviado:", response?.messageId || response);
     return response;
   } catch (error) {
     console.error("❌ Error enviando correo:", error);
     throw new Error("No se pudo enviar el correo de reseteo");
   }
 }
-

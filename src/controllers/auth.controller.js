@@ -155,8 +155,12 @@ export const forgotPassword = async (req, res) => {
         message: "Si existe una cuenta con ese usuario, se enviará un mail con instrucciones.",
       });
     }
-    //esto: " const email = user.email;" iría aca abajo cuando se configure el dominio en resend 👇🏼 
-    const email = 'seba.antueno@gmail.com';
+    const email = user.email;
+    if (!email) {
+      return res.status(400).json({
+        error: "El usuario no tiene un correo electrónico registrado",
+      });
+    }
     const [name, domain] = email.split("@");
     const maskedName =
       name.length > 4
@@ -184,8 +188,8 @@ export const forgotPassword = async (req, res) => {
     // 4️⃣ Crear enlace al frontend
     const resetLink = `${FRONTEND_URL}/reset-password?token=${tokenRaw}`;
 
-    // 5️⃣ Enviar correo con Resend
-    await sendResetMail(user.email, user.nombre || user.usuario, resetLink);
+    // 5️⃣ Enviar correo
+    await sendResetMail(email, user.nombre || user.usuario, resetLink);
 
     // 6️⃣ Devolver respuesta con correo enmascarado
     return res.json({
