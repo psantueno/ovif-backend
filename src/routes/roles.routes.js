@@ -9,14 +9,17 @@ import {
 } from "../controllers/roles.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
+import { requireAdmin } from "../middlewares/requireAdmin.js";
 
 const router = Router();
 
-router.get("/", authenticateToken, getRoles);
-router.get("/select", authenticateToken, getRolesSelect);
-router.get("/:id", authenticateToken, getRolById);
-router.post("/", authenticateToken, createRol);
-router.put("/:id", authenticateToken, updateRol);
-router.delete("/:id", authenticateToken, deleteRol);
+router.use(authenticateToken, requireAdmin);
+
+router.get("/", getRoles);
+router.get("/select", getRolesSelect);
+router.get("/:id", getRolById);
+router.post("/", createRol);
+router.put("/:id", updateRol);
+router.delete("/:id", deleteRol);
 
 export default router;

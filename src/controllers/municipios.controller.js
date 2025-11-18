@@ -10,6 +10,9 @@ const toISODate = (value) => {
   return date.toISOString().split("T")[0];
 };
 
+const buildCalendarioKey = (ejercicio, mes, convenioId, pautaId) =>
+  `${ejercicio}-${mes}-${convenioId ?? "null"}-${pautaId ?? "null"}`;
+
 const construirJerarquiaPartidas = async (municipioId, ejercicio, mes) => {
   const [partidas, gastosGuardados] = await Promise.all([
     PartidaGasto.findAll({
@@ -251,15 +254,12 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
       if (p.convenio_id) convenioIds.add(p.convenio_id);
       if (p.pauta_id) pautaIds.add(p.pauta_id);
     });
-    const cierres = await EjercicioMesCerrado.findAll({
-      where: { municipio_id: municipioId },
-    });
 
     const prorrogaMap = new Map(
-      prorrogas.map((p) => [`${p.ejercicio}-${p.mes}`, p])
-    );
-    const cierreMap = new Map(
-      cierres.map((c) => [`${c.ejercicio}-${c.mes}`, c])
+      prorrogas.map((p) => [
+        buildCalendarioKey(p.ejercicio, p.mes, p.convenio_id, p.pauta_id),
+        p,
+      ])
     );
 
     const [convenios, pautas] = await Promise.all([
@@ -277,9 +277,8 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
     const hoy = toISODate(new Date());
     const disponibles = ejercicios
       .map((em) => {
-        const key = `${em.ejercicio}-${em.mes}`;
+        const key = buildCalendarioKey(em.ejercicio, em.mes, em.convenio_id, em.pauta_id);
         const prorroga = prorrogaMap.get(key);
-        const cierre = cierreMap.get(key);
         const resolvedConvenioId = prorroga?.convenio_id ?? em.convenio_id ?? null;
         const resolvedPautaId = prorroga?.pauta_id ?? em.pauta_id ?? null;
         const convenio = resolvedConvenioId ? convenioMap.get(resolvedConvenioId) : null;
@@ -287,14 +286,11 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
 
         const fechaInicio = em.fecha_inicio;
         const fechaFin = prorroga?.fecha_fin_nueva || em.fecha_fin;
-        const fechaCierre = cierre?.fecha || null;
 
         const fechaFinStr = toISODate(fechaFin);
-        const fechaCierreStr = toISODate(fechaCierre);
 
         const vencido = fechaFinStr ? hoy > fechaFinStr : false;
-        const cerrado = Boolean(cierre);
-        const disponible = !vencido && !cerrado;
+        const disponible = !vencido;
 
         return {
           ejercicio: em.ejercicio,
@@ -309,9 +305,9 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
           convenio_nombre: convenio?.nombre ?? null,
           pauta_descripcion: pauta?.descripcion ?? null,
           tipo_pauta: pauta?.tipo_pauta ?? null,
-          fecha_cierre: fechaCierreStr,
+          fecha_cierre: fechaFinStr,
           vencido,
-          cerrado,
+          cerrado: false,
           disponible,
         };
       })

@@ -8,12 +8,15 @@ import {
   eliminarRecurso
 } from "../controllers/recursos.controller.js";
 
+import { validarMunicipioAsignado } from "../middlewares/validarMunicipioAsignado.js";
+import { validarFechaLimiteDeCarga } from "../middlewares/validarFechaLimiteDeCarga.js";
+
 const router = Router();
 
-router.post("/", crearRecurso);
-router.get("/", obtenerRecursos);
-router.get("/:ejercicio/:mes/:partida/:municipio", obtenerRecurso);
-router.put("/:ejercicio/:mes/:partida/:municipio", actualizarRecurso);
-router.delete("/:ejercicio/:mes/:partida/:municipio", eliminarRecurso);
+router.post("/", validarMunicipioAsignado, validarFechaLimiteDeCarga, crearRecurso);
+router.get("/", validarMunicipioAsignado, validarFechaLimiteDeCarga, obtenerRecursos);
+router.get("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteDeCarga, obtenerRecurso);
+router.put("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteDeCarga, actualizarRecurso);
+// router.delete("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarRecurso);
 
 export default router;

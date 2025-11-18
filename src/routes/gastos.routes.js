@@ -16,7 +16,7 @@ const router = Router();
 
 
 // Listar
-router.get("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarMunicipioAsignado, listarGastos);
+router.get("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, listarGastos);
 
 // Crear
 router.post("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, crearGasto);
@@ -26,7 +26,7 @@ router.post("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, v
 router.put("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, actualizarGasto);
 
 // Eliminar
-router.delete("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarGasto);
+// router.delete("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarGasto);
 
 // Reporte por partida
 router.get(

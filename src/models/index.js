@@ -19,6 +19,7 @@ import PartidaEconomico from './puentes/PartidaEconomico.js';
 import EconomicoGasto from './clasificacionEconomica/EconomicoGasto.js';
 import EjercicioMesCerrado from './moduloEjercicios/EjercicioMesCerrado.js';
 import CronLog from './moduloEjercicios/CronLog.js';
+import CierreModulo from './moduloEjercicios/CierreModulo.js';
 import RecursoEconomico from './puentes/RecursoEconomico.js';
 import EconomicoRecurso from './clasificacionEconomica/EconomicoRecurso.js';
 import PasswordReset from './PasswordReset.js';
@@ -119,6 +120,9 @@ EconomicoGasto.hasMany(PartidaEconomico, {
 });
 
 EjercicioMesCerrado.belongsTo(Municipio, { foreignKey: "municipio_id" });
+CierreModulo.belongsTo(Municipio, { foreignKey: "municipio_id" });
+CierreModulo.belongsTo(Convenio, { foreignKey: "convenio_id" });
+CierreModulo.belongsTo(PautaConvenio, { foreignKey: "pauta_id" });
 
 PartidaRecurso.hasOne(RecursoEconomico, {
   foreignKey: "cod_recurso",                 // en ovif_recursos_economico
@@ -156,6 +160,7 @@ export {
   EconomicoGasto,
   Poblacion,
   EjercicioMesCerrado,
+  CierreModulo,
   PasswordReset,
   TokenBlacklist,
   CronLog,

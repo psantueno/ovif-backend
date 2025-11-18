@@ -22,7 +22,7 @@ export const validarMunicipioAsignado = async (req, res, next) => {
     });
 
     if (!acceso) {
-      return res.status(403).json({ error: "No tiene acceso al municipio solicitado" });
+      return res.status(403).json({ error: "No posee autorización para operar este municipio" });
     }
 
     next();
