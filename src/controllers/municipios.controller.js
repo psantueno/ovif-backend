@@ -2,6 +2,7 @@
 import { Municipio, EjercicioMes, ProrrogaMunicipio, EjercicioMesCerrado, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
+import { Op } from "sequelize";
 
 const toISODate = (value) => {
   if (!value) return null;
@@ -204,8 +205,39 @@ const aplanarJerarquiaPartidasRecursos = (nodos, nivel = 0) => {
 // Obtener todos los municipios
 export const getMunicipios = async (req, res) => {
   try {
-    const municipios = await Municipio.findAll();
-    res.json(municipios);
+    let { pagina = 1, limite = 10, search } = req.query;
+
+    const paginaParsed = Number.parseInt(pagina, 10);
+    const limiteParsed = Number.parseInt(limite, 10);
+    const paginaFinal = Number.isFinite(paginaParsed) && paginaParsed > 0 ? paginaParsed : 1;
+    const limiteFinal = Number.isFinite(limiteParsed) && limiteParsed > 0 ? limiteParsed : 10;
+    const offset = (paginaFinal - 1) * limiteFinal;
+
+    const where = {};
+    const trimmedSearch = typeof search === "string" ? search.trim() : "";
+    if (trimmedSearch) {
+      where.municipio_nombre = { [Op.like]: `%${trimmedSearch}%` };
+    }
+
+    const { rows, count } = await Municipio.findAndCountAll({
+      where,
+      order: [
+        ["municipio_nombre", "ASC"],
+        ["municipio_id", "ASC"],
+      ],
+      limit: limiteFinal,
+      offset,
+    });
+
+    const totalPaginas = limiteFinal > 0 ? Math.ceil(count / limiteFinal) : 0;
+
+    res.json({
+      total: count,
+      pagina: paginaFinal,
+      limite: limiteFinal,
+      totalPaginas,
+      data: rows,
+    });
   } catch (error) {
     console.error("❌ Error consultando municipios:", error);
     res.status(500).json({ error: "Error consultando municipios" });
@@ -575,24 +607,24 @@ export const updateMunicipio = async (req, res) => {
 };
 
 // Eliminar un municipio
-// export const deleteMunicipio = async (req, res) => {
-//   const { id } = req.params;
+export const deleteMunicipio = async (req, res) => {
+  const { id } = req.params;
 
-//   try {
-//     const municipio = await Municipio.findByPk(id);
+  try {
+    const municipio = await Municipio.findByPk(id);
 
-//     if (!municipio) {
-//       return res.status(404).json({ error: "Municipio no encontrado" });
-//     }
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
 
-//     await municipio.destroy();
+    await municipio.destroy();
 
-//     res.json({ message: "Municipio eliminado correctamente" });
-//   } catch (error) {
-//     console.error("❌ Error eliminando municipio:", error);
-//     res.status(500).json({ error: "Error eliminando municipio" });
-//   }
-// };
+    res.json({ message: "Municipio eliminado correctamente" });
+  } catch (error) {
+    console.error("❌ Error eliminando municipio:", error);
+    res.status(500).json({ error: "Error eliminando municipio" });
+  }
+};
 
 // === Partidas de gastos del municipio (con importes cargados) ===
 export const obtenerPartidasGastosMunicipio = async (req, res) => {

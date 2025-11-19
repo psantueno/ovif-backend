@@ -7,6 +7,7 @@ import {
   Municipio,
   Convenio,
   PautaConvenio,
+  CierreModulo,
 } from "../models/index.js";
 
 const isValidISODate = (value) => {
@@ -17,6 +18,16 @@ const isValidISODate = (value) => {
   if (Number.isNaN(date.getTime())) return false;
   return date.toISOString().slice(0, 10) === trimmed;
 };
+
+const toISODateString = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().split("T")[0];
+};
+
+const MODULOS_VALIDOS = ["GASTOS", "RECURSOS", "RECAUDACIONES", "PERSONAL"];
+const TIPOS_CIERRE = ["AUTOMATICO", "MANUAL"];
 
 
 // Listar todos los ejercicios
@@ -412,47 +423,106 @@ export const getFechaLimite = async (req, res) => {
 // POST /api/ejercicios/:ejercicio/mes/:mes/municipios/:municipioId/cerrar
 export const cerrarMesMunicipio = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
-  const { informe_recursos, informe_gastos, informe_personal } = req.body;
-  const fechaHoy = new Date().toISOString().split("T")[0];
+  const convenioIdInput = req.params.convenioId ?? req.body.convenio_id;
+  const pautaIdInput = req.params.pautaId ?? req.body.pauta_id;
+  const moduloInput = req.params.modulo ?? req.body.modulo;
+  const { informe_path, tipo_cierre, observacion } = req.body;
+
+  const errores = [];
+
+  const ejercicioParsed = Number.parseInt(ejercicio, 10);
+  const mesParsed = Number.parseInt(mes, 10);
+  const municipioParsed = Number.parseInt(municipioId, 10);
+  const convenioParsed = Number.parseInt(convenioIdInput, 10);
+  const pautaParsed = Number.parseInt(pautaIdInput, 10);
+
+  if (Number.isNaN(ejercicioParsed)) {
+    errores.push("El parámetro 'ejercicio' debe ser numérico.");
+  }
+  if (Number.isNaN(mesParsed)) {
+    errores.push("El parámetro 'mes' debe ser numérico.");
+  }
+  if (Number.isNaN(municipioParsed)) {
+    errores.push("El parámetro 'municipioId' debe ser numérico.");
+  }
+  if (Number.isNaN(convenioParsed)) {
+    errores.push("Debe indicar un 'convenio_id' válido.");
+  }
+  if (Number.isNaN(pautaParsed)) {
+    errores.push("Debe indicar un 'pauta_id' válido.");
+  }
+
+  const modulo = typeof moduloInput === "string" ? moduloInput.trim().toUpperCase() : null;
+  if (!modulo || !MODULOS_VALIDOS.includes(modulo)) {
+    errores.push("El campo 'modulo' es obligatorio y debe ser uno de: GASTOS, RECURSOS, RECAUDACIONES, PERSONAL.");
+  }
+
+  const tipoCierreFuente =
+    typeof tipo_cierre === "string" && tipo_cierre.trim() !== ""
+      ? tipo_cierre
+      : "MANUAL";
+  const tipoCierreNormalizado = tipoCierreFuente.trim().toUpperCase();
+  if (!TIPOS_CIERRE.includes(tipoCierreNormalizado)) {
+    errores.push("El campo 'tipo_cierre' debe ser AUTOMATICO o MANUAL.");
+  }
+
+  if (typeof informe_path !== "string" || informe_path.trim() === "") {
+    errores.push("El campo 'informe_path' es obligatorio.");
+  }
+
+  if (errores.length > 0) {
+    return res.status(400).json({
+      error: "Datos inválidos para registrar el cierre.",
+      detalles: errores,
+    });
+  }
 
   try {
-    // === 1. Validar que exista el ejercicio/mes oficial
-    const oficial = await EjercicioMes.findOne({ where: { ejercicio, mes } });
+    const municipio = await Municipio.findByPk(municipioParsed);
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado." });
+    }
+
+    const oficial = await EjercicioMes.findOne({
+      where: {
+        ejercicio: ejercicioParsed,
+        mes: mesParsed,
+        convenio_id: convenioParsed,
+        pauta_id: pautaParsed,
+      },
+    });
+
     if (!oficial) {
-      return res.status(404).json({ error: "Ejercicio/Mes no encontrado en calendario oficial" });
+      return res.status(404).json({ error: "Ejercicio/Mes para el convenio y pauta indicados no existe." });
     }
 
-    // === 2. Verificar si hay override de fechas para el municipio
     const prorroga = await ProrrogaMunicipio.findOne({
-      where: { ejercicio, mes, municipio_id: municipioId },
+      where: {
+        ejercicio: ejercicioParsed,
+        mes: mesParsed,
+        municipio_id: municipioParsed,
+        convenio_id: convenioParsed,
+        pauta_id: pautaParsed,
+      },
     });
 
-    const fechaLimite = prorroga?.fecha_fin_nueva || oficial.fecha_fin;
+    const fechaLimite = toISODateString(prorroga?.fecha_fin_nueva || oficial.fecha_fin);
+    const fechaHoy = toISODateString(new Date());
 
-    // Validar fecha de cierre
-    if (fechaHoy > new Date(fechaLimite).toISOString().split("T")[0]) {
-      return res.status(400).json({ error: "El plazo de carga ya venció, no se puede cerrar" });
+    if (fechaLimite && fechaHoy > fechaLimite) {
+      return res.status(400).json({ error: "El plazo de carga ya venció, no se puede cerrar." });
     }
 
-    // === 3. Validar si ya existe un cierre registrado
-    const existente = await EjercicioMesCerrado.findOne({
-      where: { ejercicio, mes, municipio_id: municipioId },
-    });
-    if (existente) {
-      return res.status(400).json({ error: "El municipio ya cerró este ejercicio/mes" });
-    }
-
-    // === 4. Registrar el cierre
-    // 📌 IMPORTANTE: no validamos si hay datos en gastos, recursos o personal.
-    // Si no existen registros, simplemente el municipio queda "cerrado en blanco".
-    const cierre = await EjercicioMesCerrado.create({
-      ejercicio,
-      mes,
-      municipio_id: municipioId,
-      fecha: fechaHoy,
-      informe_recursos: informe_recursos || "",
-      informe_gastos: informe_gastos || "",
-      informe_personal: informe_personal || "",
+    const cierre = await CierreModulo.create({
+      ejercicio: ejercicioParsed,
+      mes: mesParsed,
+      municipio_id: municipioParsed,
+      convenio_id: convenioParsed,
+      pauta_id: pautaParsed,
+      modulo,
+      informe_path: informe_path.trim(),
+      tipo_cierre: tipoCierreNormalizado,
+      observacion: observacion || null,
     });
 
     return res.status(201).json({
@@ -466,7 +536,7 @@ export const cerrarMesMunicipio = async (req, res) => {
 };
 
 
-// Lista todos los municipios que completaron el cierre para un ejercicio y mes dados
+// Lista todos los municipios que completaron el cierre para un ejercicio y mes dados (sin uso aún)
 // GET /api/ejercicios/:ejercicio/mes/:mes/cierres
 export const listarCierres = async (req, res) => {
   const { ejercicio, mes } = req.params;

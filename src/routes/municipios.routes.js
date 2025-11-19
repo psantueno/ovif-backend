@@ -14,6 +14,7 @@ import {
   generarInformeGastosMunicipio,
   generarInformeRecursosMunicipio,
   crearProrrogaMunicipio,
+  deleteMunicipio,
 } from "../controllers/municipios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
@@ -100,6 +101,6 @@ router.post("/", authenticateToken, requireAdmin, createMunicipio);
 router.put("/:id", authenticateToken, requireAdmin, updateMunicipio);
 
 // eliminar municipio
-// router.delete("/:id", authenticateToken, deleteMunicipio);
+router.delete("/:id", authenticateToken, requireAdmin, deleteMunicipio);
 
 export default router;

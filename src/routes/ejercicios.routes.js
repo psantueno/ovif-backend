@@ -32,7 +32,13 @@ router.put("/:ejercicio/mes/:mes/municipios/:municipioId/prorroga", prorrogarCie
 // === Consultar fecha límite efectiva de un municipio ===
 router.get("/:ejercicio/mes/:mes/municipios/:municipioId", getFechaLimite);
 
-// === Cerrar mes para un municipio (registro en ovif_ejercicios_meses_cerrados) ===
+// === Cierre por módulo para un municipio ===
+router.post(
+  "/:ejercicio/mes/:mes/convenios/:convenioId/pautas/:pautaId/municipios/:municipioId/modulos/:modulo/cerrar",
+  cerrarMesMunicipio
+);
+
+// Ruta legacy (se mantiene temporalmente para compatibilidad)
 router.post("/:ejercicio/mes/:mes/municipios/:municipioId/cerrar", cerrarMesMunicipio);
 
 // === Lista de municipios que han cerrado un ejercicio/mes ===

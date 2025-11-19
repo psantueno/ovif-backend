@@ -53,17 +53,12 @@ const CierreModulo = sequelize.define("CierreModulo", {
     type: DataTypes.DATE,
     allowNull: true,
     defaultValue: DataTypes.NOW,
-  },
-  fecha_actualizacion: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    defaultValue: DataTypes.NOW,
-  },
+  }
 }, {
   tableName: "ovif_cierres_modulos",
   timestamps: true,
   createdAt: "fecha_creacion",
-  updatedAt: "fecha_actualizacion",
+  updatedAt: false,
 });
 
 export default CierreModulo;
