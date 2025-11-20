@@ -1,5 +1,5 @@
 // Modelo
-import { Municipio, EjercicioMes, ProrrogaMunicipio, EjercicioMesCerrado, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio } from "../models/index.js";
+import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { Op } from "sequelize";
@@ -381,15 +381,16 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const cierres = await EjercicioMesCerrado.findAll({
-      where: {
-        municipio_id: municipioId,
-        ejercicio,
-      },
-      order: [["mes", "ASC"]],
+    const oficiales = await EjercicioMes.findAll({
+      where: { ejercicio },
+      order: [
+        ["mes", "ASC"],
+        ["convenio_id", "ASC"],
+        ["pauta_id", "ASC"],
+      ],
     });
 
-    if (cierres.length === 0) {
+    if (oficiales.length === 0) {
       return res.json({
         municipio: municipio.get(),
         ejercicio,
@@ -397,9 +398,6 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
       });
     }
 
-    const oficiales = await EjercicioMes.findAll({
-      where: { ejercicio },
-    });
     const prorrogas = await ProrrogaMunicipio.findAll({
       where: {
         ejercicio,
@@ -407,37 +405,41 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
       },
     });
 
-    const oficialMap = new Map(
-      oficiales.map((item) => [`${item.ejercicio}-${item.mes}`, item])
-    );
     const prorrogaMap = new Map(
-      prorrogas.map((item) => [`${item.ejercicio}-${item.mes}`, item])
+      prorrogas.map((item) => [
+        buildCalendarioKey(item.ejercicio, item.mes, item.convenio_id, item.pauta_id),
+        item,
+      ])
     );
 
-    const respuesta = cierres.map((cierre) => {
-      const key = `${cierre.ejercicio}-${cierre.mes}`;
-      const oficial = oficialMap.get(key);
+    const respuesta = oficiales.map((oficial) => {
+      const key = buildCalendarioKey(
+        oficial.ejercicio,
+        oficial.mes,
+        oficial.convenio_id,
+        oficial.pauta_id
+      );
       const prorroga = prorrogaMap.get(key);
       const fechaProrroga = prorroga?.fecha_fin_nueva || null;
-      const fechaVigente = fechaProrroga ?? oficial?.fecha_fin ?? null;
+      const fechaVigente = fechaProrroga ?? oficial.fecha_fin ?? null;
 
       return {
-        ejercicio: cierre.ejercicio,
-        mes: cierre.mes,
+        ejercicio: oficial.ejercicio,
+        mes: oficial.mes,
+        convenio_id: oficial.convenio_id,
+        pauta_id: oficial.pauta_id,
         fechas: {
-          inicio_oficial: toISODate(oficial?.fecha_inicio),
-          fin_oficial: toISODate(oficial?.fecha_fin),
+          inicio_oficial: toISODate(oficial.fecha_inicio),
+          fin_oficial: toISODate(oficial.fecha_fin),
           inicio_prorroga: null,
           fin_prorroga: toISODate(fechaProrroga),
           fin_vigente: toISODate(fechaVigente),
-          fecha_cierre: toISODate(cierre.fecha),
+          fecha_cierre: toISODate(fechaVigente),
         },
-        datosOficiales: oficial
-          ? {
-              fecha_inicio: toISODate(oficial.fecha_inicio),
-              fecha_fin: toISODate(oficial.fecha_fin),
-            }
-          : null,
+        datosOficiales: {
+          fecha_inicio: toISODate(oficial.fecha_inicio),
+          fecha_fin: toISODate(oficial.fecha_fin),
+        },
         prorroga: prorroga
           ? {
               fecha_inicio: null,
@@ -447,13 +449,7 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
               pauta_id: prorroga.pauta_id,
             }
           : null,
-        cierre: {
-          municipio_id: cierre.municipio_id,
-          fecha: toISODate(cierre.fecha),
-          informe_recursos: cierre.informe_recursos,
-          informe_gastos: cierre.informe_gastos,
-          informe_personal: cierre.informe_personal,
-        },
+        cierre: null,
         tiene_prorroga: Boolean(prorroga),
       };
     });

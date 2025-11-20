@@ -49,20 +49,21 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
 
-    // 👇 Ahora guardamos usuario_id directamente
-    const payload = {
-      usuario_id: user.usuario_id,
-      usuario: user.usuario,
-    };
-
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "4h" });
-
     const roles = Array.isArray(user.Roles)
       ? user.Roles.map((rol) => ({
           id: rol.rol_id,
           nombre: rol.nombre,
         }))
       : [];
+
+    // 👇 Ahora guardamos usuario_id directamente
+    const payload = {
+      usuario_id: user.usuario_id,
+      usuario: user.usuario,
+      roles: roles.map((rol) => rol.nombre),
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "4h" });
 
     return res.json({
       token,
