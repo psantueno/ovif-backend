@@ -405,6 +405,45 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
       },
     });
 
+    const convenioIds = new Set();
+    const pautaIds = new Set();
+
+    oficiales.forEach((oficial) => {
+      if (oficial.convenio_id !== null && oficial.convenio_id !== undefined) {
+        convenioIds.add(oficial.convenio_id);
+      }
+      if (oficial.pauta_id !== null && oficial.pauta_id !== undefined) {
+        pautaIds.add(oficial.pauta_id);
+      }
+    });
+
+    prorrogas.forEach((prorroga) => {
+      if (prorroga.convenio_id !== null && prorroga.convenio_id !== undefined) {
+        convenioIds.add(prorroga.convenio_id);
+      }
+      if (prorroga.pauta_id !== null && prorroga.pauta_id !== undefined) {
+        pautaIds.add(prorroga.pauta_id);
+      }
+    });
+
+    const [convenios, pautas] = await Promise.all([
+      convenioIds.size
+        ? Convenio.findAll({
+            attributes: ["convenio_id", "nombre"],
+            where: { convenio_id: { [Op.in]: [...convenioIds] } },
+          })
+        : Promise.resolve([]),
+      pautaIds.size
+        ? PautaConvenio.findAll({
+            attributes: ["pauta_id", "descripcion", "convenio_id"],
+            where: { pauta_id: { [Op.in]: [...pautaIds] } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const convenioMap = new Map(convenios.map((item) => [item.convenio_id, item]));
+    const pautaMap = new Map(pautas.map((item) => [item.pauta_id, item]));
+
     const prorrogaMap = new Map(
       prorrogas.map((item) => [
         buildCalendarioKey(item.ejercicio, item.mes, item.convenio_id, item.pauta_id),
@@ -420,36 +459,24 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
         oficial.pauta_id
       );
       const prorroga = prorrogaMap.get(key);
-      const fechaProrroga = prorroga?.fecha_fin_nueva || null;
-      const fechaVigente = fechaProrroga ?? oficial.fecha_fin ?? null;
+      const fechaCierreOficial = toISODate(oficial.fecha_fin);
+      const fechaProrrogaVigente = prorroga ? toISODate(prorroga.fecha_fin_nueva) : null;
+      const fechaCierre = fechaProrrogaVigente ?? fechaCierreOficial;
+      const convenio = convenioMap.get(oficial.convenio_id);
+      const pauta = pautaMap.get(oficial.pauta_id);
 
       return {
         ejercicio: oficial.ejercicio,
         mes: oficial.mes,
         convenio_id: oficial.convenio_id,
+        convenio_nombre: convenio?.nombre ?? null,
         pauta_id: oficial.pauta_id,
+        pauta_descripcion: pauta?.descripcion ?? null,
         fechas: {
-          inicio_oficial: toISODate(oficial.fecha_inicio),
-          fin_oficial: toISODate(oficial.fecha_fin),
-          inicio_prorroga: null,
-          fin_prorroga: toISODate(fechaProrroga),
-          fin_vigente: toISODate(fechaVigente),
-          fecha_cierre: toISODate(fechaVigente),
+          cierre_oficial: fechaCierreOficial,
+          prorroga_vigente: fechaProrrogaVigente,
         },
-        datosOficiales: {
-          fecha_inicio: toISODate(oficial.fecha_inicio),
-          fecha_fin: toISODate(oficial.fecha_fin),
-        },
-        prorroga: prorroga
-          ? {
-              fecha_inicio: null,
-              fecha_fin: toISODate(prorroga.fecha_fin_nueva),
-              fecha_fin_nueva: toISODate(prorroga.fecha_fin_nueva),
-              convenio_id: prorroga.convenio_id,
-              pauta_id: prorroga.pauta_id,
-            }
-          : null,
-        cierre: null,
+        fecha_cierre: fechaCierre,
         tiene_prorroga: Boolean(prorroga),
       };
     });
