@@ -362,18 +362,8 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
     return res.status(400).json({ error: "municipioId inválido" });
   }
 
-  const currentYear = new Date().getFullYear();
-  const normalizeQueryValue = (value) => (Array.isArray(value) ? value[0] : value);
-  const ejercicioParam = normalizeQueryValue(
-    req.query?.anio ?? req.query?.ejercicio ?? req.query?.year
-  );
-  const ejercicio = ejercicioParam === undefined ? currentYear : Number(ejercicioParam);
-
-  if (Number.isNaN(ejercicio)) {
-    return res.status(400).json({ error: "El año del ejercicio es inválido" });
-  }
-
   try {
+    // 1️⃣ Validar que el municipio existe
     const municipio = await Municipio.findByPk(municipioId, {
       attributes: ["municipio_id", "municipio_nombre"],
     });
@@ -381,10 +371,17 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
+    // 2️⃣ Obtener la fecha actual automáticamente
+    const hoy = toISODate(new Date());
+
+    // 3️⃣ Buscar TODOS los ejercicios/mes donde fecha_fin < hoy (VENCIDOS)
     const oficiales = await EjercicioMes.findAll({
-      where: { ejercicio },
+      where: {
+        fecha_fin: { [Op.lt]: new Date(hoy) }, // fecha_fin menor a hoy
+      },
       order: [
-        ["mes", "ASC"],
+        ["ejercicio", "DESC"],
+        ["mes", "DESC"],
         ["convenio_id", "ASC"],
         ["pauta_id", "ASC"],
       ],
@@ -393,18 +390,20 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
     if (oficiales.length === 0) {
       return res.json({
         municipio: municipio.get(),
-        ejercicio,
         cierres: [],
+        fecha_consulta: hoy,
+        total_vencidos: 0,
       });
     }
 
+    // 4️⃣ Buscar prórrogas para este municipio
     const prorrogas = await ProrrogaMunicipio.findAll({
       where: {
-        ejercicio,
         municipio_id: municipioId,
       },
     });
 
+    // 5️⃣ Recopilar IDs de convenios y pautas
     const convenioIds = new Set();
     const pautaIds = new Set();
 
@@ -426,6 +425,7 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
       }
     });
 
+    // 6️⃣ Buscar datos de convenios y pautas
     const [convenios, pautas] = await Promise.all([
       convenioIds.size
         ? Convenio.findAll({
@@ -441,6 +441,7 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
         : Promise.resolve([]),
     ]);
 
+    // 7️⃣ Crear mapas para acceso rápido
     const convenioMap = new Map(convenios.map((item) => [item.convenio_id, item]));
     const pautaMap = new Map(pautas.map((item) => [item.pauta_id, item]));
 
@@ -451,6 +452,7 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
       ])
     );
 
+    // 8️⃣ Construir respuesta
     const respuesta = oficiales.map((oficial) => {
       const key = buildCalendarioKey(
         oficial.ejercicio,
@@ -483,8 +485,9 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
 
     return res.json({
       municipio: municipio.get(),
-      ejercicio,
       cierres: respuesta,
+      fecha_consulta: hoy,
+      total_vencidos: respuesta.length,
     });
   } catch (error) {
     console.error("❌ Error listando ejercicios cerrados:", error);
@@ -710,7 +713,6 @@ export const obtenerPartidasRecursosMunicipio = async (req, res) => {
   }
 };
 
-// === Upsert masivo de gastos por municipio ===
 
 export const crearProrrogaMunicipio = async (req, res) => {
   const municipioId = Number(req.params.municipioId || req.params.id);
@@ -726,6 +728,10 @@ export const crearProrrogaMunicipio = async (req, res) => {
   }
 
   if (!fecha_fin) {
+    return res.status(400).json({ error: "Debe enviar fecha_fin" });
+  }
+
+  if (!tipo || (tipo !== "RECTIFICATIVA" && tipo !== "PRORROGA")) {
     return res.status(400).json({ error: "Debe enviar fecha_fin" });
   }
 
@@ -763,7 +769,7 @@ export const crearProrrogaMunicipio = async (req, res) => {
     }
 
     let prorroga = await ProrrogaMunicipio.findOne({
-      where: { ejercicio, mes, municipio_id: municipioId },
+      where: { ejercicio, mes, municipio_id: municipioId, convenio_id, pauta_id },
     });
 
     const fechaAnterior = prorroga ? prorroga.fecha_fin_nueva : oficial.fecha_fin;
@@ -808,10 +814,10 @@ export const crearProrrogaMunicipio = async (req, res) => {
       pauta_id: prorroga.pauta_id,
       fecha_fin_anterior: fechaAnterior,
       fecha_fin_prorrogada: fecha_fin,
-      tipo: tipo || "PRORROGA",
-      motivo: motivo || comentario || null,
+      tipo: tipo,
+      motivo: motivo,
       gestionado_por: usuarioId,
-      observaciones: observaciones ?? null,
+      observaciones: observaciones,
     });
 
     return res.json({
