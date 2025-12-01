@@ -4,14 +4,14 @@ import sequelize from "../config/db.js";
 const PautaConvenio = sequelize.define(
     "PautaConvenio",
     {
+        convenio_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+        },
         pauta_id: {
             type: DataTypes.INTEGER,
             primaryKey: true,
             autoIncrement: true,
-        },
-        convenio_id: {
-            type: DataTypes.INTEGER,
-            allowNull: false,
         },
         descripcion: {
             type: DataTypes.STRING(255),
@@ -26,7 +26,7 @@ const PautaConvenio = sequelize.define(
             allowNull: false,
         },
         tipo_pauta: {
-            type: DataTypes.INTEGER, // en db esta como enum('gastos_recursos', 'recaudaciones_personal') 	utf8mb4_unicode_ci 	
+            type: DataTypes.INTEGER,
             allowNull: false,
         },
         fecha_creacion: {

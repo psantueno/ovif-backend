@@ -11,9 +11,15 @@ import PartidaGasto from './partidas/PartidaGasto.js';
 import PartidaRecurso from './partidas/PartidaRecurso.js';
 import Recurso from './moduloCargaDatos/Recurso.js';
 import Gasto from './moduloCargaDatos/Gasto.js';
-import Personal from './moduloCargaDatos/Personal.js';
 import Archivo from './moduloCargaDatos/Archivo.js';
 import SituacionRevista from './moduloCargaDatos/SituacionRevista.js';
+import Remuneracion from './moduloCargaDatos/Remuneracion.js';
+import ConceptoRecaudacion from './ConceptoRecaudacion.js';
+import Recaudacion from './moduloCargaDatos/Recaudacion.js';
+import RecaudacionRectificada from './rectificaciones/RecaudacionRectificada.js';
+import RemuneracionRectificada from './rectificaciones/RemuneracionRectificada.js';
+import RegimenLaboral from './RegimenLaboral.js';
+import TipoGasto from './TipoGasto.js';
 import Poblacion from './moduloCargaDatos/Poblacion.js';
 import PartidaEconomico from './puentes/PartidaEconomico.js';
 import EconomicoGasto from './clasificacionEconomica/EconomicoGasto.js';
@@ -94,10 +100,33 @@ Recurso.belongsTo(PartidaRecurso, { foreignKey: "partidas_recursos_codigo", targ
 
 Archivo.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
-Personal.belongsTo(Municipio, { foreignKey: "municipio_id" });
-Personal.belongsTo(SituacionRevista, { foreignKey: "id_situacion_revista" });
+ConceptoRecaudacion.belongsTo(PartidaRecurso, {
+  foreignKey: "cod_recurso",
+  targetKey: "partidas_recursos_codigo"
+});
+PartidaRecurso.hasMany(ConceptoRecaudacion, {
+  foreignKey: "cod_recurso",
+  sourceKey: "partidas_recursos_codigo"
+});
+
+
+Remuneracion.belongsTo(RegimenLaboral, { foreignKey: "regimen_id" });
+RegimenLaboral.hasMany(Remuneracion, { foreignKey: "regimen_id" });
+Remuneracion.belongsTo(TipoGasto, { foreignKey: "tipo_liquidacion" });
+TipoGasto.hasMany(Remuneracion, { foreignKey: "tipo_liquidacion" });
+RemuneracionRectificada.belongsTo(RegimenLaboral, { foreignKey: "regimen_id" });
+RegimenLaboral.hasMany(RemuneracionRectificada, { foreignKey: "regimen_id" });
+RemuneracionRectificada.belongsTo(TipoGasto, { foreignKey: "tipo_liquidacion" });
+TipoGasto.hasMany(RemuneracionRectificada, { foreignKey: "tipo_liquidacion" });
 
 Poblacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
+
+Recaudacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
+Recaudacion.belongsTo(ConceptoRecaudacion, { foreignKey: "cod_concepto", targetKey: "cod_concepto" });
+ConceptoRecaudacion.hasMany(Recaudacion, { foreignKey: "cod_concepto", sourceKey: "cod_concepto" });
+RecaudacionRectificada.belongsTo(Municipio, { foreignKey: "municipio_id" });
+RecaudacionRectificada.belongsTo(ConceptoRecaudacion, { foreignKey: "cod_concepto", targetKey: "cod_concepto" });
+ConceptoRecaudacion.hasMany(RecaudacionRectificada, { foreignKey: "cod_concepto", sourceKey: "cod_concepto" });
 
 // PartidaGasto ↔ PartidaEconomico
 PartidaGasto.hasMany(PartidaEconomico, {
@@ -151,7 +180,6 @@ export {
   EjercicioMes,
   Gasto,
   Recurso,
-  Personal,
   Archivo,
   PartidaGasto,
   PartidaRecurso, 
@@ -169,5 +197,12 @@ export {
   Convenio,
   PautaConvenio,
   ProrrogaMunicipio,
-  AuditoriaProrrogaMunicipio
+  AuditoriaProrrogaMunicipio,
+  RegimenLaboral,
+  TipoGasto,
+  Remuneracion,
+  ConceptoRecaudacion,
+  Recaudacion,
+  RecaudacionRectificada,
+  RemuneracionRectificada
 };
