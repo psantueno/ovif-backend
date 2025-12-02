@@ -10,13 +10,21 @@ import {
   getCierreMunicipio,
   listarEstadoMunicipios,
   deleteEjercicio,
+  obtenerFiltrosInformes,
+  obtenerInformeModulo,
 } from "../controllers/ejercicios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
+import { validarMunicipioAsignado } from "../middlewares/validarMunicipioAsignado.js";
 
 const router = Router();
 
+// === Informes por módulo (acceso por usuario autenticado con municipio asignado) ===
+router.get("/informes/filtros", authenticateToken, validarMunicipioAsignado, obtenerFiltrosInformes);
+router.get("/informes", authenticateToken, validarMunicipioAsignado, obtenerInformeModulo);
+
+// === Resto de endpoints de ejercicios (admin) ===
 router.use(authenticateToken, requireAdmin);
 
 // === CRUD de EjerciciosMes ===

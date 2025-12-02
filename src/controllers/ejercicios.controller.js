@@ -9,6 +9,7 @@ import {
   PautaConvenio,
   CierreModulo,
 } from "../models/index.js";
+import { Op } from "sequelize";
 
 const isValidISODate = (value) => {
   if (typeof value !== "string") return false;
@@ -683,5 +684,99 @@ export const listarEstadoMunicipios = async (req, res) => {
   } catch (error) {
     console.error("❌ Error en listarEstadoMunicipios:", error);
     return res.status(500).json({ error: "Error consultando estados de municipios" });
+  }
+};
+
+
+// === Informes por módulo para un municipio ===
+// GET /api/ejercicios/informes/filtros?municipio_id=...
+export const obtenerFiltrosInformes = async (req, res) => {
+  const municipioId = req.query?.municipio_id ?? req.params?.municipioId;
+
+  if (!municipioId) {
+    return res.status(400).json({ error: "municipio_id es requerido" });
+  }
+
+  try {
+    const sequelize = CierreModulo.sequelize;
+    const where = { municipio_id: municipioId };
+
+    const [ejercicios, meses, modulos] = await Promise.all([
+      CierreModulo.findAll({
+        attributes: [[sequelize.fn("DISTINCT", sequelize.col("ejercicio")), "ejercicio"]],
+        where,
+        order: [["ejercicio", "DESC"]],
+        raw: true,
+      }),
+      CierreModulo.findAll({
+        attributes: [[sequelize.fn("DISTINCT", sequelize.col("mes")), "mes"]],
+        where,
+        order: [["mes", "ASC"]],
+        raw: true,
+      }),
+      CierreModulo.findAll({
+        attributes: [[sequelize.fn("DISTINCT", sequelize.col("modulo")), "modulo"]],
+        where,
+        order: [["modulo", "ASC"]],
+        raw: true,
+      }),
+    ]);
+
+    return res.json({
+      ejercicios: ejercicios.map((e) => e.ejercicio).filter(Boolean),
+      meses: meses.map((m) => m.mes).filter(Boolean),
+      modulos: modulos.map((m) => m.modulo).filter(Boolean),
+    });
+  } catch (error) {
+    console.error("❌ Error obteniendo filtros de informes:", error);
+    return res.status(500).json({ error: "Error obteniendo filtros" });
+  }
+};
+
+// GET /api/ejercicios/informes?municipio_id=&ejercicio=&mes=&modulo=
+export const obtenerInformeModulo = async (req, res) => {
+  const municipioId = req.query?.municipio_id ?? req.params?.municipioId;
+  const ejercicioRaw = req.query?.ejercicio;
+  const mesRaw = req.query?.mes;
+  const modulo = req.query?.modulo?.toUpperCase();
+
+  const ejercicio = Number.parseInt(ejercicioRaw, 10);
+  const mes = Number.parseInt(mesRaw, 10);
+
+  if (!municipioId || Number.isNaN(ejercicio) || Number.isNaN(mes) || !modulo) {
+    return res.status(400).json({
+      error: "municipio_id, ejercicio, mes y modulo son requeridos",
+    });
+  }
+
+  if (mes < 1 || mes > 12) {
+    return res.status(400).json({ error: "mes debe estar entre 1 y 12" });
+  }
+
+  if (!MODULOS_VALIDOS.includes(modulo)) {
+    return res.status(400).json({ error: "modulo inválido" });
+  }
+
+  try {
+    const cierre = await CierreModulo.findOne({
+      where: {
+        municipio_id: municipioId,
+        ejercicio,
+        mes,
+        modulo,
+        informe_path: { [Op.ne]: null },
+      },
+      order: [["fecha_cierre", "DESC"]],
+    });
+
+    if (!cierre) {
+      return res.status(404).json({ error: "No hay informe disponible con esos filtros" });
+    }
+
+    const downloadUrl = cierre.informe_path || "/files/informes/placeholder.pdf";
+    return res.json({ downloadUrl });
+  } catch (error) {
+    console.error("❌ Error obteniendo informe del módulo:", error);
+    return res.status(500).json({ error: "Error obteniendo informe" });
   }
 };

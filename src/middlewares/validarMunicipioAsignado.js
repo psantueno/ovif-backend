@@ -2,8 +2,12 @@ import { UsuarioMunicipio } from "../models/index.js";
 
 // Verifica que el usuario autenticado tenga asignado el municipio solicitado
 export const validarMunicipioAsignado = async (req, res, next) => {
-  const { municipioId } = req.params;
   const usuarioId = req.user?.usuario_id;
+  const municipioId =
+    req.params?.municipioId ||
+    req.params?.municipio ||
+    req.query?.municipio_id ||
+    req.body?.municipio_id;
 
   if (!usuarioId) {
     return res.status(401).json({ error: "Usuario no autenticado" });
