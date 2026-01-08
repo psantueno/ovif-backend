@@ -3,6 +3,11 @@ import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio,
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { Op } from "sequelize";
+import { GastosSchema } from "../validation/gastosSchema.validation.js";
+import { RecursosSchema } from "../validation/recursosSchema.validation.js";
+import { EjerciciosSchema } from "../validation/ejerciciosSchema.validation.js";
+import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
+import e from "express";
 
 const toISODate = (value) => {
   if (!value) return null;
@@ -845,12 +850,10 @@ export const upsertGastosMunicipio = async (req, res) => {
   const mesNum = Number(mes);
   const municipioNum = Number(municipioId);
 
-  if ([ejercicioNum, mesNum, municipioNum].some((value) => Number.isNaN(value))) {
-    return res.status(400).json({ error: "Ejercicio, mes y municipio deben ser numéricos" });
-  }
+  const valid = EjerciciosSchema.safeParse({ ejercicio: ejercicioNum, mes: mesNum, municipio_id: municipioNum });
 
-  if (!Array.isArray(partidas) || partidas.length === 0) {
-    return res.status(400).json({ error: "Debe enviar un arreglo 'partidas' con al menos un elemento" });
+  if (!valid.success) {
+    return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
   }
 
   const sequelize = Gasto.sequelize;
@@ -866,83 +869,100 @@ export const upsertGastosMunicipio = async (req, res) => {
     let actualizados = 0;
     let sinCambios = 0;
 
+    const errores = [];
+
     for (const item of partidas) {
-      const codigo = Number(item?.partidas_gastos_codigo);
+      try{
+        const codigo = Number(item?.partidas_gastos_codigo);
 
-      if (Number.isNaN(codigo)) {
-        await transaction.rollback();
-        return res.status(400).json({ error: "Cada partida debe incluir 'partidas_gastos_codigo' numérico" });
-      }
+        const partidaGasto = await PartidaGasto.findOne({ where: { partidas_gastos_codigo: codigo } });
 
-      const tieneImporte = Object.prototype.hasOwnProperty.call(item, "gastos_importe_devengado");
-      const importeValor = item?.gastos_importe_devengado;
-      let importeParsed;
-
-      if (tieneImporte) {
-        const normalizado = importeValor === null || importeValor === "" ? 0 : importeValor;
-        importeParsed = Number(normalizado);
-        if (Number.isNaN(importeParsed)) {
-          await transaction.rollback();
-          return res.status(400).json({ error: `El importe para la partida ${codigo} debe ser numérico` });
+        if (!partidaGasto) {
+          errores.push(`La partida con código ${item?.partidas_gastos_codigo} no existe en el catálogo de partidas de gastos.`);
+          continue;
         }
-      }
 
-      const where = {
-        gastos_ejercicio: ejercicioNum,
-        gastos_mes: mesNum,
-        municipio_id: municipioNum,
-        partidas_gastos_codigo: codigo,
-      };
+        if(partidaGasto && !partidaGasto.partidas_gastos_carga){
+          errores.push(`La partida con código ${item?.partidas_gastos_codigo} no permite carga de gastos.`);
+          continue;
+        }
 
-      const existente = await Gasto.findOne({ where, transaction });
+        const tieneImporte = Object.prototype.hasOwnProperty.call(item, "gastos_importe_devengado");
+        const importeValor = item?.gastos_importe_devengado;
+        let importeParsed;
 
-      if (!existente) {
+        if (tieneImporte) {
+          const normalizado = importeValor === null || importeValor === "" ? 0 : importeValor;
+          importeParsed = Number(normalizado);
+        }
+        const validGasto = GastosSchema.safeParse({
+          partidas_gastos_codigo: codigo,
+          gastos_importe_devengado: importeParsed,
+        });
+
+        if (!validGasto.success) {
+          errores.push(`Error procesando la partida con código ${item?.partidas_gastos_codigo}: ${zodErrorsToArray(validGasto.error.issues).join(", ")}`);
+          continue;
+        }
+
+        const where = {
+          gastos_ejercicio: ejercicioNum,
+          gastos_mes: mesNum,
+          municipio_id: municipioNum,
+          partidas_gastos_codigo: codigo,
+        };
+
+        const existente = await Gasto.findOne({ where, transaction });
+
+        if (!existente) {
+          await Gasto.create(
+            {
+              ...where,
+              gastos_importe_devengado: importeParsed,
+            },
+            { transaction }
+          );
+          creados += 1;
+          continue;
+        }
+
         if (!tieneImporte) {
-          await transaction.rollback();
-          return res.status(400).json({
-            error: `La partida ${codigo} no existe y requiere 'gastos_importe_devengado' para crearla`,
-          });
+          sinCambios += 1;
+          continue;
         }
 
-        await Gasto.create(
+        const importeActual = Number(existente.gastos_importe_devengado);
+        if (!Number.isNaN(importeActual) && importeActual === importeParsed) {
+          sinCambios += 1;
+          continue;
+        }
+
+        await existente.update(
           {
-            ...where,
             gastos_importe_devengado: importeParsed,
           },
           { transaction }
         );
-        creados += 1;
-        continue;
-      }
 
-      if (!tieneImporte) {
-        sinCambios += 1;
-        continue;
+        actualizados += 1;
+      } catch (error) {
+        errores.push(`Error procesando partida ${item?.partidas_gastos_codigo}: ${error.message}`);
       }
-
-      const importeActual = Number(existente.gastos_importe_devengado);
-      if (!Number.isNaN(importeActual) && importeActual === importeParsed) {
-        sinCambios += 1;
-        continue;
-      }
-
-      await existente.update(
-        {
-          gastos_importe_devengado: importeParsed,
-        },
-        { transaction }
-      );
-      actualizados += 1;
     }
 
     await transaction.commit();
 
+    const message = errores.length > 0
+      ? `Gastos procesados con errores: ${errores.length}`
+      : "Gastos procesados correctamente";
+
     return res.json({
-      message: "Gastos procesados correctamente",
+      message,
       resumen: {
         creados,
         actualizados,
         sinCambios,
+        errores
       },
     });
   } catch (error) {
@@ -960,12 +980,10 @@ export const upsertRecursosMunicipio = async (req, res) => {
   const mesNum = Number(mes);
   const municipioNum = Number(municipioId);
 
-  if ([ejercicioNum, mesNum, municipioNum].some((value) => Number.isNaN(value))) {
-    return res.status(400).json({ error: "Ejercicio, mes y municipio deben ser numéricos" });
-  }
+  const valid = EjerciciosSchema.safeParse({ ejercicio: ejercicioNum, mes: mesNum, municipio_id: municipioNum });
 
-  if (!Array.isArray(partidas) || partidas.length === 0) {
-    return res.status(400).json({ error: "Debe enviar un arreglo 'partidas' con al menos un elemento" });
+  if (!valid.success) {
+    return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
   }
 
   const sequelize = Recurso.sequelize;
@@ -981,43 +999,41 @@ export const upsertRecursosMunicipio = async (req, res) => {
     let creados = 0;
     let actualizados = 0;
     let sinCambios = 0;
-
-    const parseDecimal = (valor, codigo, campo) => {
-      const normalizado = valor === null || valor === "" ? 0 : valor;
-      const parsed = Number(normalizado);
-      if (Number.isNaN(parsed) || !Number.isFinite(parsed)) {
-        throw new Error(`El campo ${campo} para la partida ${codigo} debe ser numérico`);
-      }
-      return parsed;
-    };
-
-    const parseEntero = (valor, codigo, campo) => {
-      const normalizado = valor === null || valor === "" ? 0 : valor;
-      const parsed = Number(normalizado);
-      if (Number.isNaN(parsed) || !Number.isFinite(parsed) || !Number.isInteger(parsed)) {
-        throw new Error(`El campo ${campo} para la partida ${codigo} debe ser un número entero`);
-      }
-      return parsed;
-    };
+    let errores = [];
 
     for (const item of partidas) {
-      const codigo = Number(item?.partidas_recursos_codigo);
-      if (Number.isNaN(codigo)) {
-        await transaction.rollback();
-        return res.status(400).json({
-          error: "Cada partida debe incluir 'partidas_recursos_codigo' numérico",
-        });
+      const tieneImporte = Object.prototype.hasOwnProperty.call(item, "recursos_importe_percibido");
+      const tieneContribuyentes = item?.recursos_cantidad_contribuyentes !== undefined;
+      const tienePagaron = item?.recursos_cantidad_pagaron !== undefined;
+
+      console.log("Procesando partida recurso:", item);
+
+      const validRecurso = RecursosSchema.safeParse({
+        partidas_recursos_codigo: item?.partidas_recursos_codigo,
+        recursos_importe_percibido: item?.recursos_importe_percibido,
+        recursos_cantidad_contribuyentes: item?.recursos_cantidad_contribuyentes,
+        recursos_cantidad_pagaron: item?.recursos_cantidad_pagaron,
+      });
+
+      if (!validRecurso.success) {
+        errores.push(`Error procesando la partida con código ${item?.partidas_recursos_codigo}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
+        continue;
       }
 
-      const tieneImporte = Object.prototype.hasOwnProperty.call(item, "recursos_importe_percibido");
-      const tieneContribuyentes = Object.prototype.hasOwnProperty.call(
-        item,
-        "recursos_cantidad_contribuyentes"
-      );
-      const tienePagaron = Object.prototype.hasOwnProperty.call(
-        item,
-        "recursos_cantidad_pagaron"
-      );
+      const codigo = Number(item?.partidas_recursos_codigo);
+
+      const partidaRecurso = await PartidaRecurso.findOne({ where: { partidas_recursos_codigo: codigo } });
+      if (!partidaRecurso) {
+        errores.push(`La partida con código ${item?.partidas_recursos_codigo} no existe en el catálogo de partidas de recursos.`);
+        continue;
+      }
+
+      if(partidaRecurso && !partidaRecurso.partidas_recursos_carga){
+        errores.push(`La partida con código ${item?.partidas_recursos_codigo} no permite carga de recursos.`);
+        continue;
+      }
+
+      const cargaContribuyentes = !partidaRecurso.partidas_recursos_sl;
 
       const where = {
         recursos_ejercicio: ejercicioNum,
@@ -1029,44 +1045,16 @@ export const upsertRecursosMunicipio = async (req, res) => {
       const existente = await Recurso.findOne({ where, transaction });
 
       if (!existente) {
-        if (!tieneImporte) {
-          await transaction.rollback();
-          return res.status(400).json({
-            error: `La partida ${codigo} no existe y requiere 'recursos_importe_percibido' para crearla`,
-          });
-        }
+        const data = { ...where, recursos_importe_percibido: item.recursos_importe_percibido, recursos_cantidad_contribuyentes: 0, recursos_cantidad_pagaron: 0 };
 
-        let importeParsed;
-        let contribuyentesParsed = 0;
-        let pagaronParsed = 0;
-
-        try {
-          importeParsed = parseDecimal(item.recursos_importe_percibido, codigo, "recursos_importe_percibido");
-          if (tieneContribuyentes) {
-            contribuyentesParsed = parseEntero(
-              item.recursos_cantidad_contribuyentes,
-              codigo,
-              "recursos_cantidad_contribuyentes"
-            );
-          }
-          if (tienePagaron) {
-            pagaronParsed = parseEntero(
-              item.recursos_cantidad_pagaron,
-              codigo,
-              "recursos_cantidad_pagaron"
-            );
-          }
-        } catch (error) {
-          await transaction.rollback();
-          return res.status(400).json({ error: error.message });
+        if(cargaContribuyentes){
+          data.recursos_cantidad_contribuyentes = item.recursos_cantidad_contribuyentes ?? 0;
+          data.recursos_cantidad_pagaron = item.recursos_cantidad_pagaron ?? 0;
         }
 
         await Recurso.create(
           {
-            ...where,
-            recursos_importe_percibido: importeParsed,
-            recursos_cantidad_contribuyentes: contribuyentesParsed,
-            recursos_cantidad_pagaron: pagaronParsed,
+            ...data,
           },
           { transaction }
         );
@@ -1077,57 +1065,25 @@ export const upsertRecursosMunicipio = async (req, res) => {
       let huboCambios = false;
 
       if (tieneImporte) {
-        let importeParsed;
-        try {
-          importeParsed = parseDecimal(item.recursos_importe_percibido, codigo, "recursos_importe_percibido");
-        } catch (error) {
-          await transaction.rollback();
-          return res.status(400).json({ error: error.message });
-        }
-
         const importeActual = Number(existente.recursos_importe_percibido);
-        if (!Number.isNaN(importeActual) && importeActual !== importeParsed) {
-          existente.recursos_importe_percibido = importeParsed;
+        if (!Number.isNaN(importeActual) && importeActual !== item.recursos_importe_percibido) {
+          existente.recursos_importe_percibido = item.recursos_importe_percibido;
           huboCambios = true;
         }
       }
 
-      if (tieneContribuyentes) {
-        let contribuyentesParsed;
-        try {
-          contribuyentesParsed = parseEntero(
-            item.recursos_cantidad_contribuyentes,
-            codigo,
-            "recursos_cantidad_contribuyentes"
-          );
-        } catch (error) {
-          await transaction.rollback();
-          return res.status(400).json({ error: error.message });
-        }
-
+      if (tieneContribuyentes && cargaContribuyentes) {
         const contribuyentesActual = Number(existente.recursos_cantidad_contribuyentes);
-        if (!Number.isNaN(contribuyentesActual) && contribuyentesActual !== contribuyentesParsed) {
-          existente.recursos_cantidad_contribuyentes = contribuyentesParsed;
+        if (!Number.isNaN(contribuyentesActual) && contribuyentesActual !== item.recursos_cantidad_contribuyentes) {
+          existente.recursos_cantidad_contribuyentes = item.recursos_cantidad_contribuyentes ?? 0;
           huboCambios = true;
         }
       }
 
-      if (tienePagaron) {
-        let pagaronParsed;
-        try {
-          pagaronParsed = parseEntero(
-            item.recursos_cantidad_pagaron,
-            codigo,
-            "recursos_cantidad_pagaron"
-          );
-        } catch (error) {
-          await transaction.rollback();
-          return res.status(400).json({ error: error.message });
-        }
-
+      if (tienePagaron && cargaContribuyentes) {
         const pagaronActual = Number(existente.recursos_cantidad_pagaron);
-        if (!Number.isNaN(pagaronActual) && pagaronActual !== pagaronParsed) {
-          existente.recursos_cantidad_pagaron = pagaronParsed;
+        if (!Number.isNaN(pagaronActual) && pagaronActual !== item.recursos_cantidad_pagaron) {
+          existente.recursos_cantidad_pagaron = item.recursos_cantidad_pagaron ?? 0;
           huboCambios = true;
         }
       }
@@ -1149,6 +1105,7 @@ export const upsertRecursosMunicipio = async (req, res) => {
         creados,
         actualizados,
         sinCambios,
+        errores
       },
     });
   } catch (error) {
