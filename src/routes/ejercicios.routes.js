@@ -12,6 +12,7 @@ import {
   deleteEjercicio,
   obtenerFiltrosInformes,
   obtenerInformeModulo,
+  descargarInforme,
 } from "../controllers/ejercicios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
@@ -22,6 +23,7 @@ const router = Router();
 
 // === Informes por módulo (acceso por usuario autenticado con municipio asignado) ===
 router.get("/informes/filtros", authenticateToken, validarMunicipioAsignado, obtenerFiltrosInformes);
+router.get("/informes/download/:filename", authenticateToken, validarMunicipioAsignado, descargarInforme);
 router.get("/informes", authenticateToken, validarMunicipioAsignado, obtenerInformeModulo);
 
 // === Resto de endpoints de ejercicios (admin) ===

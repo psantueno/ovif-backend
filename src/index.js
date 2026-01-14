@@ -35,7 +35,11 @@ const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 
 // === Middlewares ===
-app.use(helmet());
+app.use((req, res, next) => {
+  const skip = req.path.startsWith("/api/ejercicios/informes/download") || req.originalUrl.includes("/informes/download");
+  if (skip) return next();
+  return helmet()(req, res, next);
+});
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 app.use(morgan("dev"));

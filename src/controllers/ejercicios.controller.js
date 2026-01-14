@@ -11,6 +11,11 @@ import {
 } from "../models/index.js";
 import { Op } from "sequelize";
 
+import path from "path";
+import fs from "fs";
+
+const __dirname = path.resolve();
+
 const isValidISODate = (value) => {
   if (typeof value !== "string") return false;
   const trimmed = value.trim();
@@ -773,10 +778,45 @@ export const obtenerInformeModulo = async (req, res) => {
       return res.status(404).json({ error: "No hay informe disponible con esos filtros" });
     }
 
-    const downloadUrl = cierre.informe_path || "/files/informes/placeholder.pdf";
+    const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
+
+    const downloadUrl = `${BASE_URL}/api/ejercicios/informes/download/${cierre.informe_path}`;
+
     return res.json({ downloadUrl });
   } catch (error) {
     console.error("❌ Error obteniendo informe del módulo:", error);
     return res.status(500).json({ error: "Error obteniendo informe" });
+  }
+};
+
+export const descargarInforme = (req, res) => {
+  const { filename } = req.params;
+  try{
+    // ⚠️ Seguridad básica
+    if (!filename.endsWith(".pdf")) {
+      return res.status(400).json({ error: "Archivo inválido" });
+    }
+
+    const filePath = path.join(__dirname, "files", "informes", filename);
+
+    // Verificar que exista
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Archivo no encontrado" });
+    }
+
+    res.setHeader(
+      'Access-Control-Expose-Headers',
+      'Content-Disposition'
+    );
+
+    res.download(filePath, filename, (err) => {
+      if (err) {
+        console.error("❌ Error enviando archivo:", err);
+        res.status(500).json({ error: "Error descargando archivo" });
+      }
+    });
+  }catch(error){
+    console.error("❌ Error en descargarInforme:", error);
+    return res.status(500).json({ error: "Error descargando informe" });
   }
 };
