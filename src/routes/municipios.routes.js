@@ -9,10 +9,15 @@ import {
   listarEjerciciosCerradosPorMunicipio,
   obtenerPartidasGastosMunicipio,
   obtenerPartidasRecursosMunicipio,
+  obtenerConceptosRecaudacionMunicipio,
   upsertGastosMunicipio,
   upsertRecursosMunicipio,
+  upsertRecaudacionesMunicipio,
+  upsertRemuneracionesMunicipio,
   generarInformeGastosMunicipio,
   generarInformeRecursosMunicipio,
+  generarInformeRecaudacionesMunicipio,
+  generarInformeRemuneracionesMunicipio,
   crearProrrogaMunicipio,
   deleteMunicipio,
 } from "../controllers/municipios.controller.js";
@@ -68,7 +73,28 @@ router.get(
   generarInformeRecursosMunicipio
 );
 
-// Upsert de gastos del municipio
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones/conceptos",
+  authenticateToken,
+  validarMunicipioAsignado,
+  obtenerConceptosRecaudacionMunicipio
+);
+
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones/informe",
+  authenticateToken,
+  validarMunicipioAsignado,
+  generarInformeRecaudacionesMunicipio
+);
+
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones/informe",
+  authenticateToken,
+  validarMunicipioAsignado,
+  generarInformeRemuneracionesMunicipio
+);
+
+// Upserts
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/gastos",
   authenticateToken,
@@ -83,6 +109,22 @@ router.put(
   validarMunicipioAsignado,
   validarFechaLimiteDeCarga,
   upsertRecursosMunicipio
+);
+
+router.put(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones",
+  authenticateToken,
+  validarMunicipioAsignado,
+  validarFechaLimiteDeCarga,
+  upsertRecaudacionesMunicipio
+);
+
+router.put(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones",
+  authenticateToken,
+  validarMunicipioAsignado,
+  validarFechaLimiteDeCarga,
+  upsertRemuneracionesMunicipio
 );
 
 router.put(

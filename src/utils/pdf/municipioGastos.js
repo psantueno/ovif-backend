@@ -62,7 +62,7 @@ const currencyFormatter = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 2,
 });
 
-export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, totalImporte }) => {
+export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, totalImporte, usuarioNombre, convenioNombre }) => {
   if (!Array.isArray(partidas) || partidas.length === 0) {
     throw new Error("No hay partidas de gastos para generar el informe");
   }
@@ -102,7 +102,7 @@ export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, 
       const importeNumerico = tieneImporte ? Number(partida.importe) : null;
       const importeFormateado = tieneImporte && Number.isFinite(importeNumerico)
         ? currencyFormatter.format(importeNumerico)
-        : "";
+        : "------";
 
       return [
         { text: partida.codigo ?? "-", style: esGrupo ? "grupoCodigo" : "itemCodigo" },
@@ -174,6 +174,15 @@ export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, 
           vLineColor: "#ccc",
         },
       },
+      {
+          text: "",
+          margin: [0, 15, 0, 0],
+      },
+      {
+          text: `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`,
+          style: "disclaimer",
+          margin: [20, 10, 20, 10],
+      },
     ],
     styles: {
       titulo: { fontSize: 14, bold: true, color: "#2B3E4C" },
@@ -193,8 +202,17 @@ export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, 
       grupoCodigo: { fontSize: 10, bold: true, color: "#2B3E4C", alignment: "center" },
       grupoDescripcion: { fontSize: 10, bold: true, color: "#2B3E4C" },
       grupoImporte: { fontSize: 10, color: "#333" },
-      totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "right" },
+      totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "left" },
       totalValue: { fontSize: 11, bold: true, color: "#2B3E4C" },
+      disclaimer: {
+        fontSize: 8,
+        color: "#666",
+        italics: true,
+        alignment: "justify",
+        border: [1, 1, 1, 1],
+        borderColor: "#ccc",
+        fillColor: "#f9f9f9",
+      },
     },
     defaultStyle: {
       font: "Manrope",
