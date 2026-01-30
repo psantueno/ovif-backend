@@ -66,7 +66,7 @@ const integerFormatter = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 0,
 });
 
-export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas, totalImporte }) => {
+export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas, totalImporte, usuarioNombre, convenioNombre }) => {
   if (!Array.isArray(partidas) || partidas.length === 0) {
     throw new Error("No hay partidas de recursos para generar el informe");
   }
@@ -112,7 +112,7 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
       const importeFormateado =
         tieneImporte && Number.isFinite(importeNumerico)
           ? currencyFormatter.format(importeNumerico)
-          : "";
+          : "------";
 
       const contribuyentesNumerico =
         partida.totalContribuyentes !== null && partida.totalContribuyentes !== undefined
@@ -160,10 +160,10 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
     }),
     [
       { text: "TOTAL", colSpan: 2, style: "totalLabel" },
-      {},
-      { text: totalFormateado, alignment: "right", style: "totalValue" },
-      { text: "", style: "totalEmpty" },
-      { text: "", style: "totalEmpty" },
+      { text: "", style: "totalEmpty"},
+      { text: totalFormateado, alignment: "left", style: "totalValue" },
+      { text: "—", style: "totalEmpty"},
+      { text: "—", style: "totalEmpty"},
     ],
   ];
 
@@ -214,6 +214,15 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
           vLineColor: "#ccc",
         },
       },
+      {
+        text: "",
+        margin: [0, 15, 0, 0],
+      },
+      {
+        text: `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`,
+        style: "disclaimer",
+        margin: [20, 10, 20, 10],
+      },
     ],
     styles: {
       titulo: { fontSize: 14, bold: true, color: "#2B3E4C" },
@@ -232,9 +241,18 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
       grupoCodigo: { fontSize: 10, bold: true, color: "#2B3E4C", alignment: "center" },
       grupoDescripcion: { fontSize: 10, bold: true, color: "#2B3E4C" },
       grupoImporte: { fontSize: 10, color: "#333" },
-      totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "right" },
+      totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "left" },
       totalValue: { fontSize: 11, bold: true, color: "#2B3E4C" },
-      totalEmpty: { fontSize: 11, color: "#2B3E4C" },
+      totalEmpty: { fontSize: 11, color: "#2B3E4C", alignment: "center" },
+      disclaimer: {
+        fontSize: 8,
+        color: "#666",
+        italics: true,
+        alignment: "justify",
+        border: [1, 1, 1, 1],
+        borderColor: "#ccc",
+        fillColor: "#f9f9f9",
+      },
     },
     defaultStyle: {
       font: "Manrope",

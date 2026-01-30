@@ -2,11 +2,14 @@ import { DataTypes } from "sequelize";
 import sequelize from "../../config/db.js";
 
 const SituacionRevista = sequelize.define("SituacionRevista", {
-  id_situacion_revista: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  descripcion: { type: DataTypes.STRING(100), allowNull: false },
+  situacion_revista_id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  nombre: { type: DataTypes.STRING(100), allowNull: false },
+  regimen_id: { type: DataTypes.INTEGER }
 }, {
   tableName: "ovif_situacion_revista",
-  timestamps: false,
+  timestamps: true,
+  createdAt: "fecha_creacion",
+  updatedAt: "fecha_actualizacion"
 });
 
 export default SituacionRevista;
