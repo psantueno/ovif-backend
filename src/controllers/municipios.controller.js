@@ -1,5 +1,5 @@
 // Modelo
-import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio, ConceptoRecaudacion, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario } from "../models/index.js";
+import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio, ConceptoRecaudacion, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario, Archivo, CierreModulo, EjercicioMesCerrado, Poblacion, UsuarioMunicipio } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
@@ -11,6 +11,7 @@ import { RecaudacionSchema } from "../validation/RecaudacionSchema.validation.js
 import { RemuneracionSchema } from "../validation/RemuneracionSchema.validation.js";
 import { EjerciciosSchema } from "../validation/ejerciciosSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
+import { MunicipiosSchema } from "../validation/MunicipiosSchema.validation.js";
 
 const toISODate = (value) => {
   if (!value) return null;
@@ -237,6 +238,23 @@ export const getMunicipios = async (req, res) => {
       offset,
     });
 
+    const municipiosPlanos = await Promise.all(
+      rows.map(async (m) => {
+        const modificable = await esMunicipioModificable(m.municipio_id);
+
+        return {
+          municipio_id: m.municipio_id,
+          municipio_nombre: m.municipio_nombre,
+          municipio_usuario: m.municipio_usuario,
+          municipio_spar: m.municipio_spar,
+          municipio_ubge: m.municipio_ubge,
+          municipio_subir_archivos: m.municipio_subir_archivos,
+          municipio_poblacion: m.municipio_poblacion,
+          modificable: modificable
+        };
+      })
+    );
+
     const totalPaginas = limiteFinal > 0 ? Math.ceil(count / limiteFinal) : 0;
 
     res.json({
@@ -244,7 +262,7 @@ export const getMunicipios = async (req, res) => {
       pagina: paginaFinal,
       limite: limiteFinal,
       totalPaginas,
-      data: rows,
+      data: municipiosPlanos,
     });
   } catch (error) {
     console.error("❌ Error consultando municipios:", error);
@@ -541,39 +559,35 @@ export const getMunicipioById = async (req, res) => {
 export const createMunicipio = async (req, res) => {
   const {
     municipio_nombre,
-    municipio_usuario,
-    municipio_password,
     municipio_spar,
     municipio_ubge,
     municipio_subir_archivos,
     municipio_poblacion,
   } = req.body;
 
-  if (
-    !municipio_nombre ||
-    !municipio_usuario ||
-    !municipio_password ||
-    municipio_spar === undefined ||
-    municipio_ubge === undefined ||
-    municipio_subir_archivos === undefined ||
-    municipio_poblacion === undefined
-  ) {
-    return res.status(400).json({ error: "Todos los campos del municipio son obligatorios" });
-  }
-
   try {
+    const valid = MunicipiosSchema.safeParse({ 
+      municipio_nombre,
+      municipio_spar,
+      municipio_ubge,
+      municipio_subir_archivos,
+      municipio_poblacion, 
+    });
+
+    if (!valid.success) {
+      return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(',') })
+    }
+
     const municipioExistente = await Municipio.findOne({
       where: { municipio_nombre },
     });
 
     if (municipioExistente) {
-      return res.status(400).json({ error: "Ya existe un municipio con ese nombre" });
+      return res.status(400).json({ error: "Ya existe un municipio con este nombre" });
     }
 
     const nuevoMunicipio = await Municipio.create({
       municipio_nombre,
-      municipio_usuario,
-      municipio_password,
       municipio_spar,
       municipio_ubge,
       municipio_subir_archivos,
@@ -595,8 +609,6 @@ export const updateMunicipio = async (req, res) => {
   const { id } = req.params;
   const {
     municipio_nombre,
-    municipio_usuario,
-    municipio_password,
     municipio_spar,
     municipio_ubge,
     municipio_subir_archivos,
@@ -610,6 +622,18 @@ export const updateMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
+    const valid = MunicipiosSchema.safeParse({ 
+      municipio_nombre,
+      municipio_spar,
+      municipio_ubge,
+      municipio_subir_archivos,
+      municipio_poblacion, 
+    });
+
+    if (!valid.success) {
+      return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(',') })
+    }
+
     if (municipio_nombre && municipio_nombre !== municipio.municipio_nombre) {
       const municipioDuplicado = await Municipio.findOne({ where: { municipio_nombre } });
 
@@ -620,8 +644,13 @@ export const updateMunicipio = async (req, res) => {
       municipio.municipio_nombre = municipio_nombre;
     }
 
-    if (municipio_usuario !== undefined) municipio.municipio_usuario = municipio_usuario;
-    if (municipio_password !== undefined) municipio.municipio_password = municipio_password;
+    const modificable = esMunicipioModificable(municipio.municipio_id);
+    if(!modificable){
+      return res.status(400).json({ error: "El municipio está asociado a otros datos y no puede ser actualizado" });
+    }
+
+    municipio.modificable = modificable;
+
     if (municipio_spar !== undefined) municipio.municipio_spar = municipio_spar;
     if (municipio_ubge !== undefined) municipio.municipio_ubge = municipio_ubge;
     if (municipio_subir_archivos !== undefined)
@@ -649,6 +678,11 @@ export const deleteMunicipio = async (req, res) => {
 
     if (!municipio) {
       return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const modificable = esMunicipioModificable(municipio.municipio_id);
+    if(!modificable){
+      return res.status(400).json({ error: "El municipio está asociado a otros datos y no puede ser actualizado" });
     }
 
     await municipio.destroy();
@@ -1856,4 +1890,29 @@ const obtenerFecha = (fechaString) => {
   const fecha = new Date(anio, mes - 1, dia);
 
   return fecha
+}
+
+const esMunicipioModificable = async (municipioId) => {
+  const cierresModulos = await CierreModulo.findOne({ where: { municipio_id: municipioId } });
+  if(cierresModulos) return false;
+
+  const ejercicioMesCerrado = await EjercicioMesCerrado.findOne({ where: { municipio_id: municipioId } });
+  if(ejercicioMesCerrado) return false;
+
+  const gastos = await Gasto.findOne({ where: { municipio_id: municipioId } });
+  if(gastos) return false;
+
+  const recaudaciones = await Recaudacion.findOne({ where: { municipio_id: municipioId } });
+  if(recaudaciones) return false;
+
+  const recursos = await Recurso.findOne({ where: { municipio_id: municipioId } });
+  if(recursos) return false;
+
+  const remuneraciones = await Remuneracion.findOne({ where: { municipio_id: municipioId } });
+  if(remuneraciones) return false;
+
+  const usuarioMunicipio = await UsuarioMunicipio.findOne({ where: { municipio_id: municipioId } });
+  if(usuarioMunicipio) return false;
+
+  return true;
 }

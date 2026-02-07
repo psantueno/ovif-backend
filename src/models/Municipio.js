@@ -13,14 +13,6 @@ const Municipio = sequelize.define('Municipio', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  municipio_usuario: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  municipio_password: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
   municipio_spar: {
     type: DataTypes.INTEGER,
     allowNull: false

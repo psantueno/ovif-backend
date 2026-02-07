@@ -29,6 +29,14 @@ const PautaConvenio = sequelize.define(
             type: DataTypes.INTEGER,
             allowNull: false,
         },
+        cant_dias_rectifica: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
+        plazo_mes_rectifica: {
+            type: DataTypes.INTEGER,
+            allowNull: true
+        },
         fecha_creacion: {
             type: DataTypes.DATE,
             defaultValue: DataTypes.NOW,
