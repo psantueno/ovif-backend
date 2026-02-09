@@ -18,6 +18,10 @@ const Remuneracion = sequelize.define("Remuneracion", {
     type: DataTypes.STRING(20),
     primaryKey: true
   },
+  legajo: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
   apellido_nombre: {
     type: DataTypes.STRING(255),
     allowNull: false

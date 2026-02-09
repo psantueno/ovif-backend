@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 export const RemuneracionSchema = z.object({
-    cuil: z.number({ message: "El CUIL debe ser un número entero" }).int({ message: "El CUIL debe ser un número entero" }),
+    cuil: z.number({ message: "El CUIL debe ser un número entero" }).int({ message: "El CUIL debe ser un número entero" }).positive({ message: "El CUIL debe ser un número entero positivo" }),
+    legajo: z.number({ message: "El legajo debe ser un número entero" }).int({ message: "El legajo debe ser un número entero" }).positive({ message: "El legajo debe ser un número entero positivo" }),
     remuneracion_neta: z.number({ message: "La remuneración neta debe ser un número" }).refine((value) => 
         {
             const str = value.toString();

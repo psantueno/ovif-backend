@@ -128,6 +128,7 @@ export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, re
             const headerRow = [
                 { text: "CUIL", style: "tableHeader", valign: "middle", minHeight: 20 },
                 { text: "NOMBRE", style: "tableHeader", valign: "middle", minHeight: 20 },
+                { text: "LEGAJO", style: "tableHeader", valign: "middle", minHeight: 20 },
                 { text: "SIT. DE REV.", style: "tableHeader", valign: "middle", minHeight: 20 },
                 { text: "FECHA ALTA", style: "tableHeader", valign: "middle", minHeight: 20 },
                 { text: "TIPO LIQ.", style: "tableHeader", valign: "middle", minHeight: 20 },
@@ -203,6 +204,7 @@ export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, re
                 return [
                     { text: remuneracion.cuil ?? "Sin especificar", style: "itemDescripcion" },
                     { text: apellidoNombreFormateado, style: "itemDescripcion" },
+                    { text: remuneracion.legajo ?? "Sin especificar", style: "itemDescripcion" },
                     { text: remuneracion.situacion_revista ?? 'Sin especificar', style: "itemDescripcion" },
                     { text: formatearFecha(remuneracion.fecha_alta), style: "itemDescripcion" },
                     { text: remuneracion.tipo_liquidacion ?? 'Sin especificar', style: "itemDescripcion" },
@@ -269,6 +271,7 @@ export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, re
                 { },
                 { },
                 { },
+                { },
                 { text: currencyFormatter.format(totalRemuneracion || 0), style: "totalValue" },
                 { text: currencyFormatter.format(totalBonificacion || 0), style: "totalValue" },
                 { text: totalCantCincuenta, style: "totalValue" },
@@ -286,7 +289,7 @@ export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, re
 
             content.push({
                 table: {
-                    widths: [50, 50, 50, 50, 50, 55, 55, 40, 55, 40, 55, 50, 50, 50],
+                    widths: [50, 45, 45, 45, 45, 45, 55, 50, 45, 40, 45, 45, 45, 45, 45],
                     headerRows: 1,
                     body: tableBody,
                 },

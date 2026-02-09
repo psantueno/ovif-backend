@@ -1580,6 +1580,7 @@ export const generarInformeRemuneracionesMunicipio = async (req, res) => {
     const remuneracionesPlanas = remuneraciones.map((remuneracion) => ({
       cuil: remuneracion.cuil,
       apellido_nombre: remuneracion.apellido_nombre,
+      legajo: remuneracion.legajo,
       fecha_alta: remuneracion.fecha_alta,
       remuneracion_neta: remuneracion.remuneracion_neta,
       bonificacion: remuneracion.bonificacion,
@@ -1670,7 +1671,8 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
         importe_hs_extra_100: item?.importe_hs_extra_100,
         art: item?.art,
         seguro_vida: item?.seguro_vida,
-        otros_conceptos: item?.otros_conceptos
+        otros_conceptos: item?.otros_conceptos,
+        legajo: item?.legajo
       });
 
       if (!validRecurso.success) {
@@ -1679,8 +1681,6 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
       }
       const tieneRemuneracionNeta = Object.prototype.hasOwnProperty.call(item, "remuneracion_neta");
       const tieneApellidoNombre = Object.prototype.hasOwnProperty.call(item, "apellido_nombre");
-      const tieneRegimen = Object.prototype.hasOwnProperty.call(item, "regimen");
-      const tieneSituacionRevista = Object.prototype.hasOwnProperty.call(item, "situacion_revista");
       const tieneTipoLiquidacion = Object.prototype.hasOwnProperty.call(item, "tipo_liquidacion");
       const tieneBonificacion = Object.prototype.hasOwnProperty.call(item, "bonificacion");
       const tieneCantHsExtra50 = Object.prototype.hasOwnProperty.call(item, "cant_hs_extra_50");
@@ -1701,7 +1701,7 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
       const situacionRevistaNombre = item.situacion_revista ?? ''
       const situacionRevista = await SituacionRevista.findOne({ where: { nombre: situacionRevistaNombre } })
       if(!situacionRevista){
-        errores.push(`La situación de revista con nombre ${situacionRevista} no existe`);
+        errores.push(`La situación de revista con nombre ${situacionRevistaNombre} no existe`);
         continue;
       }
 
@@ -1716,7 +1716,8 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
         remuneraciones_ejercicio: ejercicioNum,
         remuneraciones_mes: mesNum,
         municipio_id: municipioNum,
-        cuil: item.cuil
+        cuil: item.cuil,
+        legajo: item.legajo,
       };
 
       const existente = await Remuneracion.findOne({ where, transaction });
@@ -1750,7 +1751,10 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
         continue;
       }
 
-      if(existente.regimen_id != regimen.regimen_id || existente.situacion_revista_id != situacionRevista.situacion_revista_id){
+      if(
+        existente.regimen_id != regimen.regimen_id || 
+        existente.situacion_revista_id != situacionRevista.situacion_revista_id
+      ){
         errores.push(`El usuario con CUIL ${item.cuil} ya se encuentra cargado en el sistema con otro régimen y otra situación de revista asignados`);
         continue;
       }
@@ -1759,14 +1763,6 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
 
       if (tieneApellidoNombre && !compararValores(existente.apellido_nombre, item.apellido_nombre)) {
         existente.apellido_nombre = item.apellido_nombre;
-        huboCambios = true;
-      }
-      if (tieneRegimen && !compararValores(existente.regimen_id, regimen.regimen_id, 'number')) {
-        existente.regimen_id = regimen.regimen_id;
-        huboCambios = true;
-      }
-      if (tieneSituacionRevista && !compararValores(existente.situacion_revista_id, situacionRevista.situacion_revista_id, 'number')) {
-        existente.situacion_revista_id = situacionRevista.situacion_revista_id;
         huboCambios = true;
       }
       if (tieneTipoLiquidacion&& !compararValores(existente.tipo_liquidacion, tipoLiquidacion.tipo_gasto_id, 'number')) {
