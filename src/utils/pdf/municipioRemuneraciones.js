@@ -83,10 +83,14 @@ const truncarNombre = (apellidoNombre) => {
     return truncado;
 }
 
-export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, remuneraciones, regimenes, usuarioNombre, convenioNombre }) => {
+export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, remuneraciones, regimenes, usuarioNombre, convenioNombre, esRectificacion }) => {
     if (!Array.isArray(remuneraciones)) {
         throw new Error("No existen remuneraciones cargadas para mostrar");
     }
+
+    const subtitulo = esRectificacion 
+        ? `Informe de Rectificación de Remuneraciones - ${mes}/${ejercicio}\n`
+        : `Informe de Remuneraciones - ${mes}/${ejercicio}\n`;
 
     const headerContent = [
         HEADER_BASE64
@@ -98,7 +102,7 @@ export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, re
         {
             text: [
                 { text: "OFICINA VIRTUAL DE INFORMACIÓN FISCAL\n", style: "titulo" },
-                { text: `Informe de Remuneraciones - ${mes}/${ejercicio}\n`, style: "subtitulo" },
+                { text: subtitulo, style: "subtitulo" },
                 { text: `Municipio: ${municipioNombre}`, style: "detalle" },
             ],
             alignment: "center",

@@ -94,6 +94,20 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
     ? currencyFormatter.format(totalNumerico)
     : currencyFormatter.format(0);
 
+  const totalContribuyentes = partidas.reduce((sum, partida) => {
+    const contribuyentes = partida.totalContribuyentes;
+    const contribuyentesNumerico = contribuyentes !== null && contribuyentes !== undefined ? Number(contribuyentes) : 0;
+    return sum + (Number.isFinite(contribuyentesNumerico) ? contribuyentesNumerico : 0);
+  }, 0);
+  const totalContribuyentesFormateado = integerFormatter.format(totalContribuyentes);
+
+  const totalPagaron = partidas.reduce((sum, partida) => {
+    const pagaron = partida.contribuyentesPagaron;
+    const pagaronNumerico = pagaron !== null && pagaron !== undefined ? Number(pagaron) : 0;
+    return sum + (Number.isFinite(pagaronNumerico) ? pagaronNumerico : 0);
+  }, 0);
+  const totalPagaronFormateado = integerFormatter.format(totalPagaron);
+
   const tableBody = [
     [
       { text: "CÓDIGO", style: "tableHeader", alignment: "center", valign: "middle", minHeight: 20 },
@@ -162,8 +176,8 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
       { text: "TOTAL", colSpan: 2, style: "totalLabel" },
       { text: "", style: "totalEmpty"},
       { text: totalFormateado, alignment: "left", style: "totalValue" },
-      { text: "—", style: "totalEmpty"},
-      { text: "—", style: "totalEmpty"},
+      { text: totalContribuyentesFormateado, style: "totalValue"},
+      { text: totalPagaronFormateado, style: "totalValue"},
     ],
   ];
 
@@ -242,7 +256,7 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
       grupoDescripcion: { fontSize: 10, bold: true, color: "#2B3E4C" },
       grupoImporte: { fontSize: 10, color: "#333" },
       totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "left" },
-      totalValue: { fontSize: 11, bold: true, color: "#2B3E4C" },
+      totalValue: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "right" },
       totalEmpty: { fontSize: 11, color: "#2B3E4C", alignment: "center" },
       disclaimer: {
         fontSize: 8,

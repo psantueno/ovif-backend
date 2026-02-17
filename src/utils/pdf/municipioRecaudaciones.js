@@ -62,10 +62,14 @@ const currencyFormatter = new Intl.NumberFormat("es-AR", {
     maximumFractionDigits: 2,
 });
 
-export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, conceptos, totalImporte, usuarioNombre, convenioNombre }) => {
+export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, conceptos, totalImporte, usuarioNombre, convenioNombre, esRectificacion }) => {
     if (!Array.isArray(conceptos) || conceptos.length === 0) {
         throw new Error("No hay conceptos de recaudaciones para generar el informe");
     }
+
+    const subtitulo = esRectificacion 
+        ? `Informe de Rectificación de Recaudaciones - ${mes}/${ejercicio}\n`
+        : `Informe de Recaudaciones - ${mes}/${ejercicio}\n`;
 
     const headerContent = [
         HEADER_BASE64
@@ -77,7 +81,7 @@ export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, con
         {
             text: [
                 { text: "OFICINA VIRTUAL DE INFORMACIÓN FISCAL\n", style: "titulo" },
-                { text: `Informe de Recaudaciones - ${mes}/${ejercicio}\n`, style: "subtitulo" },
+                { text: subtitulo, style: "subtitulo" },
                 { text: `Municipio: ${municipioNombre}`, style: "detalle" },
             ],
             alignment: "center",
@@ -97,7 +101,6 @@ export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, con
             { text: "IMPORTE RECAUDACIÓN", style: "tableHeader", alignment: "right", valign: "middle" },
         ],
         ...conceptos.map((concepto) => {
-            console.log("concepto", concepto);
             const tieneImporte = concepto.importe_recaudacion !== null && concepto.importe_recaudacion !== undefined;
             const importeNumerico = tieneImporte ? Number(concepto.importe_recaudacion) : null;
             const importeFormateado = tieneImporte && Number.isFinite(importeNumerico)

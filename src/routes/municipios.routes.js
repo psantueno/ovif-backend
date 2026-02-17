@@ -6,6 +6,7 @@ import {
   updateMunicipio,
   getMunicipiosSelect,
   listarEjerciciosDisponiblesPorMunicipio,
+  listarEjerciciosRectificacionesDisponiblesPorMunicipio,
   listarEjerciciosCerradosPorMunicipio,
   obtenerPartidasGastosMunicipio,
   obtenerPartidasRecursosMunicipio,
@@ -18,6 +19,11 @@ import {
   generarInformeRecursosMunicipio,
   generarInformeRecaudacionesMunicipio,
   generarInformeRemuneracionesMunicipio,
+  obtenerConceptosRecaudacionRectificadaMunicipio,
+  upsertRecaudacionesRectificadasMunicipio,
+  generarInformeRecaudacionesRectificadasMunicipio,
+  upsertRemuneracionesRectificadasMunicipio,
+  generarInformeRemuneracionesRectificadasMunicipio,
   crearProrrogaMunicipio,
   deleteMunicipio,
 } from "../controllers/municipios.controller.js";
@@ -37,6 +43,9 @@ router.get("/select", authenticateToken, requireAdmin, getMunicipiosSelect);
 
 // Ejercicios abiertos para el municipio
 router.get("/:id/ejercicios/disponibles", authenticateToken, listarEjerciciosDisponiblesPorMunicipio);
+
+// Ejercicios reftificables abiertos para el municipio
+router.get("/:id/ejercicios/rectificaciones/disponibles", authenticateToken, listarEjerciciosRectificacionesDisponiblesPorMunicipio);
 
 router.get(
   "/:municipioId/ejercicios/cerrados",
@@ -59,6 +68,8 @@ router.get(
   generarInformeGastosMunicipio
 );
 
+// Partidas de recursos
+
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recursos/partidas",
   authenticateToken,
@@ -73,6 +84,8 @@ router.get(
   generarInformeRecursosMunicipio
 );
 
+// Partidas de recaudaciones
+
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones/conceptos",
   authenticateToken,
@@ -86,6 +99,8 @@ router.get(
   validarMunicipioAsignado,
   generarInformeRecaudacionesMunicipio
 );
+
+// Partidas de remuneraciones
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones/informe",
@@ -125,6 +140,45 @@ router.put(
   validarMunicipioAsignado,
   validarFechaLimiteDeCarga,
   upsertRemuneracionesMunicipio
+);
+
+// Rectificaciones
+
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas/conceptos",
+  authenticateToken,
+  validarMunicipioAsignado,
+  obtenerConceptosRecaudacionRectificadaMunicipio
+);
+
+router.put(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas",
+  authenticateToken,
+  validarMunicipioAsignado,
+  validarFechaLimiteDeCarga,
+  upsertRecaudacionesRectificadasMunicipio
+);
+
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas/informe",
+  authenticateToken,
+  validarMunicipioAsignado,
+  generarInformeRecaudacionesRectificadasMunicipio
+);
+
+router.put(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones-rectificadas",
+  authenticateToken,
+  validarMunicipioAsignado,
+  validarFechaLimiteDeCarga,
+  upsertRemuneracionesRectificadasMunicipio
+);
+
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones-rectificadas/informe",
+  authenticateToken,
+  validarMunicipioAsignado,
+  generarInformeRemuneracionesRectificadasMunicipio
 );
 
 router.put(

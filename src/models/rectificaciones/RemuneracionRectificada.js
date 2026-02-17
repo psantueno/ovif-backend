@@ -73,6 +73,10 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
   otros_conceptos: {
     type: DataTypes.DECIMAL(20,2),
     allowNull: false
+  },
+  legajo: {
+    type: DataTypes.INTEGER,
+    allowNull: false
   }
 }, {
   tableName: "ovif_remuneraciones_rectificadas",
