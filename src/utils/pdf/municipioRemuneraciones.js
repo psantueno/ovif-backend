@@ -83,11 +83,7 @@ const truncarNombre = (apellidoNombre) => {
     return truncado;
 }
 
-export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, remuneraciones, regimenes, usuarioNombre, convenioNombre, esRectificacion }) => {
-    if (!Array.isArray(remuneraciones)) {
-        throw new Error("No existen remuneraciones cargadas para mostrar");
-    }
-
+export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, remuneraciones, regimenes, usuarioNombre, convenioNombre, esRectificacion = false, cierreId = null }) => {
     const subtitulo = esRectificacion 
         ? `Informe de Rectificación de Remuneraciones - ${mes}/${ejercicio}\n`
         : `Informe de Remuneraciones - ${mes}/${ejercicio}\n`;
@@ -114,8 +110,15 @@ export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, re
 
     const regimenesList = Array.isArray(regimenes) ? regimenes : [];
 
-    if (regimenesList.length === 0) {
-        content.push({ text: 'No se proporcionaron regímenes para mostrar.', style: 'detalle' });
+    if (regimenesList.length === 0 || remuneraciones.length === 0) {
+        content.push(
+            { 
+                text: 'No se recibieron importes para poder generar el informe.', 
+                style: "noDataMessage",
+                alignment: "center",
+                margin: [0, 50, 0, 0],
+            }
+        );
     } else {
         for (const regimenObj of regimenesList) {
             const regimenNombre = regimenObj && regimenObj.nombre ? regimenObj.nombre : 'Sin nombre de régimen';
@@ -311,6 +314,10 @@ export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, re
         }
     }
 
+    const footerText = cierreId 
+        ? `Identificación del documento: ${cierreId}.`
+        : `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`;
+
     const docDefinition = {
         pageSize: "A4",
         pageOrientation: "landscape",
@@ -332,10 +339,15 @@ export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, re
             margin: [40, 10],
         }),
         content: [
-            content,
+            ...content,
             {
-                text: `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`,
+                text: "",
+                margin: [0, 15, 0, 0],
+            },
+            {
+                text: footerText,
                 style: "disclaimer",
+                alignment: "center",
                 margin: [20, 10, 20, 10],
             }
         ],
@@ -356,6 +368,7 @@ export const buildInformeRemuneraciones = ({ municipioNombre, ejercicio, mes, re
             itemDescripcion: { fontSize: 8, color: "#333", alignment: "left" },
             totalLabel: { fontSize: 9, bold: true, color: "#2B3E4C", alignment: "left" },
             totalValue: { fontSize: 9, bold: true, color: "#2B3E4C", alignment: "right" },
+            noDataMessage: { fontSize: 12, color: "#666", italics: true },
             disclaimer: {
                 fontSize: 8,
                 color: "#666",

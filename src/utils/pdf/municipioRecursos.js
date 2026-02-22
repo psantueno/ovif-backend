@@ -66,11 +66,7 @@ const integerFormatter = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 0,
 });
 
-export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas, totalImporte, usuarioNombre, convenioNombre }) => {
-  if (!Array.isArray(partidas) || partidas.length === 0) {
-    throw new Error("No hay partidas de recursos para generar el informe");
-  }
-
+export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas, totalImporte, usuarioNombre, convenioNombre, cierreId }) => {
   const headerContent = [
     HEADER_BASE64
       ? {
@@ -89,120 +85,113 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
     },
   ].filter(Boolean);
 
-  const totalNumerico = Number(totalImporte);
-  const totalFormateado = Number.isFinite(totalNumerico)
-    ? currencyFormatter.format(totalNumerico)
-    : currencyFormatter.format(0);
+  const content = [];
 
-  const totalContribuyentes = partidas.reduce((sum, partida) => {
-    const contribuyentes = partida.totalContribuyentes;
-    const contribuyentesNumerico = contribuyentes !== null && contribuyentes !== undefined ? Number(contribuyentes) : 0;
-    return sum + (Number.isFinite(contribuyentesNumerico) ? contribuyentesNumerico : 0);
-  }, 0);
-  const totalContribuyentesFormateado = integerFormatter.format(totalContribuyentes);
+  if (!Array.isArray(partidas) || partidas.length === 0) {
+    content.push(
+      {
+        text: "No se recibieron importes para poder generar el informe.",
+        style: "noDataMessage",
+        alignment: "center",
+        margin: [0, 50, 0, 0],
+      },
+    );
+  } else {
+    const totalNumerico = Number(totalImporte);
+    const totalFormateado = Number.isFinite(totalNumerico)
+      ? currencyFormatter.format(totalNumerico)
+      : currencyFormatter.format(0);
 
-  const totalPagaron = partidas.reduce((sum, partida) => {
-    const pagaron = partida.contribuyentesPagaron;
-    const pagaronNumerico = pagaron !== null && pagaron !== undefined ? Number(pagaron) : 0;
-    return sum + (Number.isFinite(pagaronNumerico) ? pagaronNumerico : 0);
-  }, 0);
-  const totalPagaronFormateado = integerFormatter.format(totalPagaron);
+    const totalContribuyentes = partidas.reduce((sum, partida) => {
+      const contribuyentes = partida.totalContribuyentes;
+      const contribuyentesNumerico = contribuyentes !== null && contribuyentes !== undefined ? Number(contribuyentes) : 0;
+      return sum + (Number.isFinite(contribuyentesNumerico) ? contribuyentesNumerico : 0);
+    }, 0);
+    const totalContribuyentesFormateado = integerFormatter.format(totalContribuyentes);
 
-  const tableBody = [
-    [
-      { text: "CÓDIGO", style: "tableHeader", alignment: "center", valign: "middle", minHeight: 20 },
-      { text: "PARTIDA", style: "tableHeader", valign: "middle", minHeight: 20 },
-      { text: "IMPORTE PERCIBIDO", style: "tableHeader", alignment: "right", valign: "middle" },
-      { text: "TOTAL CONTRIBUYENTES", style: "tableHeader", alignment: "right", valign: "middle" },
-      { text: "CONTRIBUYENTES PAGARON", style: "tableHeader", alignment: "right", valign: "middle" },
-    ],
-    ...partidas.map((partida) => {
-      const esGrupo = !partida.puedeCargar;
-      const esSinLiquidacion = Boolean(partida.esSinLiquidacion);
+    const totalPagaron = partidas.reduce((sum, partida) => {
+      const pagaron = partida.contribuyentesPagaron;
+      const pagaronNumerico = pagaron !== null && pagaron !== undefined ? Number(pagaron) : 0;
+      return sum + (Number.isFinite(pagaronNumerico) ? pagaronNumerico : 0);
+    }, 0);
+    const totalPagaronFormateado = integerFormatter.format(totalPagaron);
 
-      const tieneImporte =
-        partida.importePercibido !== null && partida.importePercibido !== undefined;
-      const importeNumerico = tieneImporte ? Number(partida.importePercibido) : null;
-      const importeFormateado =
-        tieneImporte && Number.isFinite(importeNumerico)
-          ? currencyFormatter.format(importeNumerico)
-          : "------";
-
-      const contribuyentesNumerico =
-        partida.totalContribuyentes !== null && partida.totalContribuyentes !== undefined
-          ? Number(partida.totalContribuyentes)
-          : null;
-      const contribuyentesFormateado =
-        esGrupo || esSinLiquidacion
-          ? esGrupo
-            ? ""
-            : "------"
-          : contribuyentesNumerico !== null && Number.isFinite(contribuyentesNumerico)
-            ? integerFormatter.format(contribuyentesNumerico)
-            : "";
-
-      const pagaronNumerico =
-        partida.contribuyentesPagaron !== null && partida.contribuyentesPagaron !== undefined
-          ? Number(partida.contribuyentesPagaron)
-          : null;
-      const pagaronFormateado =
-        esGrupo || esSinLiquidacion
-          ? esGrupo
-            ? ""
-            : "------"
-          : pagaronNumerico !== null && Number.isFinite(pagaronNumerico)
-            ? integerFormatter.format(pagaronNumerico)
-            : "";
-
-      return [
-        { text: partida.codigo ?? "-", style: esGrupo ? "grupoCodigo" : "itemCodigo" },
-        {
-          text: partida.descripcion ?? "Sin descripción",
-          style: esGrupo ? "grupoDescripcion" : "itemDescripcion",
-          margin: [partida.nivel * 12, esGrupo ? 2 : 0, 0, 2],
-        },
-        esGrupo
-          ? { text: "", style: "grupoImporte" }
-          : { text: importeFormateado, alignment: "right", style: "itemImporte" },
-        esGrupo
-          ? { text: "", style: "grupoImporte" }
-          : { text: contribuyentesFormateado, alignment: "right", style: "itemImporte" },
-        esGrupo
-          ? { text: "", style: "grupoImporte" }
-          : { text: pagaronFormateado, alignment: "right", style: "itemImporte" },
-      ];
-    }),
-    [
-      { text: "TOTAL", colSpan: 2, style: "totalLabel" },
-      { text: "", style: "totalEmpty"},
-      { text: totalFormateado, alignment: "left", style: "totalValue" },
-      { text: totalContribuyentesFormateado, style: "totalValue"},
-      { text: totalPagaronFormateado, style: "totalValue"},
-    ],
-  ];
-
-  const totalRowIndex = tableBody.length - 1;
-
-  const docDefinition = {
-    pageSize: "A4",
-    pageMargins: [40, HEADER_BASE64 ? 170 : 100, 40, 60],
-    header: headerContent,
-    footer: (currentPage, pageCount) => ({
-      columns: [
-        {
-          text: `Generado el ${new Date().toLocaleDateString("es-AR")}`,
-          alignment: "left",
-          fontSize: 8,
-        },
-        {
-          text: `Página ${currentPage} de ${pageCount}`,
-          alignment: "right",
-          fontSize: 8,
-        },
+    const tableBody = [
+      [
+        { text: "CÓDIGO", style: "tableHeader", alignment: "center", valign: "middle", minHeight: 20 },
+        { text: "PARTIDA", style: "tableHeader", valign: "middle", minHeight: 20 },
+        { text: "IMPORTE PERCIBIDO", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "TOTAL CONTRIBUYENTES", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "CONTRIBUYENTES PAGARON", style: "tableHeader", alignment: "right", valign: "middle" },
       ],
-      margin: [40, 10],
-    }),
-    content: [
+      ...partidas.map((partida) => {
+        const esGrupo = !partida.puedeCargar;
+        const esSinLiquidacion = Boolean(partida.esSinLiquidacion);
+
+        const tieneImporte =
+          partida.importePercibido !== null && partida.importePercibido !== undefined;
+        const importeNumerico = tieneImporte ? Number(partida.importePercibido) : null;
+        const importeFormateado =
+          tieneImporte && Number.isFinite(importeNumerico)
+            ? currencyFormatter.format(importeNumerico)
+            : "------";
+
+        const contribuyentesNumerico =
+          partida.totalContribuyentes !== null && partida.totalContribuyentes !== undefined
+            ? Number(partida.totalContribuyentes)
+            : null;
+        const contribuyentesFormateado =
+          esGrupo || esSinLiquidacion
+            ? esGrupo
+              ? ""
+              : "------"
+            : contribuyentesNumerico !== null && Number.isFinite(contribuyentesNumerico)
+              ? integerFormatter.format(contribuyentesNumerico)
+              : "";
+
+        const pagaronNumerico =
+          partida.contribuyentesPagaron !== null && partida.contribuyentesPagaron !== undefined
+            ? Number(partida.contribuyentesPagaron)
+            : null;
+        const pagaronFormateado =
+          esGrupo || esSinLiquidacion
+            ? esGrupo
+              ? ""
+              : "------"
+            : pagaronNumerico !== null && Number.isFinite(pagaronNumerico)
+              ? integerFormatter.format(pagaronNumerico)
+              : "";
+
+        return [
+          { text: partida.codigo ?? "-", style: esGrupo ? "grupoCodigo" : "itemCodigo" },
+          {
+            text: partida.descripcion ?? "Sin descripción",
+            style: esGrupo ? "grupoDescripcion" : "itemDescripcion",
+            margin: [partida.nivel * 12, esGrupo ? 2 : 0, 0, 2],
+          },
+          esGrupo
+            ? { text: "", style: "grupoImporte" }
+            : { text: importeFormateado, alignment: "right", style: "itemImporte" },
+          esGrupo
+            ? { text: "", style: "grupoImporte" }
+            : { text: contribuyentesFormateado, alignment: "right", style: "itemImporte" },
+          esGrupo
+            ? { text: "", style: "grupoImporte" }
+            : { text: pagaronFormateado, alignment: "right", style: "itemImporte" },
+        ];
+      }),
+      [
+        { text: "TOTAL", colSpan: 2, style: "totalLabel" },
+        { text: "", style: "totalEmpty"},
+        { text: totalFormateado, alignment: "left", style: "totalValue" },
+        { text: totalContribuyentesFormateado, style: "totalValue"},
+        { text: totalPagaronFormateado, style: "totalValue"},
+      ],
+    ];
+
+    const totalRowIndex = tableBody.length - 1;
+
+    content.push(
       {
         table: {
           widths: ["auto", "*", "auto", "auto", "auto"],
@@ -227,14 +216,43 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
           hLineColor: "#ccc",
           vLineColor: "#ccc",
         },
-      },
+      }
+    )
+  }
+
+  const footerText = cierreId 
+    ? `Identificación del documento: ${cierreId}.`
+    : `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`;
+
+  const docDefinition = {
+    pageSize: "A4",
+    pageMargins: [40, HEADER_BASE64 ? 170 : 100, 40, 60],
+    header: headerContent,
+    footer: (currentPage, pageCount) => ({
+      columns: [
+        {
+          text: `Generado el ${new Date().toLocaleDateString("es-AR")}`,
+          alignment: "left",
+          fontSize: 8,
+        },
+        {
+          text: `Página ${currentPage} de ${pageCount}`,
+          alignment: "right",
+          fontSize: 8,
+        },
+      ],
+      margin: [40, 10],
+    }),
+    content: [
+      ...content,
       {
         text: "",
         margin: [0, 15, 0, 0],
       },
       {
-        text: `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`,
+        text: footerText,
         style: "disclaimer",
+        alignment: "center",
         margin: [20, 10, 20, 10],
       },
     ],
@@ -258,6 +276,7 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
       totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "left" },
       totalValue: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "right" },
       totalEmpty: { fontSize: 11, color: "#2B3E4C", alignment: "center" },
+      noDataMessage: { fontSize: 12, color: "#666", italics: true },
       disclaimer: {
         fontSize: 8,
         color: "#666",

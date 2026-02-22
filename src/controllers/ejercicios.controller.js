@@ -820,3 +820,20 @@ export const descargarInforme = (req, res) => {
     return res.status(500).json({ error: "Error descargando informe" });
   }
 };
+
+export const listarCatalogoEjercicios = async (req, res) => {
+  try {
+    const ejercicios = await EjercicioMes.findAll({
+      attributes: [
+        [EjercicioMes.sequelize.fn("DISTINCT", EjercicioMes.sequelize.col("ejercicio")), "ejercicio"],
+      ],
+      order: [["ejercicio", "DESC"]],
+      raw: true,
+    });
+    const catalogo = ejercicios.map((e) => e.ejercicio).filter(Boolean);
+    res.json(catalogo);
+  } catch (error) {
+    console.error("❌ Error listando catálogo de ejercicios:", error);
+    res.status(500).json({ error: "Error listando catálogo de ejercicios" });
+  };
+}

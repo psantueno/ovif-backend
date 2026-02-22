@@ -2640,14 +2640,20 @@ const esMunicipioModificable = async (municipioId) => {
 }
 
 const verificarGastosRecursosDisponibles = async (ejercicio, mes) => {
-  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(ejercicio, mes, 'gastos_recursos', new Date(), new Date());
+  const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires"
+  });
+  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(ejercicio, mes, 'gastos_recursos', fechaHoyArgentina, fechaHoyArgentina);
   if(!ejercicioMes) return false;
 
   return true;
 }
 
 const verificarRecaudacionRemuneracionDisponible = async (ejercicio, mes) => {
-  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(ejercicio, mes, 'recaudacion_remuneracion', new Date(), new Date());
+  const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires"
+  });
+  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(ejercicio, mes, 'recaudacion_remuneracion', fechaHoyArgentina, fechaHoyArgentina);
   if(!ejercicioMes) return false;
 
   return true;
@@ -2748,6 +2754,7 @@ const obtenerConvenioPautaEjercicioMes = async (ejercicio, mes, tipoPauta, fecha
     ejercicio,
     mes
   }
+
   if(fechaInicio) whereEjercicioMes.fecha_inicio = { [Op.lte]: fechaInicio };
   if(fechaFin) whereEjercicioMes.fecha_fin = { [Op.gte]: fechaFin };
 

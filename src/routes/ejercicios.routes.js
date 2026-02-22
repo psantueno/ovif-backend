@@ -13,6 +13,7 @@ import {
   obtenerFiltrosInformes,
   obtenerInformeModulo,
   descargarInforme,
+  listarCatalogoEjercicios
 } from "../controllers/ejercicios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
@@ -31,6 +32,7 @@ router.use(authenticateToken, requireAdmin);
 
 // === CRUD de EjerciciosMes ===
 router.get("/", listarEjercicios); 
+router.get("/select", listarCatalogoEjercicios);
 router.post("/", crearEjercicio); 
 router.put("/:ejercicio/mes/:mes", updateEjercicio); 
 // router.delete("/:ejercicio/mes/:mes", deleteEjercicio); 
