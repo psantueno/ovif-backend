@@ -20,6 +20,7 @@ import cronRoutes from "./routes/cron.routes.js";
 import recursoRoutes from "./routes/recurso.routes.js";
 import pautasConvenioRoutes from "./routes/pautasConvenio.routes.js";
 import conveniosRoutes from "./routes/convenios.routes.js";
+import logsRoutes from "./routes/logs.routes.js";
 
 // === Importación de CRON cierre automático del ejercicio/mes ===
 import "./cron/cierreAutomatico.js";
@@ -61,6 +62,7 @@ app.use("/api/cron-logs", cronRoutes);
 app.use("/api/recursos", recursoRoutes);
 app.use("/api/pautas-convenio", pautasConvenioRoutes);
 app.use("/api/convenios", conveniosRoutes);
+app.use("/api/logs", logsRoutes);
 
 // === Healthcheck ===
 app.get("/api/health", (req, res) => {

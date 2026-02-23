@@ -53,6 +53,10 @@ const CierreModulo = sequelize.define("CierreModulo", {
     type: DataTypes.DATE,
     allowNull: true,
     defaultValue: DataTypes.NOW,
+  },
+  id_documento: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
   }
 }, {
   tableName: "ovif_cierres_modulos",

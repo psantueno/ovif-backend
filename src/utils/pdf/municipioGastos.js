@@ -62,11 +62,7 @@ const currencyFormatter = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 2,
 });
 
-export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, totalImporte, usuarioNombre, convenioNombre }) => {
-  if (!Array.isArray(partidas) || partidas.length === 0) {
-    throw new Error("No hay partidas de gastos para generar el informe");
-  }
-
+export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, totalImporte, usuarioNombre, convenioNombre, cierreId }) => {
   const headerContent = [
     HEADER_BASE64
       ? {
@@ -85,70 +81,63 @@ export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, 
     },
   ].filter(Boolean);
 
-  const totalNumerico = Number(totalImporte);
-  const totalFormateado = Number.isFinite(totalNumerico)
-    ? currencyFormatter.format(totalNumerico)
-    : currencyFormatter.format(0);
+  const content = [];
 
-  const tableBody = [
-    [
-      { text: "CÓDIGO", style: "tableHeader", alignment: "center", valign: "middle", minHeight: 20 },
-      { text: "PARTIDA", style: "tableHeader", valign: "middle", minHeight: 20 },
-      { text: "IMPORTE DEVENGADO", style: "tableHeader", alignment: "right", valign: "middle" },
-    ],
-    ...partidas.map((partida) => {
-      const esGrupo = !partida.puedeCargar;
-      const tieneImporte = partida.importe !== null && partida.importe !== undefined;
-      const importeNumerico = tieneImporte ? Number(partida.importe) : null;
-      const importeFormateado = tieneImporte && Number.isFinite(importeNumerico)
-        ? currencyFormatter.format(importeNumerico)
-        : "------";
-
-      return [
-        { text: partida.codigo ?? "-", style: esGrupo ? "grupoCodigo" : "itemCodigo" },
-        {
-          text: partida.descripcion ?? "Sin descripción",
-          style: esGrupo ? "grupoDescripcion" : "itemDescripcion",
-          margin: [partida.nivel * 12, esGrupo ? 2 : 0, 0, 2],
-        },
-        esGrupo
-          ? { text: "", style: "grupoImporte" }
-          : { text: importeFormateado, alignment: "right", style: "itemImporte" },
-      ];
-    }),
-    [
-      { text: "TOTAL", colSpan: 2, style: "totalLabel" },
-      {},
+  if (!Array.isArray(partidas) || partidas.length === 0) {
+    content.push(
       {
-        text: totalFormateado,
-        alignment: "right",
-        style: "totalValue",
-      },
-    ],
-  ];
+        text: "No se recibieron importes para poder generar el informe.",
+        style: "noDataMessage",
+        alignment: "center",
+        margin: [0, 50, 0, 0],
+      }
+    );
+  } else {
+    const totalNumerico = Number(totalImporte);
+    const totalFormateado = Number.isFinite(totalNumerico)
+      ? currencyFormatter.format(totalNumerico)
+      : currencyFormatter.format(0);
 
-  const totalRowIndex = tableBody.length - 1;
+    const tableBody = [
+      [
+        { text: "CÓDIGO", style: "tableHeader", alignment: "center", valign: "middle", minHeight: 20 },
+        { text: "PARTIDA", style: "tableHeader", valign: "middle", minHeight: 20 },
+        { text: "IMPORTE DEVENGADO", style: "tableHeader", alignment: "right", valign: "middle" },
+      ],
+      ...partidas.map((partida) => {
+        const esGrupo = !partida.puedeCargar;
+        const tieneImporte = partida.importe !== null && partida.importe !== undefined;
+        const importeNumerico = tieneImporte ? Number(partida.importe) : null;
+        const importeFormateado = tieneImporte && Number.isFinite(importeNumerico)
+          ? currencyFormatter.format(importeNumerico)
+          : "------";
 
-  const docDefinition = {
-    pageSize: "A4",
-    pageMargins: [40, HEADER_BASE64 ? 170 : 100, 40, 60],
-    header: headerContent,
-    footer: (currentPage, pageCount) => ({
-      columns: [
+        return [
+          { text: partida.codigo ?? "-", style: esGrupo ? "grupoCodigo" : "itemCodigo" },
+          {
+            text: partida.descripcion ?? "Sin descripción",
+            style: esGrupo ? "grupoDescripcion" : "itemDescripcion",
+            margin: [partida.nivel * 12, esGrupo ? 2 : 0, 0, 2],
+          },
+          esGrupo
+            ? { text: "", style: "grupoImporte" }
+            : { text: importeFormateado, alignment: "right", style: "itemImporte" },
+        ];
+      }),
+      [
+        { text: "TOTAL", colSpan: 2, style: "totalLabel" },
+        {},
         {
-          text: `Generado el ${new Date().toLocaleDateString("es-AR")}`,
-          alignment: "left",
-          fontSize: 8,
-        },
-        {
-          text: `Página ${currentPage} de ${pageCount}`,
+          text: totalFormateado,
           alignment: "right",
-          fontSize: 8,
+          style: "totalValue",
         },
       ],
-      margin: [40, 10],
-    }),
-    content: [
+    ];
+
+    const totalRowIndex = tableBody.length - 1;
+
+    content.push(
       {
         table: {
           widths: ["auto", "*", "auto"],
@@ -173,14 +162,43 @@ export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, 
           hLineColor: "#ccc",
           vLineColor: "#ccc",
         },
-      },
+      }
+    )
+  }
+
+  const footerText = cierreId 
+    ? `Identificación del documento: ${cierreId}.`
+    : `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`;
+
+  const docDefinition = {
+    pageSize: "A4",
+    pageMargins: [40, HEADER_BASE64 ? 170 : 100, 40, 60],
+    header: headerContent,
+    footer: (currentPage, pageCount) => ({
+      columns: [
+        {
+          text: `Generado el ${new Date().toLocaleDateString("es-AR")}`,
+          alignment: "left",
+          fontSize: 8,
+        },
+        {
+          text: `Página ${currentPage} de ${pageCount}`,
+          alignment: "right",
+          fontSize: 8,
+        },
+      ],
+      margin: [40, 10],
+    }),
+    content: [
+      ...content,
       {
           text: "",
           margin: [0, 15, 0, 0],
       },
       {
-          text: `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`,
+          text: footerText,
           style: "disclaimer",
+          alignment: "center",
           margin: [20, 10, 20, 10],
       },
     ],
@@ -204,6 +222,7 @@ export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, 
       grupoImporte: { fontSize: 10, color: "#333" },
       totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "left" },
       totalValue: { fontSize: 11, bold: true, color: "#2B3E4C" },
+      noDataMessage: { fontSize: 12, color: "#666", italics: true },
       disclaimer: {
         fontSize: 8,
         color: "#666",
@@ -231,6 +250,7 @@ export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, partidas, 
 
       pdfDoc.end();
     } catch (error) {
+      console.error(error.message)
       reject(error);
     }
   });

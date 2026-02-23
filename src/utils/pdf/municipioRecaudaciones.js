@@ -62,10 +62,10 @@ const currencyFormatter = new Intl.NumberFormat("es-AR", {
     maximumFractionDigits: 2,
 });
 
-export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, conceptos, totalImporte, usuarioNombre, convenioNombre }) => {
-    if (!Array.isArray(conceptos) || conceptos.length === 0) {
-        throw new Error("No hay conceptos de recaudaciones para generar el informe");
-    }
+export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, conceptos, totalImporte, usuarioNombre, convenioNombre, esRectificacion = false, cierreId = null }) => {
+    const subtitulo = esRectificacion 
+        ? `Informe de Rectificación de Recaudaciones - ${mes}/${ejercicio}\n`
+        : `Informe de Recaudaciones - ${mes}/${ejercicio}\n`;
 
     const headerContent = [
         HEADER_BASE64
@@ -77,7 +77,7 @@ export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, con
         {
             text: [
                 { text: "OFICINA VIRTUAL DE INFORMACIÓN FISCAL\n", style: "titulo" },
-                { text: `Informe de Recaudaciones - ${mes}/${ejercicio}\n`, style: "subtitulo" },
+                { text: subtitulo, style: "subtitulo" },
                 { text: `Municipio: ${municipioNombre}`, style: "detalle" },
             ],
             alignment: "center",
@@ -85,66 +85,57 @@ export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, con
         },
     ].filter(Boolean);
 
-    const totalNumerico = Number(totalImporte);
-    const totalFormateado = Number.isFinite(totalNumerico)
-        ? currencyFormatter.format(totalNumerico)
-        : currencyFormatter.format(0);
+    const content = [];
+    if (!Array.isArray(conceptos) || conceptos.length === 0) {
+        content.push(
+            {
+                text: "No se recibieron importes para poder generar el informe.",
+                style: "noDataMessage",
+                alignment: "center",
+                margin: [0, 50, 0, 0],
+            },
+        );
+    } else {
+        const totalNumerico = Number(totalImporte);
+        const totalFormateado = Number.isFinite(totalNumerico)
+            ? currencyFormatter.format(totalNumerico)
+            : currencyFormatter.format(0);
 
-    const tableBody = [
-        [
-            { text: "CODIGO", style: "tableHeader", valign: "middle", minHeight: 20 },
-            { text: "CONCEPTO", style: "tableHeader", valign: "middle", minHeight: 20 },
-            { text: "IMPORTE RECAUDACIÓN", style: "tableHeader", alignment: "right", valign: "middle" },
-        ],
-        ...conceptos.map((concepto) => {
-            console.log("concepto", concepto);
-            const tieneImporte = concepto.importe_recaudacion !== null && concepto.importe_recaudacion !== undefined;
-            const importeNumerico = tieneImporte ? Number(concepto.importe_recaudacion) : null;
-            const importeFormateado = tieneImporte && Number.isFinite(importeNumerico)
-                ? currencyFormatter.format(importeNumerico)
-                : "------";
-
-            return [
-                {
-                    text: concepto.cod_concepto ?? "Sin código",
-                    style: "itemCodigo",
-                },
-                {
-                    text: concepto.descripcion ?? "Sin descripcion",
-                    style: "itemDescripcion",
-                },
-                { text: importeFormateado, alignment: "right", style: "itemImporte" },
-            ];
-        }),
-        [
-            { text: "TOTAL", colSpan: 2, style: "totalLabel" },
-            { text: ""},
-            { text: totalFormateado, alignment: "right", style: "totalValue" },
-        ],
-    ];
-
-    const totalRowIndex = tableBody.length - 1;
-
-    const docDefinition = {
-        pageSize: "A4",
-        pageMargins: [40, HEADER_BASE64 ? 170 : 100, 40, 60],
-        header: headerContent,
-        footer: (currentPage, pageCount) => ({
-            columns: [
-                {
-                    text: `Generado el ${new Date().toLocaleDateString("es-AR")}`,
-                    alignment: "left",
-                    fontSize: 8,
-                },
-                {
-                    text: `Página ${currentPage} de ${pageCount}`,
-                    alignment: "right",
-                    fontSize: 8,
-                },
+        const tableBody = [
+            [
+                { text: "CODIGO", style: "tableHeader", valign: "middle", minHeight: 20 },
+                { text: "CONCEPTO", style: "tableHeader", valign: "middle", minHeight: 20 },
+                { text: "IMPORTE RECAUDACIÓN", style: "tableHeader", alignment: "right", valign: "middle" },
             ],
-            margin: [40, 10],
-        }),
-        content: [
+            ...conceptos.map((concepto) => {
+                const tieneImporte = concepto.importe_recaudacion !== null && concepto.importe_recaudacion !== undefined;
+                const importeNumerico = tieneImporte ? Number(concepto.importe_recaudacion) : null;
+                const importeFormateado = tieneImporte && Number.isFinite(importeNumerico)
+                    ? currencyFormatter.format(importeNumerico)
+                    : "------";
+
+                return [
+                    {
+                        text: concepto.cod_concepto ?? "Sin código",
+                        style: "itemCodigo",
+                    },
+                    {
+                        text: concepto.descripcion ?? "Sin descripcion",
+                        style: "itemDescripcion",
+                    },
+                    { text: importeFormateado, alignment: "right", style: "itemImporte" },
+                ];
+            }),
+            [
+                { text: "TOTAL", colSpan: 2, style: "totalLabel" },
+                { text: ""},
+                { text: totalFormateado, alignment: "right", style: "totalValue" },
+            ],
+        ];
+
+        const totalRowIndex = tableBody.length - 1;
+
+        content.push(
             {
                 table: {
                     widths: ["auto", "*", "auto"],
@@ -170,13 +161,42 @@ export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, con
                 vLineColor: "#ccc",
                 },
             },
+        );
+    }
+
+    const footerText = cierreId 
+        ? `Identificación del documento: ${cierreId}.`
+        : `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`;
+
+    const docDefinition = {
+        pageSize: "A4",
+        pageMargins: [40, HEADER_BASE64 ? 170 : 100, 40, 60],
+        header: headerContent,
+        footer: (currentPage, pageCount) => ({
+            columns: [
+                {
+                    text: `Generado el ${new Date().toLocaleDateString("es-AR")}`,
+                    alignment: "left",
+                    fontSize: 8,
+                },
+                {
+                    text: `Página ${currentPage} de ${pageCount}`,
+                    alignment: "right",
+                    fontSize: 8,
+                },
+            ],
+            margin: [40, 10],
+        }),
+        content: [
+            ...content,
             {
                 text: "",
                 margin: [0, 15, 0, 0],
             },
             {
-                text: `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`,
+                text: footerText,
                 style: "disclaimer",
+                alignment: "center",
                 margin: [20, 10, 20, 10],
             },
         ],
@@ -196,6 +216,7 @@ export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, con
             itemImporte: { fontSize: 10, color: "#333" },
             totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "left" },
             totalValue: { fontSize: 11, bold: true, color: "#2B3E4C" },
+            noDataMessage: { fontSize: 12, color: "#666", italics: true },
             disclaimer: {
                 fontSize: 8,
                 color: "#666",
