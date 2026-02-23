@@ -29,8 +29,8 @@ import crypto from "crypto"
 
 // 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
 cron.schedule(
-  //"0 2 * * *",
-  "*/60 * * * * *",
+  "0 2 * * *",
+  //"*/30 * * * * *",
   async () => {
     const hoy = new Date();
 
@@ -168,7 +168,7 @@ cron.schedule(
       }
 
       // Procesar prorrogas
-      for (const prorroga of prorrogas) {
+      for (const prorroga of prorrogasFiltradas) {
         const { ejercicio, mes, convenio_id, pauta_id } = prorroga;
         const pauta = await PautaConvenio.findByPk(pauta_id);
         const modulos = pauta.tipo_pauta === 'gastos_recursos' ? ['Gastos', 'Recursos'] : ['Recaudaciones', 'Remuneraciones'];
