@@ -22,6 +22,7 @@ import pautasConvenioRoutes from "./routes/pautasConvenio.routes.js";
 import conveniosRoutes from "./routes/convenios.routes.js";
 import logsRoutes from "./routes/logs.routes.js";
 import conceptosRecaudacionRoutes from "./routes/conceptosRecaudacion.routes.js";
+import partidasRecursosRoutes from "./routes/partidasRecursos.routes.js";
 
 // === Importación de CRON cierre automático del ejercicio/mes ===
 import "./cron/cierreAutomatico.js";
@@ -65,6 +66,7 @@ app.use("/api/pautas-convenio", pautasConvenioRoutes);
 app.use("/api/convenios", conveniosRoutes);
 app.use("/api/logs", logsRoutes);
 app.use("/api/conceptos-recaudaciones", conceptosRecaudacionRoutes);
+app.use("/api/partidas-recursos", partidasRecursosRoutes);
 
 // === Healthcheck ===
 app.get("/api/health", (req, res) => {
