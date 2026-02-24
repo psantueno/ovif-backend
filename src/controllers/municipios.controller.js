@@ -5,11 +5,11 @@ import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
 import { Op } from "sequelize";
-import { GastosSchema } from "../validation/gastosSchema.validation.js";
-import { RecursosSchema } from "../validation/recursosSchema.validation.js";
+import { GastosSchema } from "../validation/GastosSchema.validation.js";
+import { RecursosSchema } from "../validation/RecursosSchema.validation.js";
 import { RecaudacionSchema } from "../validation/RecaudacionSchema.validation.js";
 import { RemuneracionSchema } from "../validation/RemuneracionSchema.validation.js";
-import { EjerciciosSchema } from "../validation/ejerciciosSchema.validation.js";
+import { EjerciciosSchema } from "../validation/EjerciciosSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
 import { MunicipiosSchema } from "../validation/MunicipiosSchema.validation.js";
 
