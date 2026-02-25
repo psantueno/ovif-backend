@@ -36,6 +36,7 @@ import Convenio from './Convenio.js';
 import PautaConvenio from './PautaConvenio.js';
 import ProrrogaMunicipio from './ProrrogaMunicipio.js';
 import AuditoriaProrrogaMunicipio from './AuditoriaProrrogaMunicipio.js';
+import Parametros from './Parametros.js';
 
 
 // Relación muchos a muchos con Rol
@@ -204,5 +205,6 @@ export {
   ConceptoRecaudacion,
   Recaudacion,
   RecaudacionRectificada,
-  RemuneracionRectificada
+  RemuneracionRectificada,
+  Parametros
 };

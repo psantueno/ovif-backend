@@ -21,6 +21,7 @@ import recursoRoutes from "./routes/recurso.routes.js";
 import pautasConvenioRoutes from "./routes/pautasConvenio.routes.js";
 import conveniosRoutes from "./routes/convenios.routes.js";
 import logsRoutes from "./routes/logs.routes.js";
+import parametrosRoutes from "./routes/parametros.routes.js";
 import conceptosRecaudacionRoutes from "./routes/conceptosRecaudacion.routes.js";
 import partidasRecursosRoutes from "./routes/partidasRecursos.routes.js";
 
@@ -65,6 +66,7 @@ app.use("/api/recursos", recursoRoutes);
 app.use("/api/pautas-convenio", pautasConvenioRoutes);
 app.use("/api/convenios", conveniosRoutes);
 app.use("/api/logs", logsRoutes);
+app.use("/api/parametros", parametrosRoutes);
 app.use("/api/conceptos-recaudaciones", conceptosRecaudacionRoutes);
 app.use("/api/partidas-recursos", partidasRecursosRoutes);
 

@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import fs from "fs";
 import path from "path";
-import { Op, Sequelize } from "sequelize";
+import { Op } from "sequelize";
 import { 
   PartidaGasto,
   PartidaRecurso,
@@ -19,18 +19,20 @@ import {
   CierreModulo,
   Municipio,
   PautaConvenio,
-  Convenio
+  Convenio, 
+  Parametros
 } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
-import crypto from "crypto"
+import crypto from "crypto";
+import { dir } from "console";
 
 // 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
 cron.schedule(
-  "0 2 * * *",
-  //"*/30 * * * * *",
+  //"0 2 * * *",
+  "*/30 * * * * *",
   async () => {
     const hoy = new Date();
 
@@ -647,7 +649,17 @@ const generarNumeroUnico = async () => {
 
 // Función para generar PDF
 const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, convenioNombre, numero) => {
-  const dirPath = path.join('files', 'cierres');
+  // Buscar directorio en BD
+  const directorio = await Parametros.findOne({ where: {
+    nombre: "Directorio de Informes",
+    estado: true
+  } });
+
+  // Separar rutas
+  const partes = directorio.valor.split("/")
+  
+  // Armar ruta
+  const dirPath = path.join(...partes);
 
   // Crear carpeta si no existe
   await fs.promises.mkdir(dirPath, { recursive: true });
