@@ -5,13 +5,11 @@ import {
   updateEjercicio,
   prorrogarCierre,
   getFechaLimite,
-  cerrarMesMunicipio,
   listarCierres,
   getCierreMunicipio,
   listarEstadoMunicipios,
   deleteEjercicio,
   obtenerFiltrosInformes,
-  obtenerInformeModulo,
   descargarInforme,
   listarCatalogoEjercicios
 } from "../controllers/ejercicios.controller.js";
@@ -24,8 +22,7 @@ const router = Router();
 
 // === Informes por módulo (acceso por usuario autenticado con municipio asignado) ===
 router.get("/informes/filtros", authenticateToken, validarMunicipioAsignado, obtenerFiltrosInformes);
-router.get("/informes/download/:filename", authenticateToken, validarMunicipioAsignado, descargarInforme);
-router.get("/informes", authenticateToken, validarMunicipioAsignado, obtenerInformeModulo);
+router.get("/informes/download", authenticateToken, validarMunicipioAsignado, descargarInforme);
 
 // === Resto de endpoints de ejercicios (admin) ===
 router.use(authenticateToken, requireAdmin);
@@ -43,15 +40,6 @@ router.put("/:ejercicio/mes/:mes/municipios/:municipioId/prorroga", prorrogarCie
 
 // === Consultar fecha límite efectiva de un municipio ===
 router.get("/:ejercicio/mes/:mes/municipios/:municipioId", getFechaLimite);
-
-// === Cierre por módulo para un municipio ===
-router.post(
-  "/:ejercicio/mes/:mes/convenios/:convenioId/pautas/:pautaId/municipios/:municipioId/modulos/:modulo/cerrar",
-  cerrarMesMunicipio
-);
-
-// Ruta legacy (se mantiene temporalmente para compatibilidad)
-router.post("/:ejercicio/mes/:mes/municipios/:municipioId/cerrar", cerrarMesMunicipio);
 
 // === Lista de municipios que han cerrado un ejercicio/mes ===
 router.get("/:ejercicio/mes/:mes/cierres", listarCierres);
