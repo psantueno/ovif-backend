@@ -5,7 +5,7 @@ export const GastosSchema = z.object({
     gastos_importe_devengado: z.number({ message: "El importe devengado debe ser un número" }).refine((value) => 
         {
             const str = value.toString();
-            return /^\d{1,10}(\.\d{1,2})?$/.test(str);
+            return /^\d{1,15}(\.\d{1,2})?$/.test(str);
         },
         {
             message: "El número debe tener hasta 10 dígitos enteros y hasta 2 decimales",

@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import fs from "fs";
 import path from "path";
-import { Op, Sequelize } from "sequelize";
+import { Op } from "sequelize";
 import { 
   PartidaGasto,
   PartidaRecurso,
@@ -19,18 +19,19 @@ import {
   CierreModulo,
   Municipio,
   PautaConvenio,
-  Convenio
+  Convenio, 
+  Parametros
 } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
-import crypto from "crypto"
+import crypto from "crypto";
 
 // 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
 cron.schedule(
   "0 2 * * *",
-  //"*/30 * * * * *",
+  //"*/60 * * * * *",
   async () => {
     const hoy = new Date();
 
@@ -136,6 +137,7 @@ cron.schedule(
                 tipo_cierre: "REGULAR",
                 informe_path: informePath,
                 observacion: `Cierre del módulo para el municipio ${municipio.municipio_nombre} exitoso`,
+                id_documento: numero
               });
 
               await CronLog.create({
@@ -201,7 +203,8 @@ cron.schedule(
                 modulo,
                 tipo_cierre: "PRORROGA",
                 informe_path: informePath,
-                observacion: `Cierre del módulo para el municipio ${municipio.municipio_nombre} exitoso.`,
+                observacion: `Cierre del módulo ${modulo} para el municipio ${municipio.municipio_nombre} exitoso.`,
+                id_documento: numero
               });
 
               await CronLog.create({
@@ -210,7 +213,7 @@ cron.schedule(
                 mes,
                 municipio_id: municipio.municipio_id,
                 estado: "OK",
-                mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes}) para el municipio ${municipio.municipio_nombre} exitoso`,
+                mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes} (Prorroga)) para el municipio ${municipio.municipio_nombre} exitoso`,
               });
 
               cierresRealizados++;
@@ -223,7 +226,7 @@ cron.schedule(
                 mes,
                 municipio_id: municipio.municipio_id,
                 estado: "ERROR",
-                mensaje: `Error cerrando módulo (${modulo} / ${ejercicio}-${mes}) para el municipio ${municipio.municipio_nombre}: ${error.message}`,
+                mensaje: `Error cerrando módulo (${modulo} / ${ejercicio}-${mes} (Prorroga)) para el municipio ${municipio.municipio_nombre}: ${error.message}`,
               });
             }
           }
@@ -645,17 +648,56 @@ const generarNumeroUnico = async () => {
   return unico;
 }
 
+const sanitizarCadena = (cadena, separador = " ") => {
+  const partes = cadena.split(separador);
+
+  return partes.join('_');
+}
+
 // Función para generar PDF
 const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, convenioNombre, numero) => {
-  const dirPath = path.join('files', 'cierres');
+  // Buscar directorio base en BD
+  const directorioBase = await Parametros.findOne({ where: {
+    nombre: "Directorio Base",
+    estado: true
+  } });
+
+  if (!directorioBase || !directorioBase.valor) {
+    throw new Error("Directorio base no configurado");
+  }
+  
+  // Buscar directorio de informes en BD
+  const directorioInformes = await Parametros.findOne({ where: {
+    nombre: "Directorio de Informes",
+    estado: true
+  } });
+
+  if (!directorioInformes || !directorioInformes.valor) {
+    throw new Error("Directorio de informes no configurado");
+  }
+
+  // Ruta base
+  const rutaBase = directorioBase.valor
+
+  // Ruta logica
+  const rutaInformes = directorioInformes.valor
+
+  // Armar ruta absoluta
+  const dirPath = path.resolve(rutaBase, rutaInformes);
 
   // Crear carpeta si no existe
-  await fs.promises.mkdir(dirPath, { recursive: true });
+  try {
+    await fs.promises.mkdir(dirPath, { recursive: true });
+  } catch (err) {
+    throw new Error(`No se pudo crear el directorio: ${dirPath}. ${err.message}`);
+  }
 
-  // Recién ahora armar el filepath
+  const fileName = `${ejercicio}-${mes}-${sanitizarCadena(municipioNombre)}-${modulo}-${numero}.pdf`
+
+  // Armar el filepath
   const filePath = path.join(
     dirPath,
-    `${ejercicio}-${mes}-${municipioNombre}-${modulo}-${numero}.pdf`
+    fileName
   );
 
   let buffer;
@@ -705,5 +747,5 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
     });
   }
   fs.writeFileSync(filePath, buffer);
-  return filePath;
+  return path.join(rutaInformes, fileName);
 };

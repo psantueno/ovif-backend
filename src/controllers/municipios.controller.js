@@ -909,7 +909,7 @@ export const crearProrrogaMunicipio = async (req, res) => {
     }
 
     const oficial = await EjercicioMes.findOne({
-      where: { ejercicio, mes },
+      where: { ejercicio, mes, pauta_id, convenio_id },
     });
     if (!oficial) {
       return res

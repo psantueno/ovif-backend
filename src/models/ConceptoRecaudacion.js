@@ -12,7 +12,7 @@ const ConceptoRecaudacion = sequelize.define("ConceptoRecaudacion", {
   },
   cod_recurso: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true
   }
 }, {
   tableName: "ovif_conceptos_recaudacion",

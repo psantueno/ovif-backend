@@ -8,6 +8,7 @@ import {
   Convenio,
   PautaConvenio,
   CierreModulo,
+  Parametros
 } from "../models/index.js";
 import { Op } from "sequelize";
 
@@ -32,7 +33,7 @@ const toISODateString = (value) => {
   return date.toISOString().split("T")[0];
 };
 
-const MODULOS_VALIDOS = ["GASTOS", "RECURSOS", "RECAUDACIONES", "PERSONAL"];
+const MODULOS_VALIDOS = ["GASTOS", "RECURSOS", "RECAUDACIONES", "PERSONAL", "REMUNERACIONES"];
 const TIPOS_CIERRE = ["AUTOMATICO", "MANUAL"];
 
 
@@ -424,124 +425,6 @@ export const getFechaLimite = async (req, res) => {
   }
 };
 
-
-// Registra el cierre de un ejercicio/mes por parte de un municipio
-// POST /api/ejercicios/:ejercicio/mes/:mes/municipios/:municipioId/cerrar
-export const cerrarMesMunicipio = async (req, res) => {
-  const { ejercicio, mes, municipioId } = req.params;
-  const convenioIdInput = req.params.convenioId ?? req.body.convenio_id;
-  const pautaIdInput = req.params.pautaId ?? req.body.pauta_id;
-  const moduloInput = req.params.modulo ?? req.body.modulo;
-  const { informe_path, tipo_cierre, observacion } = req.body;
-
-  const errores = [];
-
-  const ejercicioParsed = Number.parseInt(ejercicio, 10);
-  const mesParsed = Number.parseInt(mes, 10);
-  const municipioParsed = Number.parseInt(municipioId, 10);
-  const convenioParsed = Number.parseInt(convenioIdInput, 10);
-  const pautaParsed = Number.parseInt(pautaIdInput, 10);
-
-  if (Number.isNaN(ejercicioParsed)) {
-    errores.push("El parámetro 'ejercicio' debe ser numérico.");
-  }
-  if (Number.isNaN(mesParsed)) {
-    errores.push("El parámetro 'mes' debe ser numérico.");
-  }
-  if (Number.isNaN(municipioParsed)) {
-    errores.push("El parámetro 'municipioId' debe ser numérico.");
-  }
-  if (Number.isNaN(convenioParsed)) {
-    errores.push("Debe indicar un 'convenio_id' válido.");
-  }
-  if (Number.isNaN(pautaParsed)) {
-    errores.push("Debe indicar un 'pauta_id' válido.");
-  }
-
-  const modulo = typeof moduloInput === "string" ? moduloInput.trim().toUpperCase() : null;
-  if (!modulo || !MODULOS_VALIDOS.includes(modulo)) {
-    errores.push("El campo 'modulo' es obligatorio y debe ser uno de: GASTOS, RECURSOS, RECAUDACIONES, PERSONAL.");
-  }
-
-  const tipoCierreFuente =
-    typeof tipo_cierre === "string" && tipo_cierre.trim() !== ""
-      ? tipo_cierre
-      : "MANUAL";
-  const tipoCierreNormalizado = tipoCierreFuente.trim().toUpperCase();
-  if (!TIPOS_CIERRE.includes(tipoCierreNormalizado)) {
-    errores.push("El campo 'tipo_cierre' debe ser AUTOMATICO o MANUAL.");
-  }
-
-  if (typeof informe_path !== "string" || informe_path.trim() === "") {
-    errores.push("El campo 'informe_path' es obligatorio.");
-  }
-
-  if (errores.length > 0) {
-    return res.status(400).json({
-      error: "Datos inválidos para registrar el cierre.",
-      detalles: errores,
-    });
-  }
-
-  try {
-    const municipio = await Municipio.findByPk(municipioParsed);
-    if (!municipio) {
-      return res.status(404).json({ error: "Municipio no encontrado." });
-    }
-
-    const oficial = await EjercicioMes.findOne({
-      where: {
-        ejercicio: ejercicioParsed,
-        mes: mesParsed,
-        convenio_id: convenioParsed,
-        pauta_id: pautaParsed,
-      },
-    });
-
-    if (!oficial) {
-      return res.status(404).json({ error: "Ejercicio/Mes para el convenio y pauta indicados no existe." });
-    }
-
-    const prorroga = await ProrrogaMunicipio.findOne({
-      where: {
-        ejercicio: ejercicioParsed,
-        mes: mesParsed,
-        municipio_id: municipioParsed,
-        convenio_id: convenioParsed,
-        pauta_id: pautaParsed,
-      },
-    });
-
-    const fechaLimite = toISODateString(prorroga?.fecha_fin_nueva || oficial.fecha_fin);
-    const fechaHoy = toISODateString(new Date());
-
-    if (fechaLimite && fechaHoy > fechaLimite) {
-      return res.status(400).json({ error: "El plazo de carga ya venció, no se puede cerrar." });
-    }
-
-    const cierre = await CierreModulo.create({
-      ejercicio: ejercicioParsed,
-      mes: mesParsed,
-      municipio_id: municipioParsed,
-      convenio_id: convenioParsed,
-      pauta_id: pautaParsed,
-      modulo,
-      informe_path: informe_path.trim(),
-      tipo_cierre: tipoCierreNormalizado,
-      observacion: observacion || null,
-    });
-
-    return res.status(201).json({
-      message: "✅ Cierre registrado correctamente",
-      cierre,
-    });
-  } catch (error) {
-    console.error("❌ Error en cerrarMesMunicipio:", error);
-    return res.status(500).json({ error: "Error registrando cierre" });
-  }
-};
-
-
 // Lista todos los municipios que completaron el cierre para un ejercicio y mes dados (sin uso aún)
 // GET /api/ejercicios/:ejercicio/mes/:mes/cierres
 export const listarCierres = async (req, res) => {
@@ -703,43 +586,38 @@ export const obtenerFiltrosInformes = async (req, res) => {
   }
 
   try {
-    const sequelize = CierreModulo.sequelize;
     const where = { municipio_id: municipioId };
 
-    const [ejercicios, meses, modulos] = await Promise.all([
-      CierreModulo.findAll({
-        attributes: [[sequelize.fn("DISTINCT", sequelize.col("ejercicio")), "ejercicio"]],
-        where,
-        order: [["ejercicio", "DESC"]],
-        raw: true,
-      }),
-      CierreModulo.findAll({
-        attributes: [[sequelize.fn("DISTINCT", sequelize.col("mes")), "mes"]],
-        where,
-        order: [["mes", "ASC"]],
-        raw: true,
-      }),
-      CierreModulo.findAll({
-        attributes: [[sequelize.fn("DISTINCT", sequelize.col("modulo")), "modulo"]],
-        where,
-        order: [["modulo", "ASC"]],
-        raw: true,
-      }),
-    ]);
+    const cierresModulosMunicipio = await CierreModulo.findAll({
+      attributes: ['ejercicio', 'mes', 'modulo'],
+      where,
+      order: [['ejercicio', "DESC"], ['mes', 'ASC']],
+      raw: true
+    })
 
-    return res.json({
-      ejercicios: ejercicios.map((e) => e.ejercicio).filter(Boolean),
-      meses: meses.map((m) => m.mes).filter(Boolean),
-      modulos: modulos.map((m) => m.modulo).filter(Boolean),
-    });
+    const ejerciciosMesesCerrados = await EjercicioMesCerrado.findAll({
+      attributes: ['ejercicio', 'mes'],
+      where,
+      order: [['ejercicio', "DESC"], ['mes', 'ASC']],
+      raw: true
+    })
+
+    const MODULOS = ['GASTOS', 'RECURSOS'];
+
+    const mappedEjerciciosMesesCerrados = ejerciciosMesesCerrados.flatMap(item =>
+      MODULOS.map(modulo => ({
+        ...item,
+        modulo
+      }))
+    );
+    return res.json([...cierresModulosMunicipio, ...mappedEjerciciosMesesCerrados])
   } catch (error) {
     console.error("❌ Error obteniendo filtros de informes:", error);
     return res.status(500).json({ error: "Error obteniendo filtros" });
   }
 };
 
-// GET /api/ejercicios/informes?municipio_id=&ejercicio=&mes=&modulo=
-export const obtenerInformeModulo = async (req, res) => {
+export const descargarInforme = async (req, res) => {
   const municipioId = req.query?.municipio_id ?? req.params?.municipioId;
   const ejercicioRaw = req.query?.ejercicio;
   const mesRaw = req.query?.mes;
@@ -750,54 +628,81 @@ export const obtenerInformeModulo = async (req, res) => {
 
   if (!municipioId || Number.isNaN(ejercicio) || Number.isNaN(mes) || !modulo) {
     return res.status(400).json({
-      error: "municipio_id, ejercicio, mes y modulo son requeridos",
+      error: "ID del municipio, ejercicio, mes y modulo son requeridos",
     });
   }
 
   if (mes < 1 || mes > 12) {
-    return res.status(400).json({ error: "mes debe estar entre 1 y 12" });
+    return res.status(400).json({ error: "El mes debe estar entre 1 y 12" });
   }
 
   if (!MODULOS_VALIDOS.includes(modulo)) {
-    return res.status(400).json({ error: "modulo inválido" });
+    return res.status(400).json({ error: "Modulo inválido" });
   }
 
-  try {
-    const cierre = await CierreModulo.findOne({
-      where: {
-        municipio_id: municipioId,
-        ejercicio,
-        mes,
-        modulo,
-        informe_path: { [Op.ne]: null },
-      },
-      order: [["fecha_cierre", "DESC"]],
-    });
+  try{
+    let cierre = null
+    let filename = null
+    // agregar luego: && mes >= 4
+    if(ejercicio >= 2026){
+      const cierres= await CierreModulo.findAll({
+        where: {
+          municipio_id: municipioId,
+          ejercicio,
+          mes,
+          modulo,
+          informe_path: { [Op.ne]: null },
+        },
+        order: [["fecha_cierre", "DESC"]],
+        raw: true
+      });
 
-    if (!cierre) {
+      if(cierres.length > 1) cierre = cierres.find(c => c.tipo_cierre === 'PRORROGA') || cierres[0]
+      else cierre = cierres[0]
+
+      filename = cierre.informe_path
+    }
+    // agregar luego junto con la primer condicion || (ejercicio === 2026 && mes < 4)
+    if((ejercicio <= 2025) && (modulo === 'GASTOS' || modulo === 'RECURSOS')){
+      cierre = await EjercicioMesCerrado.findOne({
+        where: {
+          municipio_id: municipioId,
+          ejercicio,
+          mes,
+          informe_recursos: { [Op.ne]: null },
+          informe_gastos: { [Op.ne]: null },
+        },
+        raw: true
+      })
+
+      filename = modulo === 'GASTOS' ? cierre.informe_gastos : modulo === 'RECURSOS' ? cierre.informe_recursos : null
+    }
+
+    if (!cierre || !filename) {
       return res.status(404).json({ error: "No hay informe disponible con esos filtros" });
     }
 
-    const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
-
-    const downloadUrl = `${BASE_URL}/api/ejercicios/informes/download/${cierre.informe_path}`;
-
-    return res.json({ downloadUrl });
-  } catch (error) {
-    console.error("❌ Error obteniendo informe del módulo:", error);
-    return res.status(500).json({ error: "Error obteniendo informe" });
-  }
-};
-
-export const descargarInforme = (req, res) => {
-  const { filename } = req.params;
-  try{
     // ⚠️ Seguridad básica
     if (!filename.endsWith(".pdf")) {
       return res.status(400).json({ error: "Archivo inválido" });
     }
+  
+    // Buscar directorio base en BD
+    const directorioBase = await Parametros.findOne({ where: {
+      nombre: "Directorio Base",
+      estado: true
+    } });
 
-    const filePath = path.join(__dirname, "files", "informes", filename);
+    if (!directorioBase || !directorioBase.valor) {
+      throw new Error("Directorio base no configurado");
+    }
+
+    // Obtener la ruta
+    const rutaBase = directorioBase.valor
+
+    // Armar ruta absoluta
+    const filePath = path.resolve(rutaBase, filename);
+    console.log("filepath", filePath)
 
     // Verificar que exista
     if (!fs.existsSync(filePath)) {
@@ -809,10 +714,15 @@ export const descargarInforme = (req, res) => {
       'Content-Disposition'
     );
 
-    res.download(filePath, filename, (err) => {
+    return res.download(filePath, filename, (err) => {
       if (err) {
-        console.error("❌ Error enviando archivo:", err);
-        res.status(500).json({ error: "Error descargando archivo" });
+        console.error("Error enviando archivo:", err);
+
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: "No se pudo descargar el archivo",
+          });
+        }
       }
     });
   }catch(error){
