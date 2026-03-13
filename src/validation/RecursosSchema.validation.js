@@ -10,7 +10,5 @@ export const RecursosSchema = z.object({
         {
             message: "El número debe tener hasta 10 dígitos enteros y hasta 2 decimales",
         }
-    ),
-    recursos_cantidad_contribuyentes: z.number({ message: "La cantidad de contribuyentes debe ser un número entero" }).int({ message: "La cantidad de contribuyentes debe ser un número entero" }).optional().nullable(),
-    recursos_cantidad_pagaron: z.number({ message: "La cantidad que pagaron debe ser un número entero" }).int({ message: "La cantidad que pagaron debe ser un número entero" }).optional().nullable(),
+    )
 });

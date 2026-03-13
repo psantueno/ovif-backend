@@ -102,27 +102,11 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
       ? currencyFormatter.format(totalNumerico)
       : currencyFormatter.format(0);
 
-    const totalContribuyentes = partidas.reduce((sum, partida) => {
-      const contribuyentes = partida.totalContribuyentes;
-      const contribuyentesNumerico = contribuyentes !== null && contribuyentes !== undefined ? Number(contribuyentes) : 0;
-      return sum + (Number.isFinite(contribuyentesNumerico) ? contribuyentesNumerico : 0);
-    }, 0);
-    const totalContribuyentesFormateado = integerFormatter.format(totalContribuyentes);
-
-    const totalPagaron = partidas.reduce((sum, partida) => {
-      const pagaron = partida.contribuyentesPagaron;
-      const pagaronNumerico = pagaron !== null && pagaron !== undefined ? Number(pagaron) : 0;
-      return sum + (Number.isFinite(pagaronNumerico) ? pagaronNumerico : 0);
-    }, 0);
-    const totalPagaronFormateado = integerFormatter.format(totalPagaron);
-
     const tableBody = [
       [
         { text: "CÓDIGO", style: "tableHeader", alignment: "center", valign: "middle", minHeight: 20 },
         { text: "PARTIDA", style: "tableHeader", valign: "middle", minHeight: 20 },
         { text: "IMPORTE PERCIBIDO", style: "tableHeader", alignment: "right", valign: "middle" },
-        { text: "TOTAL CONTRIBUYENTES", style: "tableHeader", alignment: "right", valign: "middle" },
-        { text: "CONTRIBUYENTES PAGARON", style: "tableHeader", alignment: "right", valign: "middle" },
       ],
       ...partidas.map((partida) => {
         const esGrupo = !partida.puedeCargar;
@@ -136,32 +120,6 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
             ? currencyFormatter.format(importeNumerico)
             : "------";
 
-        const contribuyentesNumerico =
-          partida.totalContribuyentes !== null && partida.totalContribuyentes !== undefined
-            ? Number(partida.totalContribuyentes)
-            : null;
-        const contribuyentesFormateado =
-          esGrupo || esSinLiquidacion
-            ? esGrupo
-              ? ""
-              : "------"
-            : contribuyentesNumerico !== null && Number.isFinite(contribuyentesNumerico)
-              ? integerFormatter.format(contribuyentesNumerico)
-              : "";
-
-        const pagaronNumerico =
-          partida.contribuyentesPagaron !== null && partida.contribuyentesPagaron !== undefined
-            ? Number(partida.contribuyentesPagaron)
-            : null;
-        const pagaronFormateado =
-          esGrupo || esSinLiquidacion
-            ? esGrupo
-              ? ""
-              : "------"
-            : pagaronNumerico !== null && Number.isFinite(pagaronNumerico)
-              ? integerFormatter.format(pagaronNumerico)
-              : "";
-
         return [
           { text: partida.codigo ?? "-", style: esGrupo ? "grupoCodigo" : "itemCodigo" },
           {
@@ -172,20 +130,12 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
           esGrupo
             ? { text: "", style: "grupoImporte" }
             : { text: importeFormateado, alignment: "right", style: "itemImporte" },
-          esGrupo
-            ? { text: "", style: "grupoImporte" }
-            : { text: contribuyentesFormateado, alignment: "right", style: "itemImporte" },
-          esGrupo
-            ? { text: "", style: "grupoImporte" }
-            : { text: pagaronFormateado, alignment: "right", style: "itemImporte" },
         ];
       }),
       [
         { text: "TOTAL", colSpan: 2, style: "totalLabel" },
         { text: "", style: "totalEmpty"},
         { text: totalFormateado, alignment: "left", style: "totalValue" },
-        { text: totalContribuyentesFormateado, style: "totalValue"},
-        { text: totalPagaronFormateado, style: "totalValue"},
       ],
     ];
 
@@ -194,7 +144,7 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
     content.push(
       {
         table: {
-          widths: ["auto", "*", "auto", "auto", "auto"],
+          widths: ["auto", "*", "auto"],
           headerRows: 1,
           body: tableBody,
         },
