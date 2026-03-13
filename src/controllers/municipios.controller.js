@@ -199,8 +199,6 @@ const aplanarJerarquiaPartidasRecursos = (nodos, nivel = 0) => {
       puedeCargar: nodo.puede_cargar,
       esSinLiquidacion: nodo.es_sin_liquidacion,
       importePercibido: nodo.recursos_importe_percibido,
-      totalContribuyentes: nodo.recursos_cantidad_contribuyentes,
-      contribuyentesPagaron: nodo.recursos_cantidad_pagaron,
     });
 
     if (Array.isArray(nodo.children) && nodo.children.length > 0) {
@@ -1159,14 +1157,10 @@ export const upsertRecursosMunicipio = async (req, res) => {
 
     for (const item of partidas) {
       const tieneImporte = Object.prototype.hasOwnProperty.call(item, "recursos_importe_percibido");
-      const tieneContribuyentes = item?.recursos_cantidad_contribuyentes !== undefined;
-      const tienePagaron = item?.recursos_cantidad_pagaron !== undefined;
 
       const validRecurso = RecursosSchema.safeParse({
         partidas_recursos_codigo: item?.partidas_recursos_codigo,
         recursos_importe_percibido: item?.recursos_importe_percibido,
-        recursos_cantidad_contribuyentes: item?.recursos_cantidad_contribuyentes,
-        recursos_cantidad_pagaron: item?.recursos_cantidad_pagaron,
       });
 
       if (!validRecurso.success) {
@@ -1187,8 +1181,6 @@ export const upsertRecursosMunicipio = async (req, res) => {
         continue;
       }
 
-      const cargaContribuyentes = !partidaRecurso.partidas_recursos_sl;
-
       const where = {
         recursos_ejercicio: ejercicioNum,
         recursos_mes: mesNum,
@@ -1199,12 +1191,7 @@ export const upsertRecursosMunicipio = async (req, res) => {
       const existente = await Recurso.findOne({ where, transaction });
 
       if (!existente) {
-        const data = { ...where, recursos_importe_percibido: item.recursos_importe_percibido, recursos_cantidad_contribuyentes: 0, recursos_cantidad_pagaron: 0 };
-
-        if(cargaContribuyentes){
-          data.recursos_cantidad_contribuyentes = item.recursos_cantidad_contribuyentes ?? 0;
-          data.recursos_cantidad_pagaron = item.recursos_cantidad_pagaron ?? 0;
-        }
+        const data = { ...where, recursos_importe_percibido: item.recursos_importe_percibido };
 
         await Recurso.create(
           {
@@ -1222,22 +1209,6 @@ export const upsertRecursosMunicipio = async (req, res) => {
         const importeActual = Number(existente.recursos_importe_percibido);
         if (!Number.isNaN(importeActual) && importeActual !== item.recursos_importe_percibido) {
           existente.recursos_importe_percibido = item.recursos_importe_percibido;
-          huboCambios = true;
-        }
-      }
-
-      if (tieneContribuyentes && cargaContribuyentes) {
-        const contribuyentesActual = Number(existente.recursos_cantidad_contribuyentes);
-        if (!Number.isNaN(contribuyentesActual) && contribuyentesActual !== item.recursos_cantidad_contribuyentes) {
-          existente.recursos_cantidad_contribuyentes = item.recursos_cantidad_contribuyentes ?? 0;
-          huboCambios = true;
-        }
-      }
-
-      if (tienePagaron && cargaContribuyentes) {
-        const pagaronActual = Number(existente.recursos_cantidad_pagaron);
-        if (!Number.isNaN(pagaronActual) && pagaronActual !== item.recursos_cantidad_pagaron) {
-          existente.recursos_cantidad_pagaron = item.recursos_cantidad_pagaron ?? 0;
           huboCambios = true;
         }
       }

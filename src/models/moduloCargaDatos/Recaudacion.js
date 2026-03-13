@@ -21,6 +21,10 @@ const Recaudacion = sequelize.define("Recaudacion", {
   importe_recaudacion: {
     type: DataTypes.DECIMAL(20,2),
     allowNull: false
+  },
+  ente_recaudador: {
+    type: DataTypes.STRING(100),
+    allowNull: false
   }
 }, {
   tableName: "ovif_recaudaciones",

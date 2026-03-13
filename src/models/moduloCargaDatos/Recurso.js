@@ -22,14 +22,6 @@ const Recurso = sequelize.define("Recurso", {
   recursos_importe_percibido: {
     type: DataTypes.DECIMAL(20,2),
     allowNull: false
-  },
-  recursos_cantidad_contribuyentes: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  recursos_cantidad_pagaron: {
-    type: DataTypes.INTEGER,
-    allowNull: false
   }
 }, {
   tableName: "ovif_recursos",

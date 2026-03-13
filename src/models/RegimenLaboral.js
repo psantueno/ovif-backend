@@ -9,6 +9,10 @@ const RegimenLaboral = sequelize.define("RegimenLaboral", {
   nombre: {
     type: DataTypes.STRING(100),
     allowNull: false
+  },
+  municipio_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false
   }
 }, {
   tableName: "ovif_regimen_laboral",
