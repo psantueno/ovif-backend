@@ -1,5 +1,5 @@
 // Modelo
-import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio, ConceptoRecaudacion, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario, Archivo, CierreModulo, EjercicioMesCerrado, Poblacion, UsuarioMunicipio, RecaudacionRectificada, RemuneracionRectificada } from "../models/index.js";
+import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio, ConceptoRecaudacion, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario, Archivo, CierreModulo, EjercicioMesCerrado, Poblacion, UsuarioMunicipio, RecaudacionRectificada, RemuneracionRectificada, TipoPauta } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
@@ -323,7 +323,22 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
         ? Convenio.findAll({ where: { convenio_id: [...convenioIds] } })
         : [],
       pautaIds.size
-        ? PautaConvenio.findAll({ where: { pauta_id: [...pautaIds] } })
+        ? PautaConvenio.findAll({
+            where: { pauta_id: [...pautaIds] },
+            include: [
+              {
+                model: TipoPauta,
+                as: "TipoPauta",
+                attributes: [
+                  "tipo_pauta_id",
+                  "codigo",
+                  "nombre",
+                  "descripcion",
+                  "requiere_periodo_rectificar",
+                ],
+              },
+            ],
+          })
         : [],
     ]);
 
@@ -360,7 +375,13 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
           pauta_id: resolvedPautaId,
           convenio_nombre: convenio?.nombre ?? null,
           pauta_descripcion: pauta?.descripcion ?? null,
-          tipo_pauta: pauta?.tipo_pauta ?? null,
+          tipo_pauta_id: pauta?.tipo_pauta_id ?? null,
+          tipo_pauta_codigo: pauta?.TipoPauta?.codigo ?? null,
+          tipo_pauta_nombre: pauta?.TipoPauta?.nombre ?? null,
+          tipo_pauta_descripcion: pauta?.TipoPauta?.descripcion ?? null,
+          requiere_periodo_rectificar: Boolean(
+            pauta?.TipoPauta?.requiere_periodo_rectificar
+          ),
           fecha_cierre: fechaFinStr,
           vencido,
           cerrado: false,
@@ -406,26 +427,32 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
 
     const pautasRectificables = await PautaConvenio.findAll({
       where: {
+        convenio_id: {
+          [Op.in]: conveniosActivosIds
+        },
         [Op.and]: [
-          {
-            cant_dias_rectifica: {
-              [Op.ne]: null,
-              [Op.ne]: 0
-            }
-          },
-          {
-            plazo_mes_rectifica: {
-              [Op.ne]: null,
-              [Op.ne]: 0
-            }
-          },
-          {
-            convenio_id: {
-              [Op.in]: conveniosActivosIds
-            }
-          }
+          { cant_dias_rectifica: { [Op.ne]: null } },
+          { cant_dias_rectifica: { [Op.ne]: 0 } },
+          { plazo_mes_rectifica: { [Op.ne]: null } },
+          { plazo_mes_rectifica: { [Op.ne]: 0 } }
         ]
       },
+      include: [
+        {
+          model: TipoPauta,
+          as: "TipoPauta",
+          attributes: [
+            "tipo_pauta_id",
+            "codigo",
+            "nombre",
+            "descripcion",
+            "requiere_periodo_rectificar"
+          ],
+          where: {
+            requiere_periodo_rectificar: true
+          }
+        }
+      ],
     });
     const pautasRectificablesIds = pautasRectificables.map(p => p.pauta_id);
     const pautasMap = pautasRectificables.map(p => ({
@@ -433,7 +460,11 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
       descripcion: p.descripcion,
       cant_dias_rectifica: p.cant_dias_rectifica,
       plazo_mes_rectifica: p.plazo_mes_rectifica,
-      tipo_pauta: p.tipo_pauta
+      tipo_pauta_id: p.tipo_pauta_id,
+      tipo_pauta_codigo: p.TipoPauta?.codigo ?? null,
+      tipo_pauta_nombre: p.TipoPauta?.nombre ?? null,
+      tipo_pauta_descripcion: p.TipoPauta?.descripcion ?? null,
+      requiere_periodo_rectificar: Boolean(p.TipoPauta?.requiere_periodo_rectificar)
     }))
 
     const ejercicioMesRectificables = await EjercicioMes.findAll({
@@ -469,7 +500,11 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
           pauta_id: em.pauta_id,
           convenio_nombre: convenio?.nombre ?? null,
           pauta_descripcion: pauta?.descripcion ?? null,
-          tipo_pauta: pauta?.tipo_pauta ?? null,
+          tipo_pauta_id: pauta?.tipo_pauta_id ?? null,
+          tipo_pauta_codigo: pauta?.tipo_pauta_codigo ?? null,
+          tipo_pauta_nombre: pauta?.tipo_pauta_nombre ?? null,
+          tipo_pauta_descripcion: pauta?.tipo_pauta_descripcion ?? null,
+          requiere_periodo_rectificar: Boolean(pauta?.requiere_periodo_rectificar),
           fecha_cierre: toISODate(fechaCierreRectificacion),
           vencido: !disponible,
           cerrado: false,
@@ -2614,7 +2649,13 @@ const verificarGastosRecursosDisponibles = async (ejercicio, mes) => {
   const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
     timeZone: "America/Argentina/Buenos_Aires"
   });
-  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(ejercicio, mes, 'gastos_recursos', fechaHoyArgentina, fechaHoyArgentina);
+  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(
+    ejercicio,
+    mes,
+    "gastos_recursos",
+    fechaHoyArgentina,
+    fechaHoyArgentina
+  );
   if(!ejercicioMes) return false;
 
   return true;
@@ -2624,7 +2665,13 @@ const verificarRecaudacionRemuneracionDisponible = async (ejercicio, mes) => {
   const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
     timeZone: "America/Argentina/Buenos_Aires"
   });
-  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(ejercicio, mes, 'recaudacion_remuneracion', fechaHoyArgentina, fechaHoyArgentina);
+  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(
+    ejercicio,
+    mes,
+    "recaudaciones_remuneraciones",
+    fechaHoyArgentina,
+    fechaHoyArgentina
+  );
   if(!ejercicioMes) return false;
 
   return true;
@@ -2659,7 +2706,13 @@ const verificarPeriodoRectificacionDisponible = (fechaFin, plazoMesRectifica, ca
   return disponible;
 }
 
-const obtenerConvenioPautaEjercicioMes = async (ejercicio, mes, tipoPauta, fechaInicio = null, fechaFin = null) => {
+const obtenerConvenioPautaEjercicioMes = async (
+  ejercicio,
+  mes,
+  tipoPautaCodigo,
+  fechaInicio = null,
+  fechaFin = null
+) => {
   const conveniosActivos = await Convenio.findAll(
     { 
       where: { fecha_fin: { [Op.gt]: new Date() } }
@@ -2667,54 +2720,23 @@ const obtenerConvenioPautaEjercicioMes = async (ejercicio, mes, tipoPauta, fecha
   );
   const conveniosActivosIds = conveniosActivos.map(c => c.convenio_id);
 
-  let pautas = null;
-  if(tipoPauta === 'recaudacion_remuneracion'){
-    pautas = await PautaConvenio.findAll({
-      where: {
-        [Op.and]: [
-          {
-            cant_dias_rectifica: {
-              [Op.ne]: null,
-              [Op.ne]: 0
-            }
-          },
-          {
-            plazo_mes_rectifica: {
-              [Op.ne]: null,
-              [Op.ne]: 0
-            }
-          },
-          {
-            convenio_id: {
-              [Op.in]: conveniosActivosIds
-            }
-          }
-        ]
-      },
-    });
-  }else if(tipoPauta === 'gastos_recursos'){
-    pautas = await PautaConvenio.findAll({
-      where: {
-        convenio_id: {
-          [Op.in]: conveniosActivosIds
-        },
-        [Op.and]: [
-          {
-            [Op.or]: [
-              { cant_dias_rectifica: 0 },
-              { cant_dias_rectifica: { [Op.is]: null } }
-            ]
-          },
-          {
-            [Op.or]: [
-              { plazo_mes_rectifica: 0 },
-              { plazo_mes_rectifica: { [Op.is]: null } }
-            ]
-          }
-        ]
+  const pautas = await PautaConvenio.findAll({
+    where: {
+      convenio_id: {
+        [Op.in]: conveniosActivosIds
       }
-    });
-  }
+    },
+    include: [
+      {
+        model: TipoPauta,
+        as: "TipoPauta",
+        attributes: ["tipo_pauta_id", "codigo"],
+        required: true,
+        where: { codigo: tipoPautaCodigo },
+      },
+    ],
+  });
+
   if(!pautas || pautas.length === 0) return { convenio: null, pauta: null, ejercicioMes: null };
   const pautasIds = pautas.map(p => p.pauta_id);
 

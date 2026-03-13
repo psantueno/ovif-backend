@@ -8,7 +8,8 @@ import {
   Convenio,
   PautaConvenio,
   CierreModulo,
-  Parametros
+  Parametros,
+  TipoPauta
 } from "../models/index.js";
 import { Op } from "sequelize";
 
@@ -67,7 +68,20 @@ export const listarEjercicios = async (req, res) => {
         },
         {
           model: PautaConvenio,
-          attributes: ["pauta_id", "descripcion"],
+          attributes: ["pauta_id", "descripcion", "tipo_pauta_id"],
+          include: [
+            {
+              model: TipoPauta,
+              as: "TipoPauta",
+              attributes: [
+                "tipo_pauta_id",
+                "codigo",
+                "nombre",
+                "descripcion",
+                "requiere_periodo_rectificar",
+              ],
+            },
+          ],
         },
       ],
       order: [
@@ -212,7 +226,20 @@ export const crearEjercicio = async (req, res) => {
         },
         {
           model: PautaConvenio,
-          attributes: ["pauta_id", "descripcion", "dia_vto", "plazo_vto"],
+          attributes: ["pauta_id", "descripcion", "dia_vto", "plazo_vto", "tipo_pauta_id"],
+          include: [
+            {
+              model: TipoPauta,
+              as: "TipoPauta",
+              attributes: [
+                "tipo_pauta_id",
+                "codigo",
+                "nombre",
+                "descripcion",
+                "requiere_periodo_rectificar",
+              ],
+            },
+          ],
         },
       ],
     });
@@ -265,7 +292,20 @@ export const updateEjercicio = async (req, res) => {
         },
         {
           model: PautaConvenio,
-          attributes: ["pauta_id", "descripcion", "dia_vto", "plazo_vto"],
+          attributes: ["pauta_id", "descripcion", "dia_vto", "plazo_vto", "tipo_pauta_id"],
+          include: [
+            {
+              model: TipoPauta,
+              as: "TipoPauta",
+              attributes: [
+                "tipo_pauta_id",
+                "codigo",
+                "nombre",
+                "descripcion",
+                "requiere_periodo_rectificar",
+              ],
+            },
+          ],
         },
       ],
     });
