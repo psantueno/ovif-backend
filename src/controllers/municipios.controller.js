@@ -1906,13 +1906,7 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
       const tieneArt = Object.prototype.hasOwnProperty.call(item, "art");
       const tieneSeguroVidaObligatorio = Object.prototype.hasOwnProperty.call(item, "seguro_vida_obligatorio");
       const tieneRemuneracionNeta = Object.prototype.hasOwnProperty.call(item, "neto_a_cobrar");
-      
-      const regimenNombre = item.regimen_laboral ?? '';
-      const regimen = await RegimenLaboral.findOne({ where: { nombre: regimenNombre, municipio_id: municipioId } });
-      if (!regimen) {
-        errores.push(`El regimen con nombre ${regimenNombre} no existe`);
-        continue;
-      }
+      const tieneRegimenLaboral = Object.prototype.hasOwnProperty.call(item, "regimen_laboral");
 
       const where = {
         remuneraciones_ejercicio: ejercicioNum,
@@ -1931,6 +1925,7 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
           regimen_laboral: item.regimen_laboral,
           categoria: item.categoria,
           sector: item.sector,
+          regimen_laboral: item.regimen_laboral,
           fecha_ingreso: item.fecha_ingreso,
           fecha_inicio_servicio: item.fecha_inicio_servicio,
           fecha_fin_servicio: item.fecha_fin_servicio ?? null,
@@ -1949,12 +1944,8 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
           total_issn: item.total_issn ?? 0,
           art: item.art ?? 0,
           seguro_vida_obligatorio: item.seguro_vida_obligatorio ?? 0,
-          total_remuneracion_neta: item.neto_a_cobrar ?? 0
+          total_remuneracion_neta: item.neto_a_cobrar ?? 0,
         };
-
-        if(!data.total_remuneracion_neta){
-          console.log("data ", data)
-        }
 
         await Remuneracion.create(
           {
@@ -1978,6 +1969,10 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
       }
       if (tieneSector && !compararValores(existente.sector, item.sector)) {
         existente.sector = item.sector;
+        huboCambios = true;
+      }
+      if(tieneRegimenLaboral && !compararValores(existente.sector, item.sector)){
+        existente.regimen_laboral = item.regimen_laboral;
         huboCambios = true;
       }
       if (tieneFechaIngreso && !compararValores(existente.fecha_ingreso, item.fecha_ingreso)) {

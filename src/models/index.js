@@ -39,7 +39,6 @@ import ProrrogaMunicipio from './ProrrogaMunicipio.js';
 import AuditoriaProrrogaMunicipio from './AuditoriaProrrogaMunicipio.js';
 import Parametros from './Parametros.js';
 
-
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
   as: 'Roles',
@@ -200,5 +199,5 @@ export {
   Recaudacion,
   RecaudacionRectificada,
   RemuneracionRectificada,
-  Parametros
+  Parametros,
 };
