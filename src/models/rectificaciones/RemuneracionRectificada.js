@@ -22,45 +22,97 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     type: DataTypes.STRING(255),
     allowNull: false
   },
-  regimen_id: {
+  legajo: {
     type: DataTypes.INTEGER,
     allowNull: false
   },
-  situacion_revista_id: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  fecha_alta: {
+  fecha_ingreso: {
     type: DataTypes.DATEONLY,
     allowNull: false
   },
-  tipo_liquidacion: {
-    type: DataTypes.INTEGER,
+  cargo_salarial: {
+    type: DataTypes.STRING(100),
     allowNull: false
   },
-  remuneracion_neta: {
+  sector: {
+    type: DataTypes.STRING(100),
+    allowNull: false
+  },
+  fecha_alta_regimen_laboral: {
+    type: DataTypes.DATEONLY,
+    allowNull: false
+  },
+  fecha_baja_regimen_laboral: {
+    type: DataTypes.DATEONLY,
+    allowNull: false
+  },
+  total_remuneracion_neta: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: false
+  },
+  basico_cargo_salarial: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: false
+  },
+  total_remunerativo: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: false
+  },
+  sac: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: true,
+    defaultValue: null
+  },
+  total_no_remunerativo: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: false
+  },
+  ropa: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: true,
+    defaultValue: null
+  },
+  bonos: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: true,
+    defaultValue: null
+  },
+  asignaciones_familiares: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: false
+  },
+  total_descuentos: {
+    type: DataTypes.DECIMAL(20,2),
+    allowNull: false
+  },
+  total_issn: {
     type: DataTypes.DECIMAL(20,2),
     allowNull: false
   },
   bonificacion: {
-    type: DataTypes.DECIMAL(20,2),
-    allowNull: false
-  },
+  type: DataTypes.DECIMAL(20,2),
+  allowNull: true,
+  defaultValue: null
+},
   cant_hs_extra_50: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true,
+    defaultValue: null
   },
   importe_hs_extra_50: {
     type: DataTypes.DECIMAL(20,2),
-    allowNull: false
+    allowNull: true,
+    defaultValue: null
   },
   cant_hs_extra_100: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true,
+    defaultValue: null
   },
   importe_hs_extra_100: {
     type: DataTypes.DECIMAL(20,2),
-    allowNull: false
+    allowNull: true,
+    defaultValue: null
   },
   art: {
     type: DataTypes.DECIMAL(20,2),
@@ -72,10 +124,6 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
   },
   otros_conceptos: {
     type: DataTypes.DECIMAL(20,2),
-    allowNull: false
-  },
-  legajo: {
-    type: DataTypes.INTEGER,
     allowNull: false
   }
 }, {

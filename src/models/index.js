@@ -110,16 +110,6 @@ PartidaRecurso.hasMany(ConceptoRecaudacion, {
   sourceKey: "partidas_recursos_codigo"
 });
 
-
-Remuneracion.belongsTo(RegimenLaboral, { foreignKey: "regimen_id" });
-RegimenLaboral.hasMany(Remuneracion, { foreignKey: "regimen_id" });
-Remuneracion.belongsTo(TipoGasto, { foreignKey: "tipo_liquidacion" });
-TipoGasto.hasMany(Remuneracion, { foreignKey: "tipo_liquidacion" });
-RemuneracionRectificada.belongsTo(RegimenLaboral, { foreignKey: "regimen_id" });
-RegimenLaboral.hasMany(RemuneracionRectificada, { foreignKey: "regimen_id" });
-RemuneracionRectificada.belongsTo(TipoGasto, { foreignKey: "tipo_liquidacion" });
-TipoGasto.hasMany(RemuneracionRectificada, { foreignKey: "tipo_liquidacion" });
-
 Poblacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
 Recaudacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
