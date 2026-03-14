@@ -34,6 +34,7 @@ import UsuarioMunicipio from './UsuarioMunicipio.js';
 import UsuarioRol from './UsuarioRol.js';
 import Convenio from './Convenio.js';
 import PautaConvenio from './PautaConvenio.js';
+import TipoPauta from './TipoPauta.js';
 import ProrrogaMunicipio from './ProrrogaMunicipio.js';
 import AuditoriaProrrogaMunicipio from './AuditoriaProrrogaMunicipio.js';
 import Parametros from './Parametros.js';
@@ -71,6 +72,8 @@ Municipio.belongsToMany(Usuario, {
 
 Convenio.hasMany(PautaConvenio, { foreignKey: "convenio_id" });
 PautaConvenio.belongsTo(Convenio, { foreignKey: "convenio_id" });
+TipoPauta.hasMany(PautaConvenio, { foreignKey: "tipo_pauta_id", as: "PautasConvenio" });
+PautaConvenio.belongsTo(TipoPauta, { foreignKey: "tipo_pauta_id", as: "TipoPauta" });
 Convenio.hasMany(EjercicioMes, { foreignKey: "convenio_id" });
 PautaConvenio.hasMany(EjercicioMes, { foreignKey: "pauta_id" });
 Convenio.hasMany(ProrrogaMunicipio, { foreignKey: "convenio_id" });
@@ -187,6 +190,7 @@ export {
   UsuarioRol,
   Convenio,
   PautaConvenio,
+  TipoPauta,
   ProrrogaMunicipio,
   AuditoriaProrrogaMunicipio,
   RegimenLaboral,

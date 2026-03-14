@@ -19,6 +19,7 @@ import {
   CierreModulo,
   Municipio,
   PautaConvenio,
+  TipoPauta,
   Convenio, 
   Parametros
 } from "../models/index.js";
@@ -27,6 +28,20 @@ import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
 import crypto from "crypto";
+
+const MODULOS_POR_TIPO_PAUTA = {
+  gastos_recursos: ["Gastos", "Recursos"],
+  recaudaciones_remuneraciones: ["Recaudaciones", "Remuneraciones"],
+};
+
+const obtenerModulosPorTipoPauta = (codigoTipoPauta) => {
+  if (!codigoTipoPauta) {
+    return [];
+  }
+
+  const modulos = MODULOS_POR_TIPO_PAUTA[codigoTipoPauta];
+  return Array.isArray(modulos) ? modulos : [];
+};
 
 // 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
 cron.schedule(
@@ -105,8 +120,24 @@ cron.schedule(
       // Procesar ejercicios
       for (const ej of ejerciciosFiltrados) {
         const { ejercicio, mes, convenio_id, pauta_id } = ej;
-        const pauta = await PautaConvenio.findByPk(pauta_id)
-        const modulos = pauta.tipo_pauta === 'gastos_recursos' ? ['Gastos', 'Recursos'] : ['Recaudaciones', 'Remuneraciones'];
+        const pauta = await PautaConvenio.findByPk(pauta_id, {
+          include: [
+            {
+              model: TipoPauta,
+              as: "TipoPauta",
+              attributes: ["codigo", "nombre"],
+            },
+          ],
+        });
+        const tipoCodigo = pauta?.TipoPauta?.codigo ?? null;
+        const tipoNombre = pauta?.TipoPauta?.nombre ?? null;
+        const modulos = obtenerModulosPorTipoPauta(tipoCodigo);
+        if (!modulos.length) {
+          console.warn(
+            `⚠️ Cierre automático omitido para pauta ${pauta_id}: tipo de pauta no mapeado (${tipoCodigo ?? "sin-codigo"} - ${tipoNombre ?? "sin-nombre"})`
+          );
+          continue;
+        }
         const convenio = await Convenio.findByPk(convenio_id);
 
         for (const municipio of municipios) {
@@ -172,8 +203,24 @@ cron.schedule(
       // Procesar prorrogas
       for (const prorroga of prorrogasFiltradas) {
         const { ejercicio, mes, convenio_id, pauta_id } = prorroga;
-        const pauta = await PautaConvenio.findByPk(pauta_id);
-        const modulos = pauta.tipo_pauta === 'gastos_recursos' ? ['Gastos', 'Recursos'] : ['Recaudaciones', 'Remuneraciones'];
+        const pauta = await PautaConvenio.findByPk(pauta_id, {
+          include: [
+            {
+              model: TipoPauta,
+              as: "TipoPauta",
+              attributes: ["codigo", "nombre"],
+            },
+          ],
+        });
+        const tipoCodigo = pauta?.TipoPauta?.codigo ?? null;
+        const tipoNombre = pauta?.TipoPauta?.nombre ?? null;
+        const modulos = obtenerModulosPorTipoPauta(tipoCodigo);
+        if (!modulos.length) {
+          console.warn(
+            `⚠️ Cierre por prórroga omitido para pauta ${pauta_id}: tipo de pauta no mapeado (${tipoCodigo ?? "sin-codigo"} - ${tipoNombre ?? "sin-nombre"})`
+          );
+          continue;
+        }
         const convenio = await Convenio.findByPk(convenio_id);
 
         for (const municipio of municipios) {

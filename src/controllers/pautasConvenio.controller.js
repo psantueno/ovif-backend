@@ -1,13 +1,88 @@
-import { CierreModulo, Convenio, EjercicioMes, PautaConvenio, ProrrogaMunicipio } from "../models/index.js";
+import {
+  CierreModulo,
+  Convenio,
+  EjercicioMes,
+  PautaConvenio,
+  ProrrogaMunicipio,
+  TipoPauta,
+} from "../models/index.js";
 import { Op } from "sequelize";
 import { PautasSchema } from "../validation/PautasSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
+
+const includePautaRelations = [
+  {
+    model: Convenio,
+    attributes: ["convenio_id", "nombre"],
+  },
+  {
+    model: TipoPauta,
+    as: "TipoPauta",
+    attributes: [
+      "tipo_pauta_id",
+      "codigo",
+      "nombre",
+      "descripcion",
+      "requiere_periodo_rectificar",
+    ],
+  },
+];
+
+const normalizarPauta = (pauta, modificable = false) => ({
+  pauta_id: pauta.pauta_id,
+  convenio_id: pauta.convenio_id,
+  convenio_nombre: pauta.Convenio?.nombre ?? null,
+  descripcion: pauta.descripcion,
+  dia_vto: pauta.dia_vto,
+  plazo_vto: pauta.plazo_vto,
+  cant_dias_rectifica: pauta.cant_dias_rectifica,
+  plazo_mes_rectifica: pauta.plazo_mes_rectifica,
+  tipo_pauta_id: pauta.tipo_pauta_id,
+  tipo_pauta_codigo: pauta.TipoPauta?.codigo ?? null,
+  tipo_pauta_nombre: pauta.TipoPauta?.nombre ?? null,
+  tipo_pauta_descripcion: pauta.TipoPauta?.descripcion ?? null,
+  requiere_periodo_rectificar: Boolean(
+    pauta.TipoPauta?.requiere_periodo_rectificar
+  ),
+  modificable,
+});
+
+const validarRectificacionSegunTipo = (tipoPauta, payload) => {
+  if (!tipoPauta?.requiere_periodo_rectificar) {
+    return {
+      cant_dias_rectifica: null,
+      plazo_mes_rectifica: null,
+    };
+  }
+
+  const cantDias = Number(payload.cant_dias_rectifica ?? NaN);
+  const plazoMes = Number(payload.plazo_mes_rectifica ?? NaN);
+
+  if (!Number.isInteger(cantDias) || cantDias <= 0) {
+    throw new Error(
+      "La pauta requiere período de rectificación: cant_dias_rectifica debe ser un entero mayor a 0"
+    );
+  }
+
+  if (!Number.isInteger(plazoMes) || plazoMes <= 0) {
+    throw new Error(
+      "La pauta requiere período de rectificación: plazo_mes_rectifica debe ser un entero mayor a 0"
+    );
+  }
+
+  return {
+    cant_dias_rectifica: cantDias,
+    plazo_mes_rectifica: plazoMes,
+  };
+};
 
 export const getPautaConvenioParametros = async (req, res) => {
   const pautaParam = req.params?.pautaId ?? req.query?.pautaId ?? req.query?.id;
 
   if (!pautaParam || !/^[0-9]+$/.test(String(pautaParam))) {
-    return res.status(400).json({ error: "El identificador de pauta es obligatorio y debe ser numérico." });
+    return res
+      .status(400)
+      .json({ error: "El identificador de pauta es obligatorio y debe ser numérico." });
   }
 
   const pautaId = Number.parseInt(pautaParam, 10);
@@ -15,6 +90,7 @@ export const getPautaConvenioParametros = async (req, res) => {
   try {
     const pauta = await PautaConvenio.findOne({
       where: { pauta_id: pautaId },
+      include: includePautaRelations,
     });
 
     if (!pauta) {
@@ -27,26 +103,62 @@ export const getPautaConvenioParametros = async (req, res) => {
     return res.json({
       dia_vto: Number.isNaN(dia_vto) ? null : dia_vto,
       plazo_vto: Number.isNaN(plazo_vto) ? null : plazo_vto,
+      tipo_pauta_id: pauta.tipo_pauta_id,
+      tipo_pauta_codigo: pauta.TipoPauta?.codigo ?? null,
+      tipo_pauta_nombre: pauta.TipoPauta?.nombre ?? null,
+      tipo_pauta_descripcion: pauta.TipoPauta?.descripcion ?? null,
+      requiere_periodo_rectificar: Boolean(
+        pauta.TipoPauta?.requiere_periodo_rectificar
+      ),
+      cant_dias_rectifica: pauta.cant_dias_rectifica,
+      plazo_mes_rectifica: pauta.plazo_mes_rectifica,
     });
   } catch (error) {
     console.error("❌ Error obteniendo parámetros de la pauta del convenio:", error);
-    return res.status(500).json({ error: "Error obteniendo parámetros de la pauta del convenio" });
+    return res
+      .status(500)
+      .json({ error: "Error obteniendo parámetros de la pauta del convenio" });
   }
 };
 
-export const getPautasSelect = async (req, res) => {
+export const getPautasSelect = async (_req, res) => {
   try {
     const pautas = await PautaConvenio.findAll({
-      attributes: ["pauta_id", "descripcion"],
+      attributes: ["pauta_id", "descripcion", "tipo_pauta_id"],
+      include: [
+        {
+          model: TipoPauta,
+          as: "TipoPauta",
+          attributes: [
+            "tipo_pauta_id",
+            "codigo",
+            "nombre",
+            "descripcion",
+            "requiere_periodo_rectificar",
+          ],
+        },
+      ],
       order: [["descripcion", "ASC"]],
     });
 
-    res.json(pautas);
+    res.json(
+      pautas.map((pauta) => ({
+        pauta_id: pauta.pauta_id,
+        descripcion: pauta.descripcion,
+        tipo_pauta_id: pauta.tipo_pauta_id,
+        tipo_pauta_codigo: pauta.TipoPauta?.codigo ?? null,
+        tipo_pauta_nombre: pauta.TipoPauta?.nombre ?? null,
+        tipo_pauta_descripcion: pauta.TipoPauta?.descripcion ?? null,
+        requiere_periodo_rectificar: Boolean(
+          pauta.TipoPauta?.requiere_periodo_rectificar
+        ),
+      }))
+    );
   } catch (error) {
     console.error("❌ Error consultando pautas:", error);
     res.status(500).json({ error: "Error consultando pautas" });
   }
-}
+};
 
 export const listarPautas = async (req, res) => {
   try {
@@ -66,6 +178,7 @@ export const listarPautas = async (req, res) => {
 
     const { rows, count } = await PautaConvenio.findAndCountAll({
       where,
+      include: includePautaRelations,
       order: [
         ["descripcion", "ASC"],
         ["pauta_id", "ASC"],
@@ -77,21 +190,7 @@ export const listarPautas = async (req, res) => {
     const pautasPlanas = await Promise.all(
       rows.map(async (p) => {
         const modificable = await esPautaModificable(p.pauta_id);
-
-        const convenio = await Convenio.findOne({ where: { convenio_id: p.convenio_id } })
-
-        return {
-          pauta_id: p.pauta_id,
-          convenio_id: p.convenio_id,
-          convenio_nombre: convenio.nombre,
-          descripcion: p.descripcion,
-          dia_vto: p.dia_vto,
-          plazo_vto: p.plazo_vto,
-          cant_dias_rectifica: p.cant_dias_rectifica,
-          plazo_mes_rectifica: p.plazo_mes_rectifica,
-          tipo_pauta: p.tipo_pauta,
-          modificable: modificable
-        };
+        return normalizarPauta(p, modificable);
       })
     );
 
@@ -108,7 +207,7 @@ export const listarPautas = async (req, res) => {
     console.error("❌ Error consultando pautas:", error);
     res.status(500).json({ error: "Error consultando pautas" });
   }
-}
+};
 
 export const crearPauta = async (req, res) => {
   const {
@@ -118,7 +217,7 @@ export const crearPauta = async (req, res) => {
     plazo_vto,
     cant_dias_rectifica,
     plazo_mes_rectifica,
-    tipo_pauta
+    tipo_pauta_id,
   } = req.body;
 
   try {
@@ -129,46 +228,64 @@ export const crearPauta = async (req, res) => {
       plazo_vto,
       cant_dias_rectifica,
       plazo_mes_rectifica,
-      tipo_pauta
-    })
+      tipo_pauta_id,
+    });
 
     if (!valid.success) {
-      return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(',') })
-    }
-    
-
-    if (descripcion) {
-      const pautaDuplicada = await PautaConvenio.findOne({ where: { descripcion: descripcion } });
-
-      if (pautaDuplicada) {
-        return res.status(400).json({ error: "Ya existe otra pauta con esta descripción" });
-      }
+      return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(",") });
     }
 
-    const convenio = await Convenio.findOne({ where: { convenio_id: convenio_id } })
-    if(!convenio){
+    const pautaDuplicada = await PautaConvenio.findOne({ where: { descripcion } });
+
+    if (pautaDuplicada) {
+      return res.status(400).json({ error: "Ya existe otra pauta con esta descripción" });
+    }
+
+    const [convenio, tipoPauta] = await Promise.all([
+      Convenio.findOne({ where: { convenio_id } }),
+      TipoPauta.findByPk(tipo_pauta_id),
+    ]);
+
+    if (!convenio) {
       return res.status(400).json({ error: "No existe el convenio seleccionado" });
     }
 
+    if (!tipoPauta) {
+      return res.status(400).json({ error: "No existe el tipo de pauta seleccionado" });
+    }
+
+    const payloadRectificacion = validarRectificacionSegunTipo(tipoPauta, {
+      cant_dias_rectifica,
+      plazo_mes_rectifica,
+    });
+
     const pauta = await PautaConvenio.create({
-      descripcion: descripcion,
-      convenio_id: convenio_id,
+      descripcion,
+      convenio_id,
       dia_vto: dia_vto ?? 0,
       plazo_vto: plazo_vto ?? 0,
-      cant_dias_rectifica: cant_dias_rectifica ?? 0,
-      plazo_mes_rectifica: plazo_mes_rectifica ?? 0,
-      tipo_pauta: tipo_pauta
-    })
+      cant_dias_rectifica: payloadRectificacion.cant_dias_rectifica,
+      plazo_mes_rectifica: payloadRectificacion.plazo_mes_rectifica,
+      tipo_pauta_id,
+    });
 
-    res.json({
+    const pautaConRelaciones = await PautaConvenio.findByPk(pauta.pauta_id, {
+      include: includePautaRelations,
+    });
+
+    res.status(201).json({
       message: "Pauta creada correctamente",
-      pauta,
+      pauta: normalizarPauta(pautaConRelaciones, true),
     });
   } catch (error) {
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+
     console.error("❌ Error creando pauta:", error);
     res.status(500).json({ error: "Error creando pauta" });
   }
-}
+};
 
 export const actualizarPauta = async (req, res) => {
   const { pautaId } = req.params;
@@ -179,7 +296,7 @@ export const actualizarPauta = async (req, res) => {
     plazo_vto,
     cant_dias_rectifica,
     plazo_mes_rectifica,
-    tipo_pauta
+    tipo_pauta_id,
   } = req.body;
 
   try {
@@ -191,7 +308,7 @@ export const actualizarPauta = async (req, res) => {
 
     const modificable = await esPautaModificable(pautaId);
 
-    if(!modificable){
+    if (!modificable) {
       return res.status(400).json({ error: "La pauta está asociado a otros datos y no puede ser actualizado" });
     }
 
@@ -202,45 +319,62 @@ export const actualizarPauta = async (req, res) => {
       plazo_vto,
       cant_dias_rectifica,
       plazo_mes_rectifica,
-      tipo_pauta
-    })
+      tipo_pauta_id,
+    });
 
     if (!valid.success) {
-      return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(',') })
+      return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(",") });
     }
 
-    if(convenio_id){
-      const convenio = await Convenio.findOne({ where: { convenio_id: convenio_id } })
-      if(!convenio){
-        return res.status(400).json({ error: "No existe el convenio seleccionado" });
-      }
+    const [convenio, tipoPauta] = await Promise.all([
+      Convenio.findOne({ where: { convenio_id } }),
+      TipoPauta.findByPk(tipo_pauta_id),
+    ]);
+
+    if (!convenio) {
+      return res.status(400).json({ error: "No existe el convenio seleccionado" });
+    }
+
+    if (!tipoPauta) {
+      return res.status(400).json({ error: "No existe el tipo de pauta seleccionado" });
     }
 
     if (descripcion && descripcion !== pauta.descripcion) {
-      const pautaDuplicada = await PautaConvenio.findOne({ where: { descripcion: descripcion } });
+      const pautaDuplicada = await PautaConvenio.findOne({ where: { descripcion } });
 
-      if (pautaDuplicada) {
+      if (pautaDuplicada && pautaDuplicada.pauta_id !== pauta.pauta_id) {
         return res.status(400).json({ error: "Ya existe otra pauta con esta descripción" });
       }
-
-      pauta.descripcion = descripcion;
     }
 
-    if(dia_vto != undefined && dia_vto != null) pauta.dia_vto = dia_vto ?? 0;
-    if(plazo_vto != undefined && plazo_vto != null) pauta.plazo_vto = plazo_vto ?? 0;
-    if(cant_dias_rectifica != undefined && cant_dias_rectifica != null) pauta.cant_dias_rectifica = cant_dias_rectifica ?? 0;
-    if(plazo_mes_rectifica != undefined && plazo_mes_rectifica != null) pauta.plazo_mes_rectifica = plazo_mes_rectifica ?? 0;
-    if(tipo_pauta != undefined && tipo_pauta != null) pauta.tipo_pauta = tipo_pauta ?? 0;
-    if(convenio_id != undefined && convenio_id != null) pauta.convenio_id = convenio_id ?? 0;
+    const payloadRectificacion = validarRectificacionSegunTipo(tipoPauta, {
+      cant_dias_rectifica,
+      plazo_mes_rectifica,
+    });
+
+    pauta.descripcion = descripcion;
+    pauta.convenio_id = convenio_id;
+    pauta.dia_vto = dia_vto;
+    pauta.plazo_vto = plazo_vto;
+    pauta.cant_dias_rectifica = payloadRectificacion.cant_dias_rectifica;
+    pauta.plazo_mes_rectifica = payloadRectificacion.plazo_mes_rectifica;
+    pauta.tipo_pauta_id = tipo_pauta_id;
 
     await pauta.save();
-    pauta.modificable = modificable;
+
+    const pautaConRelaciones = await PautaConvenio.findByPk(pauta.pauta_id, {
+      include: includePautaRelations,
+    });
 
     res.json({
       message: "Pauta actualizado correctamente",
-      pauta,
+      pauta: normalizarPauta(pautaConRelaciones, modificable),
     });
   } catch (error) {
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+
     console.error("❌ Error actualizando pauta:", error);
     res.status(500).json({ error: "Error actualizando pauta" });
   }
@@ -258,7 +392,7 @@ export const eliminarPauta = async (req, res) => {
 
     const modificable = await esPautaModificable(pautaId);
 
-    if(!modificable){
+    if (!modificable) {
       return res.status(400).json({ error: "La pauta está asociado a otros datos y no puede ser eliminado" });
     }
 
@@ -269,17 +403,17 @@ export const eliminarPauta = async (req, res) => {
     console.error("❌ Error eliminando pauta:", error);
     res.status(500).json({ error: "Error eliminando pauta" });
   }
-}
+};
 
 const esPautaModificable = async (pautaId) => {
-  const cierreModulo = await CierreModulo.findOne({ where: { pauta_id: pautaId } })
-  if(cierreModulo) return false;
+  const cierreModulo = await CierreModulo.findOne({ where: { pauta_id: pautaId } });
+  if (cierreModulo) return false;
 
-  const ejercicioMes = await EjercicioMes.findOne({ where: { pauta_id: pautaId } })
-  if(ejercicioMes) return false;
+  const ejercicioMes = await EjercicioMes.findOne({ where: { pauta_id: pautaId } });
+  if (ejercicioMes) return false;
 
-  const prorrogaMunicipio = await ProrrogaMunicipio.findOne({ where: { pauta_id: pautaId } })
-  if(prorrogaMunicipio) return false;
+  const prorrogaMunicipio = await ProrrogaMunicipio.findOne({ where: { pauta_id: pautaId } });
+  if (prorrogaMunicipio) return false;
 
   return true;
-}
+};

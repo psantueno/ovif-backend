@@ -24,6 +24,7 @@ import logsRoutes from "./routes/logs.routes.js";
 import parametrosRoutes from "./routes/parametros.routes.js";
 import conceptosRecaudacionRoutes from "./routes/conceptosRecaudacion.routes.js";
 import partidasRecursosRoutes from "./routes/partidasRecursos.routes.js";
+import tiposPautaRoutes from "./routes/tiposPauta.routes.js";
 
 // === Importación de CRON cierre automático del ejercicio/mes ===
 import "./cron/cierreAutomatico.js";
@@ -70,6 +71,7 @@ app.use("/api/logs", logsRoutes);
 app.use("/api/parametros", parametrosRoutes);
 app.use("/api/conceptos-recaudaciones", conceptosRecaudacionRoutes);
 app.use("/api/partidas-recursos", partidasRecursosRoutes);
+app.use("/api/tipos-pauta", tiposPautaRoutes);
 
 // === Healthcheck ===
 app.get("/api/health", (req, res) => {

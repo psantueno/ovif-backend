@@ -1,5 +1,5 @@
 import { Op } from "sequelize";
-import { CierreModulo, Convenio, EjercicioMes, PautaConvenio, ProrrogaMunicipio } from "../models/index.js";
+import { CierreModulo, Convenio, EjercicioMes, PautaConvenio, ProrrogaMunicipio, TipoPauta } from "../models/index.js";
 import { ConveniosSchema } from "../validation/ConveniosSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
 
@@ -31,10 +31,40 @@ export const listarPautasPorConvenio = async (req, res) => {
   try {
     const pautas = await PautaConvenio.findAll({
       where: { convenio_id: Number.parseInt(convenioId, 10) },
+      include: [
+        {
+          model: TipoPauta,
+          as: "TipoPauta",
+          attributes: [
+            "tipo_pauta_id",
+            "codigo",
+            "nombre",
+            "descripcion",
+            "requiere_periodo_rectificar",
+          ],
+        },
+      ],
       order: [["pauta_id", "ASC"]],
     });
 
-    return res.json(pautas);
+    return res.json(
+      pautas.map((pauta) => ({
+        pauta_id: pauta.pauta_id,
+        convenio_id: pauta.convenio_id,
+        descripcion: pauta.descripcion,
+        dia_vto: pauta.dia_vto,
+        plazo_vto: pauta.plazo_vto,
+        cant_dias_rectifica: pauta.cant_dias_rectifica,
+        plazo_mes_rectifica: pauta.plazo_mes_rectifica,
+        tipo_pauta_id: pauta.tipo_pauta_id,
+        tipo_pauta_codigo: pauta.TipoPauta?.codigo ?? null,
+        tipo_pauta_nombre: pauta.TipoPauta?.nombre ?? null,
+        tipo_pauta_descripcion: pauta.TipoPauta?.descripcion ?? null,
+        requiere_periodo_rectificar: Boolean(
+          pauta.TipoPauta?.requiere_periodo_rectificar
+        ),
+      }))
+    );
   } catch (error) {
     console.error("❌ Error listando pautas por convenio:", error);
     return res.status(500).json({ error: "Error listando pautas del convenio" });
