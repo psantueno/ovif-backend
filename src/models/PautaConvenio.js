@@ -25,7 +25,7 @@ const PautaConvenio = sequelize.define(
             type: DataTypes.INTEGER,
             allowNull: false,
         },
-        tipo_pauta: {
+        tipo_pauta_id: {
             type: DataTypes.INTEGER,
             allowNull: false,
         },
@@ -55,6 +55,10 @@ const PautaConvenio = sequelize.define(
             {
                 name: "idx_pautas_convenios_convenio_id",
                 fields: ["convenio_id"],
+            },
+            {
+                name: "idx_pautas_convenios_tipo_pauta_id",
+                fields: ["tipo_pauta_id"],
             },
         ],
     }
