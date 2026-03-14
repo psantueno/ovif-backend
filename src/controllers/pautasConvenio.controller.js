@@ -64,7 +64,7 @@ const validarRectificacionSegunTipo = (tipoPauta, payload) => {
     );
   }
 
-  if (!Number.isInteger(plazoMes) || plazoMes <= 0) {
+  if (!Number.isInteger(plazoMes) || plazoMes < 0) {
     throw new Error(
       "La pauta requiere período de rectificación: plazo_mes_rectifica debe ser un entero mayor a 0"
     );
@@ -180,8 +180,8 @@ export const listarPautas = async (req, res) => {
       where,
       include: includePautaRelations,
       order: [
+        ["pauta_id", "DESC"],
         ["descripcion", "ASC"],
-        ["pauta_id", "ASC"],
       ],
       limit: limiteFinal,
       offset,

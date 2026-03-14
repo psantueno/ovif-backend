@@ -39,7 +39,6 @@ import ProrrogaMunicipio from './ProrrogaMunicipio.js';
 import AuditoriaProrrogaMunicipio from './AuditoriaProrrogaMunicipio.js';
 import Parametros from './Parametros.js';
 
-
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
   as: 'Roles',
@@ -112,16 +111,6 @@ PartidaRecurso.hasMany(ConceptoRecaudacion, {
   foreignKey: "cod_recurso",
   sourceKey: "partidas_recursos_codigo"
 });
-
-
-Remuneracion.belongsTo(RegimenLaboral, { foreignKey: "regimen_id" });
-RegimenLaboral.hasMany(Remuneracion, { foreignKey: "regimen_id" });
-Remuneracion.belongsTo(TipoGasto, { foreignKey: "tipo_liquidacion" });
-TipoGasto.hasMany(Remuneracion, { foreignKey: "tipo_liquidacion" });
-RemuneracionRectificada.belongsTo(RegimenLaboral, { foreignKey: "regimen_id" });
-RegimenLaboral.hasMany(RemuneracionRectificada, { foreignKey: "regimen_id" });
-RemuneracionRectificada.belongsTo(TipoGasto, { foreignKey: "tipo_liquidacion" });
-TipoGasto.hasMany(RemuneracionRectificada, { foreignKey: "tipo_liquidacion" });
 
 Poblacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
@@ -210,5 +199,5 @@ export {
   Recaudacion,
   RecaudacionRectificada,
   RemuneracionRectificada,
-  Parametros
+  Parametros,
 };
