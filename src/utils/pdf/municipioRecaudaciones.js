@@ -62,7 +62,18 @@ const currencyFormatter = new Intl.NumberFormat("es-AR", {
     maximumFractionDigits: 2,
 });
 
-export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, conceptos, totalImporte, usuarioNombre, convenioNombre, esRectificacion = false, cierreId = null }) => {
+export const buildInformeRecaudaciones = ({
+    municipioNombre,
+    ejercicio,
+    mes,
+    conceptos,
+    totalesPorCodigo = [],
+    totalImporte,
+    usuarioNombre,
+    convenioNombre,
+    esRectificacion = false,
+    cierreId = null,
+}) => {
     const subtitulo = esRectificacion 
         ? `Informe de Rectificación de Recaudaciones - ${mes}/${ejercicio}\n`
         : `Informe de Recaudaciones - ${mes}/${ejercicio}\n`;
@@ -101,10 +112,11 @@ export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, con
             ? currencyFormatter.format(totalNumerico)
             : currencyFormatter.format(0);
 
-        const tableBody = [
+        const detalleBody = [
             [
-                { text: "CODIGO", style: "tableHeader", valign: "middle", minHeight: 20 },
+                { text: "CODIGO TRIBUTO", style: "tableHeader", valign: "middle", minHeight: 20 },
                 { text: "CONCEPTO", style: "tableHeader", valign: "middle", minHeight: 20 },
+                { text: "ENTE RECAUDADOR", style: "tableHeader", valign: "middle", minHeight: 20 },
                 { text: "IMPORTE RECAUDACIÓN", style: "tableHeader", alignment: "right", valign: "middle" },
             ],
             ...conceptos.map((concepto) => {
@@ -116,49 +128,125 @@ export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, con
 
                 return [
                     {
-                        text: concepto.cod_concepto ?? "Sin código",
+                        text: concepto.codigo_tributo ?? "Sin código",
                         style: "itemCodigo",
                     },
                     {
                         text: concepto.descripcion ?? "Sin descripcion",
                         style: "itemDescripcion",
                     },
+                    {
+                        text: concepto.ente_recaudador ?? "Sin ente",
+                        style: "itemEnte",
+                    },
                     { text: importeFormateado, alignment: "right", style: "itemImporte" },
                 ];
             }),
+        ];
+
+        const totalesAgrupados = Array.isArray(totalesPorCodigo) && totalesPorCodigo.length > 0
+            ? totalesPorCodigo
+            : (() => {
+                const acumulados = new Map();
+                conceptos.forEach((concepto) => {
+                    const codigoTributo = Number(concepto.codigo_tributo);
+                    if (!Number.isFinite(codigoTributo)) {
+                        return;
+                    }
+                    const importeNumerico = Number(concepto.importe_recaudacion);
+                    const importeValido = Number.isFinite(importeNumerico) ? importeNumerico : 0;
+                    const acumulado = acumulados.get(codigoTributo) ?? {
+                        codigo_tributo: codigoTributo,
+                        descripcion: concepto.descripcion ?? "",
+                        importe_total_recaudacion: 0,
+                    };
+                    if (!acumulado.descripcion && concepto.descripcion) {
+                        acumulado.descripcion = concepto.descripcion;
+                    }
+                    acumulado.importe_total_recaudacion += importeValido;
+                    acumulados.set(codigoTributo, acumulado);
+                });
+                return Array.from(acumulados.values()).sort((a, b) => a.codigo_tributo - b.codigo_tributo);
+            })();
+
+        const totalesBody = [
             [
-                { text: "TOTAL", colSpan: 2, style: "totalLabel" },
-                { text: ""},
+                { text: "CODIGO TRIBUTO", style: "tableHeader", valign: "middle", minHeight: 20 },
+                { text: "CONCEPTO", style: "tableHeader", valign: "middle", minHeight: 20 },
+                { text: "TOTAL RECAUDADO", style: "tableHeader", alignment: "right", valign: "middle" },
+            ],
+            ...totalesAgrupados.map((total) => [
+                {
+                    text: total.codigo_tributo ?? "Sin código",
+                    style: "itemCodigo",
+                },
+                {
+                    text: total.descripcion ?? "Sin descripcion",
+                    style: "itemDescripcion",
+                },
+                {
+                    text: currencyFormatter.format(Number(total.importe_total_recaudacion) || 0),
+                    alignment: "right",
+                    style: "itemImporte",
+                },
+            ]),
+            [
+                { text: "TOTAL GENERAL", colSpan: 2, style: "totalLabel" },
+                { text: "" },
                 { text: totalFormateado, alignment: "right", style: "totalValue" },
             ],
         ];
 
-        const totalRowIndex = tableBody.length - 1;
-
         content.push(
             {
+                text: "Desglose de recaudaciones",
+                style: "sectionTitle",
+                margin: [0, 0, 0, 6],
+            },
+            {
                 table: {
-                    widths: ["auto", "*", "auto"],
+                    widths: ["auto", "*", "auto", "auto"],
                     headerRows: 1,
-                    body: tableBody,
+                    body: detalleBody,
                 },
                 layout: {
                 fillColor: (rowIndex) => {
                     if (rowIndex === 0) {
                         return "#2B3E4C";
                     }
-                    if (rowIndex === totalRowIndex) {
-                        return "#e9eef2";
-                    }
-                    const dataIndex = rowIndex - 1;
-                    const concepto = conceptos[dataIndex];
-                    if (concepto) {
-                        return "#f5f7f9";
-                    }
-                    return null;
+                    return "#f5f7f9";
                 },
                 hLineColor: "#ccc",
                 vLineColor: "#ccc",
+                },
+            },
+            {
+                text: "",
+                margin: [0, 10, 0, 0],
+            },
+            {
+                text: "Totales agrupados por codigo tributo",
+                style: "sectionTitle",
+                margin: [0, 0, 0, 6],
+            },
+            {
+                table: {
+                    widths: ["auto", "*", "auto"],
+                    headerRows: 1,
+                    body: totalesBody,
+                },
+                layout: {
+                    fillColor: (rowIndex) => {
+                        if (rowIndex === 0) {
+                            return "#2B3E4C";
+                        }
+                        if (rowIndex === totalesBody.length - 1) {
+                            return "#e9eef2";
+                        }
+                        return "#f5f7f9";
+                    },
+                    hLineColor: "#ccc",
+                    vLineColor: "#ccc",
                 },
             },
         );
@@ -213,6 +301,7 @@ export const buildInformeRecaudaciones = ({ municipioNombre, ejercicio, mes, con
                 alignment: "center",
             },
             itemCodigo: { fontSize: 10, color: "#333", alignment: "center" },
+            itemEnte: { fontSize: 10, color: "#333" },
             itemImporte: { fontSize: 10, color: "#333" },
             totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "left" },
             totalValue: { fontSize: 11, bold: true, color: "#2B3E4C" },

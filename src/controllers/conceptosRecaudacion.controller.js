@@ -227,10 +227,10 @@ export const eliminarConcepto = async (req, res) => {
 }
 
 const esConceptoModificable = async (cod_concepto) => {
-    const recaudacion = await Recaudacion.findOne({ where: { cod_concepto: cod_concepto } })
+    const recaudacion = await Recaudacion.findOne({ where: { codigo_tributo: cod_concepto } })
     if (recaudacion) return false;
 
-    const recaudacionRectificada = await RecaudacionRectificada.findOne({ where: { cod_concepto: cod_concepto } })
+    const recaudacionRectificada = await RecaudacionRectificada.findOne({ where: { codigo_tributo: cod_concepto } })
     if (recaudacionRectificada) return false;
 
     return true;

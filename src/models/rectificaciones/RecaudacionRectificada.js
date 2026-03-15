@@ -14,17 +14,22 @@ const RecaudacionRectificada = sequelize.define("RecaudacionRectificada", {
     type: DataTypes.INTEGER,
     primaryKey: true
   },
-  cod_concepto: {
-    type: DataTypes.INTEGER,
+  codigo_tributo: {
+    type: DataTypes.BIGINT,
     primaryKey: true
+  },
+  descripcion: {
+    type: DataTypes.STRING(255),
+    allowNull: false
   },
   importe_recaudacion: {
     type: DataTypes.DECIMAL(20,2),
     allowNull: false
   },
   ente_recaudador: {
-    type: DataTypes.STRING(100),
-    allowNull: false
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    primaryKey: true
   }
 }, {
   tableName: "ovif_recaudaciones_rectificadas",

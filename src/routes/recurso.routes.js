@@ -9,14 +9,15 @@ import {
 } from "../controllers/recursos.controller.js";
 
 import { validarMunicipioAsignado } from "../middlewares/validarMunicipioAsignado.js";
-import { validarFechaLimiteDeCarga } from "../middlewares/validarFechaLimiteDeCarga.js";
+import { validarFechaLimiteDeCargaPorTipo } from "../middlewares/validarFechaLimiteDeCarga.js";
 
 const router = Router();
+const validarFechaLimiteGastosRecursos = validarFechaLimiteDeCargaPorTipo("gastos_recursos");
 
-router.post("/", validarMunicipioAsignado, validarFechaLimiteDeCarga, crearRecurso);
-router.get("/", validarMunicipioAsignado, validarFechaLimiteDeCarga, obtenerRecursos);
-router.get("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteDeCarga, obtenerRecurso);
-router.put("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteDeCarga, actualizarRecurso);
+router.post("/", validarMunicipioAsignado, validarFechaLimiteGastosRecursos, crearRecurso);
+router.get("/", validarMunicipioAsignado, validarFechaLimiteGastosRecursos, obtenerRecursos);
+router.get("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteGastosRecursos, obtenerRecurso);
+router.put("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteGastosRecursos, actualizarRecurso);
 // router.delete("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarRecurso);
 
 export default router;
