@@ -5,10 +5,7 @@ import { Op } from "sequelize";
 import { 
   PartidaGasto,
   PartidaRecurso,
-  ConceptoRecaudacion,
   RegimenLaboral,
-  SituacionRevista,
-  TipoGasto,
   Gasto,
   Recurso,
   Recaudacion,
@@ -41,6 +38,45 @@ const obtenerModulosPorTipoPauta = (codigoTipoPauta) => {
 
   const modulos = MODULOS_POR_TIPO_PAUTA[codigoTipoPauta];
   return Array.isArray(modulos) ? modulos : [];
+};
+
+const toNumberOrZero = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeText = (value, fallback = "Sin especificar") => {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  const normalized = String(value).trim();
+  return normalized.length ? normalized : fallback;
+};
+
+const mapRemuneracionParaInforme = (remuneracion, regimenesMap = new Map()) => {
+  const regimenId = Number(remuneracion?.regimen_id);
+  const regimenPorId = Number.isFinite(regimenId) ? regimenesMap.get(regimenId) : null;
+
+  return {
+    regimen_laboral: normalizeText(
+      remuneracion?.regimen_laboral ??
+        remuneracion?.regimen ??
+        regimenPorId
+    ),
+    categoria: normalizeText(
+      remuneracion?.categoria ??
+        remuneracion?.cargo_salarial
+    ),
+    total_remunerativo: toNumberOrZero(remuneracion?.total_remunerativo),
+    total_no_remunerativo: toNumberOrZero(remuneracion?.total_no_remunerativo),
+    total_descuentos: toNumberOrZero(remuneracion?.total_descuentos),
+    neto_a_cobrar: toNumberOrZero(
+      remuneracion?.total_remuneracion_neta ??
+        remuneracion?.neto_a_cobrar ??
+        remuneracion?.remuneracion_neta
+    ),
+  };
 };
 
 // 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
@@ -576,8 +612,54 @@ const obtenerDatosRecursos = async (municipioId, ejercicio, mes) => {
 }
 
 const obtenerDatosRecaudaciones = async (municipioId, ejercicio, mes) => {
+  const obtenerImporteNumerico = (importe) => {
+    if (importe === null || importe === undefined) {
+      return null;
+    }
+
+    const importeNumerico = Number(importe);
+    return Number.isFinite(importeNumerico) ? importeNumerico : null;
+  };
+
+  const agruparTotalesPorCodigoTributo = (conceptos = []) => {
+    const acumulados = new Map();
+
+    conceptos.forEach((concepto) => {
+      const codigoTributo = Number(concepto.codigo_tributo);
+      if (!Number.isInteger(codigoTributo) || codigoTributo < 0) {
+        return;
+      }
+
+      const importeNumerico = obtenerImporteNumerico(concepto.importe_recaudacion) ?? 0;
+      const acumulado = acumulados.get(codigoTributo) ?? {
+        codigo_tributo: codigoTributo,
+        descripcion: concepto.descripcion ?? "",
+        importe_total_recaudacion: 0,
+      };
+
+      if (!acumulado.descripcion && concepto.descripcion) {
+        acumulado.descripcion = concepto.descripcion;
+      }
+
+      acumulado.importe_total_recaudacion += importeNumerico;
+      acumulados.set(codigoTributo, acumulado);
+    });
+
+    return Array.from(acumulados.values()).sort((a, b) => a.codigo_tributo - b.codigo_tributo);
+  };
+
+  const calcularTotalImporte = (conceptos = []) =>
+    conceptos.reduce((acumulado, concepto) => {
+      const importeNumerico = obtenerImporteNumerico(concepto.importe_recaudacion);
+      if (importeNumerico === null) {
+        return acumulado;
+      }
+      return acumulado + importeNumerico;
+    }, 0);
+
   const datos = {
     conceptos: [],
+    totalesPorCodigo: [],
     totalImporte: 0
   }
 
@@ -590,33 +672,29 @@ const obtenerDatosRecaudaciones = async (municipioId, ejercicio, mes) => {
   });
 
   if(recaudaciones && recaudaciones.length > 0){
-      const conceptos = await ConceptoRecaudacion.findAll();
+    const mappedConceptos = recaudaciones
+      .map((recaudacion) => ({
+        codigo_tributo: recaudacion.codigo_tributo,
+        descripcion: recaudacion.descripcion,
+        ente_recaudador: recaudacion.ente_recaudador,
+        importe_recaudacion: recaudacion.importe_recaudacion
+      }))
+      .sort((a, b) => {
+        const codigoA = Number(a.codigo_tributo);
+        const codigoB = Number(b.codigo_tributo);
+        if (codigoA !== codigoB) {
+          return codigoA - codigoB;
+        }
+        return (a.ente_recaudador ?? "").localeCompare(b.ente_recaudador ?? "");
+      });
 
-    const mappedConceptos = conceptos.map((concepto) => {
-      const recaudacion = recaudaciones.find(rec => rec.cod_concepto === concepto.cod_concepto);
-      const importeRecaudacion = recaudacion ? recaudacion.importe_recaudacion : null;
-
-      return {
-        cod_concepto: concepto.cod_concepto,
-        descripcion: concepto.descripcion,
-        importe_recaudacion: importeRecaudacion
-      }
-    })
-
-    const totalImporte = mappedConceptos.reduce((acumulado, recaudacion) => {
-      if (recaudacion.importe_recaudacion === null || recaudacion.importe_recaudacion === undefined) {
-        return acumulado;
-      }
-
-      const importeNumerico = Number(recaudacion.importe_recaudacion);
-      if (!Number.isFinite(importeNumerico)) {
-        return acumulado;
-      }
-
-      return acumulado + importeNumerico;
-    }, 0);
+    const totalesPorCodigo = agruparTotalesPorCodigoTributo(mappedConceptos);
+    const totalImporte = calcularTotalImporte(
+      totalesPorCodigo.map((item) => ({ importe_recaudacion: item.importe_total_recaudacion }))
+    );
 
     datos.conceptos = mappedConceptos;
+    datos.totalesPorCodigo = totalesPorCodigo;
     datos.totalImporte = totalImporte;
   }
   return datos;
@@ -637,37 +715,23 @@ const obtenerDatosRemuneraciones = async (municipioId, ejercicio, mes) => {
   });
 
   if (remuneraciones && remuneraciones.length > 0) {
-    const situacionesRevista = await SituacionRevista.findAll();
+    const regimenes = await RegimenLaboral.findAll({
+      attributes: ["regimen_id", "nombre"],
+    });
 
-    const tipoLiquidaciones = await TipoGasto.findAll();
+    const regimenesMap = new Map(
+      regimenes.map((regimen) => [Number(regimen.regimen_id), regimen.nombre])
+    );
 
-    const regimenes = await RegimenLaboral.findAll();
+    const remuneracionesPlanas = remuneraciones.map((remuneracion) =>
+      mapRemuneracionParaInforme(remuneracion, regimenesMap)
+    );
 
-    const regimenesPlanos = regimenes.map((regimen) => ({
-      nombre: regimen.nombre
-    }))
-
-    const remuneracionesPlanas = remuneraciones.map((remuneracion) => ({
-      cuil: remuneracion.cuil,
-      apellido_nombre: remuneracion.apellido_nombre,
-      legajo: remuneracion.legajo,
-      fecha_alta: remuneracion.fecha_alta,
-      remuneracion_neta: remuneracion.remuneracion_neta,
-      bonificacion: remuneracion.bonificacion,
-      cant_hs_extra_50: remuneracion.cant_hs_extra_50,
-      importe_hs_extra_50: remuneracion.importe_hs_extra_50,
-      cant_hs_extra_100: remuneracion.cant_hs_extra_100,
-      importe_hs_extra_100: remuneracion.importe_hs_extra_100,
-      art: remuneracion.art,
-      seguro_vida: remuneracion.seguro_vida,
-      otros_conceptos: remuneracion.otros_conceptos,
-      situacion_revista: situacionesRevista.find((sr) => sr.situacion_revista_id === remuneracion.situacion_revista_id)?.nombre ?? 'Sin especificar',
-      tipo_liquidacion: tipoLiquidaciones.find((tl) => tl.tipo_gasto_id === remuneracion.tipo_liquidacion)?.descripcion ?? 'Sin especificar',
-      regimen: regimenes.find((r) => r.regimen_id === remuneracion.regimen_id)?.nombre ?? 'Sin especificar'
-
-    }));
-
-    datos.regimenes = regimenesPlanos;
+    datos.regimenes = Array.from(
+      new Set(remuneracionesPlanas.map((item) => item.regimen_laboral))
+    )
+      .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }))
+      .map((nombre) => ({ nombre }));
     datos.remuneraciones = remuneracionesPlanas;
   }
 
@@ -776,6 +840,7 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
       ejercicio,
       mes,
       conceptos: datos.conceptos,
+      totalesPorCodigo: datos.totalesPorCodigo,
       totalImporte: datos.totalImporte,
       usuarioNombre: 'Sistema Automático',
       convenioNombre,

@@ -30,10 +30,12 @@ import {
 
 import { authenticateToken } from "../middlewares/auth.js";
 import { validarMunicipioAsignado } from "../middlewares/validarMunicipioAsignado.js";
-import { validarFechaLimiteDeCarga } from "../middlewares/validarFechaLimiteDeCarga.js";
+import { validarFechaLimiteDeCargaPorTipo } from "../middlewares/validarFechaLimiteDeCarga.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
 
 const router = Router();
+const validarFechaLimiteGastosRecursos = validarFechaLimiteDeCargaPorTipo("gastos_recursos");
+const validarFechaLimiteRecaudacionesRemuneraciones = validarFechaLimiteDeCargaPorTipo("recaudaciones_remuneraciones");
 
 // Lista todos los municipios
 router.get("/", authenticateToken, requireAdmin,  getMunicipios);
@@ -114,7 +116,7 @@ router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/gastos",
   authenticateToken,
   validarMunicipioAsignado,
-  validarFechaLimiteDeCarga,
+  validarFechaLimiteGastosRecursos,
   upsertGastosMunicipio
 );
 
@@ -122,7 +124,7 @@ router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recursos",
   authenticateToken,
   validarMunicipioAsignado,
-  validarFechaLimiteDeCarga,
+  validarFechaLimiteGastosRecursos,
   upsertRecursosMunicipio
 );
 
@@ -130,7 +132,7 @@ router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones",
   authenticateToken,
   validarMunicipioAsignado,
-  validarFechaLimiteDeCarga,
+  validarFechaLimiteRecaudacionesRemuneraciones,
   upsertRecaudacionesMunicipio
 );
 
@@ -138,7 +140,7 @@ router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones",
   authenticateToken,
   validarMunicipioAsignado,
-  validarFechaLimiteDeCarga,
+  validarFechaLimiteRecaudacionesRemuneraciones,
   upsertRemuneracionesMunicipio
 );
 
@@ -155,7 +157,7 @@ router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas",
   authenticateToken,
   validarMunicipioAsignado,
-  validarFechaLimiteDeCarga,
+  validarFechaLimiteRecaudacionesRemuneraciones,
   upsertRecaudacionesRectificadasMunicipio
 );
 
@@ -170,7 +172,7 @@ router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones-rectificadas",
   authenticateToken,
   validarMunicipioAsignado,
-  validarFechaLimiteDeCarga,
+  validarFechaLimiteRecaudacionesRemuneraciones,
   upsertRemuneracionesRectificadasMunicipio
 );
 

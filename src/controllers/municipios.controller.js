@@ -1,10 +1,10 @@
 // Modelo
-import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio, ConceptoRecaudacion, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario, Archivo, CierreModulo, EjercicioMesCerrado, Poblacion, UsuarioMunicipio, RecaudacionRectificada, RemuneracionRectificada, TipoPauta } from "../models/index.js";
+import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario, Archivo, CierreModulo, EjercicioMesCerrado, Poblacion, UsuarioMunicipio, RecaudacionRectificada, RemuneracionRectificada, TipoPauta } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
-import { Op } from "sequelize";
+import { Op, fn, col, where as sequelizeWhere } from "sequelize";
 import { GastosSchema } from "../validation/GastosSchema.validation.js";
 import { RecursosSchema } from "../validation/RecursosSchema.validation.js";
 import { RecaudacionSchema } from "../validation/RecaudacionSchema.validation.js";
@@ -19,6 +19,48 @@ const toISODate = (value) => {
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString().split("T")[0];
 };
+
+const toNumberOrZero = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeText = (value, fallback = "Sin especificar") => {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+
+  const normalized = String(value).trim();
+  return normalized.length ? normalized : fallback;
+};
+
+const mapRemuneracionParaInforme = (remuneracion, regimenesMap = new Map()) => {
+  const regimenId = Number(remuneracion?.regimen_id);
+  const regimenPorId = Number.isFinite(regimenId) ? regimenesMap.get(regimenId) : null;
+
+  return {
+    regimen_laboral: normalizeText(
+      remuneracion?.regimen_laboral ??
+        remuneracion?.regimen ??
+        regimenPorId
+    ),
+    categoria: normalizeText(
+      remuneracion?.categoria ??
+        remuneracion?.cargo_salarial
+    ),
+    total_remunerativo: toNumberOrZero(remuneracion?.total_remunerativo),
+    total_no_remunerativo: toNumberOrZero(remuneracion?.total_no_remunerativo),
+    total_descuentos: toNumberOrZero(remuneracion?.total_descuentos),
+    neto_a_cobrar: toNumberOrZero(
+      remuneracion?.total_remuneracion_neta ??
+        remuneracion?.neto_a_cobrar ??
+        remuneracion?.remuneracion_neta
+    ),
+  };
+};
+
+const whereDateOnly = (field, operator, value) =>
+  sequelizeWhere(fn("DATE", col(field)), operator, value);
 
 const buildCalendarioKey = (ejercicio, mes, convenioId, pautaId) =>
   `${ejercicio}-${mes}-${convenioId ?? "null"}-${pautaId ?? "null"}`;
@@ -208,6 +250,58 @@ const aplanarJerarquiaPartidasRecursos = (nodos, nivel = 0) => {
 
   return resultado;
 };
+
+const obtenerImporteNumerico = (importe) => {
+  if (importe === null || importe === undefined) {
+    return null;
+  }
+
+  const importeNumerico = Number(importe);
+  return Number.isFinite(importeNumerico) ? importeNumerico : null;
+};
+
+const mapearDetalleRecaudacion = (recaudacion) => ({
+  codigo_tributo: Number(recaudacion.codigo_tributo),
+  descripcion: recaudacion.descripcion,
+  ente_recaudador: recaudacion.ente_recaudador,
+  importe_recaudacion: recaudacion.importe_recaudacion,
+});
+
+const agruparTotalesRecaudacionesPorCodigo = (conceptos = []) => {
+  const totalesPorCodigo = new Map();
+
+  conceptos.forEach((concepto) => {
+    const codigoTributo = Number(concepto.codigo_tributo);
+    if (!Number.isInteger(codigoTributo) || codigoTributo < 0) {
+      return;
+    }
+
+    const importeNumerico = obtenerImporteNumerico(concepto.importe_recaudacion) ?? 0;
+    const acumulado = totalesPorCodigo.get(codigoTributo) ?? {
+      codigo_tributo: codigoTributo,
+      descripcion: concepto.descripcion ?? "",
+      importe_total_recaudacion: 0,
+    };
+
+    if (!acumulado.descripcion && concepto.descripcion) {
+      acumulado.descripcion = concepto.descripcion;
+    }
+
+    acumulado.importe_total_recaudacion += importeNumerico;
+    totalesPorCodigo.set(codigoTributo, acumulado);
+  });
+
+  return Array.from(totalesPorCodigo.values()).sort((a, b) => a.codigo_tributo - b.codigo_tributo);
+};
+
+const calcularTotalImporteRecaudacion = (conceptos = []) =>
+  conceptos.reduce((acumulado, concepto) => {
+    const importeNumerico = obtenerImporteNumerico(concepto.importe_recaudacion);
+    if (importeNumerico === null) {
+      return acumulado;
+    }
+    return acumulado + importeNumerico;
+  }, 0);
 
 // Obtener todos los municipios
 export const getMunicipios = async (req, res) => {
@@ -1471,30 +1565,21 @@ export const obtenerConceptosRecaudacionMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const conceptos = await ConceptoRecaudacion.findAll();
-
     const conceptosCargados = await Recaudacion.findAll({
       where: {
         recaudaciones_ejercicio: ejercicioNum,
         recaudaciones_mes: mesNum,
         municipio_id: municipioNum,
       },
+      order: [["codigo_tributo", "ASC"], ["ente_recaudador", "ASC"]],
     });
 
-    const conceptosCargadosMap = conceptos.map((concepto) => {
-      const recaudacion = conceptosCargados.find((recaudacionItem) =>
-        recaudacionItem.cod_concepto === concepto.cod_concepto
-      );
-      return {
-        ...concepto.get(),
-        importe_recaudacion: recaudacion ? recaudacion.importe_recaudacion: null,
-      };
-    });
+    const conceptosCargadosMap = conceptosCargados.map(mapearDetalleRecaudacion);
 
     return res.json(conceptosCargadosMap);
   } catch (error) {
-    console.error("❌ Error obteniendo partidas de gastos del municipio:", error);
-    return res.status(500).json({ error: "Error obteniendo partidas de gastos" });
+    console.error("❌ Error obteniendo recaudaciones del municipio:", error);
+    return res.status(500).json({ error: "Error obteniendo recaudaciones" });
   }
 }
 
@@ -1512,7 +1597,11 @@ export const upsertRecaudacionesMunicipio = async (req, res) => {
     return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
   }
 
-  const sequelize = Recurso.sequelize;
+  if (!Array.isArray(conceptos)) {
+    return res.status(400).json({ error: "El campo conceptos debe ser un arreglo" });
+  }
+
+  const sequelize = Recaudacion.sequelize;
   const transaction = await sequelize.transaction();
 
   try {
@@ -1531,60 +1620,57 @@ export const upsertRecaudacionesMunicipio = async (req, res) => {
     let creados = 0;
     let actualizados = 0;
     let sinCambios = 0;
-    let errores = [];
+    const errores = [];
 
     for (const item of conceptos) {
-      const tieneImporte = Object.prototype.hasOwnProperty.call(item, "importe_recaudacion");
-
       const validRecurso = RecaudacionSchema.safeParse({
-        cod_concepto: item?.cod_concepto,
+        codigo_tributo: item?.codigo_tributo,
+        descripcion: item?.descripcion,
         importe_recaudacion: item?.importe_recaudacion,
+        ente_recaudador: item?.ente_recaudador,
       });
 
       if (!validRecurso.success) {
-        errores.push(`Error procesando el concepto con código ${item?.cod_concepto}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
+        errores.push(`Error procesando la fila con código ${item?.codigo_tributo ?? "sin código"}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
         continue;
       }
 
-      const codigo = Number(item?.cod_concepto);
-
-      const concepto = await ConceptoRecaudacion.findOne({ where: { cod_concepto: codigo } });
-
-      if (!concepto) {
-        errores.push(`El concepto con código ${codigo} no existe`);
-        continue;
-      }
+      const payload = validRecurso.data;
 
       const where = {
         recaudaciones_ejercicio: ejercicioNum,
         recaudaciones_mes: mesNum,
         municipio_id: municipioNum,
-        cod_concepto: concepto.cod_concepto,
+        codigo_tributo: payload.codigo_tributo,
+        ente_recaudador: payload.ente_recaudador,
       };
 
       const existente = await Recaudacion.findOne({ where, transaction });
 
       if (!existente) {
-        const data = { ...where, importe_recaudacion: item.importe_recaudacion};
+        const data = {
+          ...where,
+          descripcion: payload.descripcion,
+          importe_recaudacion: payload.importe_recaudacion,
+        };
 
-        await Recaudacion.create(
-          {
-            ...data,
-          },
-          { transaction }
-        );
+        await Recaudacion.create({ ...data }, { transaction });
         creados += 1;
         continue;
       }
 
       let huboCambios = false;
 
-      if (tieneImporte) {
-        const importeActual = Number(existente.importe_recaudacion);
-        if (!Number.isNaN(importeActual) && importeActual !== item.importe_recaudacion) {
-          existente.importe_recaudacion = item.importe_recaudacion;
-          huboCambios = true;
-        }
+      if (existente.descripcion !== payload.descripcion) {
+        existente.descripcion = payload.descripcion;
+        huboCambios = true;
+      }
+
+      const importeActual = Number(existente.importe_recaudacion);
+      const importeNuevo = Number(payload.importe_recaudacion);
+      if (!Number.isNaN(importeActual) && !Number.isNaN(importeNuevo) && importeActual !== importeNuevo) {
+        existente.importe_recaudacion = payload.importe_recaudacion;
+        huboCambios = true;
       }
 
       if (!huboCambios) {
@@ -1609,6 +1695,14 @@ export const upsertRecaudacionesMunicipio = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
+    const esErrorFK =
+      error?.name === "SequelizeForeignKeyConstraintError" ||
+      error?.parent?.code === "ER_NO_REFERENCED_ROW_2";
+    if (esErrorFK) {
+      return res.status(400).json({
+        error: "No se pudo guardar porque existe una restricción de clave foránea legacy de recaudaciones. Aplicá la migración SQL de hotfix para quitar la FK contra ovif_conceptos_recaudacion.",
+      });
+    }
     console.error("❌ Error realizando upsert de recaudaciones del municipio:", error);
     return res.status(500).json({ error: "Error guardando los recaudaciones" });
   }
@@ -1647,37 +1741,26 @@ export const generarInformeRecaudacionesMunicipio = async (req, res) => {
         recaudaciones_mes: mesNum,
         municipio_id: municipioNum,
       },
+      order: [["codigo_tributo", "ASC"], ["ente_recaudador", "ASC"]],
     });
 
     if (!recaudaciones || recaudaciones.length === 0) {
       return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
     }
 
-    const conceptos = await ConceptoRecaudacion.findAll();
+    const mappedConceptos = recaudaciones
+      .map(mapearDetalleRecaudacion)
+      .sort((a, b) => {
+        if (a.codigo_tributo !== b.codigo_tributo) {
+          return a.codigo_tributo - b.codigo_tributo;
+        }
+        return (a.ente_recaudador ?? "").localeCompare(b.ente_recaudador ?? "");
+      });
 
-    const mappedConceptos = conceptos.map((concepto) => {
-      const recaudacion = recaudaciones.find(rec => rec.cod_concepto === concepto.cod_concepto);
-      const importeRecaudacion = recaudacion ? recaudacion.importe_recaudacion : null;
-
-      return {
-        cod_concepto: concepto.cod_concepto,
-        descripcion: concepto.descripcion,
-        importe_recaudacion: importeRecaudacion
-      }
-    })
-
-    const totalImporte = mappedConceptos.reduce((acumulado, recaudacion) => {
-      if (recaudacion.importe_recaudacion === null || recaudacion.importe_recaudacion === undefined) {
-        return acumulado;
-      }
-
-      const importeNumerico = Number(recaudacion.importe_recaudacion);
-      if (!Number.isFinite(importeNumerico)) {
-        return acumulado;
-      }
-
-      return acumulado + importeNumerico;
-    }, 0);
+    const totalesPorCodigo = agruparTotalesRecaudacionesPorCodigo(mappedConceptos);
+    const totalImporte = calcularTotalImporteRecaudacion(totalesPorCodigo.map((item) => ({
+      importe_recaudacion: item.importe_total_recaudacion,
+    })));
 
     const userRequest = req.user ?? null;
     const user = await Usuario.findOne({where: { usuario_id: userRequest.usuario_id }});
@@ -1691,6 +1774,7 @@ export const generarInformeRecaudacionesMunicipio = async (req, res) => {
       ejercicio: ejercicioNum,
       mes: mesNum,
       conceptos: mappedConceptos,
+      totalesPorCodigo,
       totalImporte,
       usuarioNombre: `${user.nombre} ${user.apellido}`,
       convenioNombre: convenio.nombre
@@ -1752,35 +1836,23 @@ export const generarInformeRemuneracionesMunicipio = async (req, res) => {
       return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
     }
 
-    const situacionesRevista = await SituacionRevista.findAll();
+    const regimenes = await RegimenLaboral.findAll({
+      attributes: ["regimen_id", "nombre"],
+    });
 
-    const tipoLiquidaciones = await TipoGasto.findAll();
+    const regimenesMap = new Map(
+      regimenes.map((regimen) => [Number(regimen.regimen_id), regimen.nombre])
+    );
 
-    const regimenes = await RegimenLaboral.findAll();
+    const remuneracionesPlanas = remuneraciones.map((remuneracion) =>
+      mapRemuneracionParaInforme(remuneracion, regimenesMap)
+    );
 
-    const regimenesPlanos = regimenes.map((regimen) => ({
-      nombre: regimen.nombre
-    }))
-
-    const remuneracionesPlanas = remuneraciones.map((remuneracion) => ({
-      cuil: remuneracion.cuil,
-      apellido_nombre: remuneracion.apellido_nombre,
-      legajo: remuneracion.legajo,
-      fecha_alta: remuneracion.fecha_alta,
-      remuneracion_neta: remuneracion.remuneracion_neta,
-      bonificacion: remuneracion.bonificacion,
-      cant_hs_extra_50: remuneracion.cant_hs_extra_50,
-      importe_hs_extra_50: remuneracion.importe_hs_extra_50,
-      cant_hs_extra_100: remuneracion.cant_hs_extra_100,
-      importe_hs_extra_100: remuneracion.importe_hs_extra_100,
-      art: remuneracion.art,
-      seguro_vida: remuneracion.seguro_vida,
-      otros_conceptos: remuneracion.otros_conceptos,
-      situacion_revista: situacionesRevista.find((sr) => sr.situacion_revista_id === remuneracion.situacion_revista_id)?.nombre ?? 'Sin especificar',
-      tipo_liquidacion: tipoLiquidaciones.find((tl) => tl.tipo_gasto_id === remuneracion.tipo_liquidacion)?.descripcion ?? 'Sin especificar',
-      regimen: regimenes.find((r) => r.regimen_id === remuneracion.regimen_id)?.nombre ?? 'Sin especificar'
-
-    }));
+    const regimenesPlanos = Array.from(
+      new Set(remuneracionesPlanas.map((item) => item.regimen_laboral))
+    )
+      .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }))
+      .map((nombre) => ({ nombre }));
 
     const userRequest = req.user ?? null;
     const user = await Usuario.findOne({where: { usuario_id: userRequest.usuario_id }});
@@ -2097,30 +2169,21 @@ export const obtenerConceptosRecaudacionRectificadaMunicipio = async (req, res) 
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const conceptos = await ConceptoRecaudacion.findAll();
-
     const conceptosCargados = await RecaudacionRectificada.findAll({
       where: {
         recaudaciones_ejercicio: ejercicioNum,
         recaudaciones_mes: mesNum,
         municipio_id: municipioNum,
       },
+      order: [["codigo_tributo", "ASC"], ["ente_recaudador", "ASC"]],
     });
 
-    const conceptosCargadosMap = conceptos.map((concepto) => {
-      const recaudacion = conceptosCargados.find((recaudacionItem) =>
-        recaudacionItem.cod_concepto === concepto.cod_concepto
-      );
-      return {
-        ...concepto.get(),
-        importe_recaudacion: recaudacion ? recaudacion.importe_recaudacion: null,
-      };
-    });
+    const conceptosCargadosMap = conceptosCargados.map(mapearDetalleRecaudacion);
 
     return res.json(conceptosCargadosMap);
   } catch (error) {
-    console.error("❌ Error obteniendo partidas de gastos del municipio:", error);
-    return res.status(500).json({ error: "Error obteniendo partidas de gastos" });
+    console.error("❌ Error obteniendo recaudaciones rectificadas del municipio:", error);
+    return res.status(500).json({ error: "Error obteniendo recaudaciones rectificadas" });
   }
 }
 
@@ -2138,7 +2201,11 @@ export const upsertRecaudacionesRectificadasMunicipio = async (req, res) => {
     return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
   }
 
-  const sequelize = Recurso.sequelize;
+  if (!Array.isArray(conceptos)) {
+    return res.status(400).json({ error: "El campo conceptos debe ser un arreglo" });
+  }
+
+  const sequelize = RecaudacionRectificada.sequelize;
   const transaction = await sequelize.transaction();
 
   try {
@@ -2150,66 +2217,64 @@ export const upsertRecaudacionesRectificadasMunicipio = async (req, res) => {
 
     const disponible = await verificarRectificacionDisponible(ejercicioNum, mesNum);
     if (!disponible) {
+      await transaction.rollback();
       return res.status(400).json({ error: "La rectificación no está disponible para este ejercicio y mes" });
     }
 
     let creados = 0;
     let actualizados = 0;
     let sinCambios = 0;
-    let errores = [];
+    const errores = [];
 
     for (const item of conceptos) {
-      const tieneImporte = Object.prototype.hasOwnProperty.call(item, "importe_recaudacion");
-
       const validRecurso = RecaudacionSchema.safeParse({
-        cod_concepto: item?.cod_concepto,
+        codigo_tributo: item?.codigo_tributo,
+        descripcion: item?.descripcion,
         importe_recaudacion: item?.importe_recaudacion,
+        ente_recaudador: item?.ente_recaudador,
       });
 
       if (!validRecurso.success) {
-        errores.push(`Error procesando el concepto con código ${item?.cod_concepto}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
+        errores.push(`Error procesando la fila con código ${item?.codigo_tributo ?? "sin código"}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
         continue;
       }
 
-      const codigo = Number(item?.cod_concepto);
-
-      const concepto = await ConceptoRecaudacion.findOne({ where: { cod_concepto: codigo } });
-
-      if (!concepto) {
-        errores.push(`El concepto con código ${codigo} no existe`);
-        continue;
-      }
+      const payload = validRecurso.data;
 
       const where = {
         recaudaciones_ejercicio: ejercicioNum,
         recaudaciones_mes: mesNum,
         municipio_id: municipioNum,
-        cod_concepto: concepto.cod_concepto,
+        codigo_tributo: payload.codigo_tributo,
+        ente_recaudador: payload.ente_recaudador,
       };
 
       const existente = await RecaudacionRectificada.findOne({ where, transaction });
 
       if (!existente) {
-        const data = { ...where, importe_recaudacion: item.importe_recaudacion};
+        const data = {
+          ...where,
+          descripcion: payload.descripcion,
+          importe_recaudacion: payload.importe_recaudacion,
+        };
 
-        await RecaudacionRectificada.create(
-          {
-            ...data,
-          },
-          { transaction }
-        );
+        await RecaudacionRectificada.create({ ...data }, { transaction });
         creados += 1;
         continue;
       }
 
       let huboCambios = false;
 
-      if (tieneImporte) {
-        const importeActual = Number(existente.importe_recaudacion);
-        if (!Number.isNaN(importeActual) && importeActual !== item.importe_recaudacion) {
-          existente.importe_recaudacion = item.importe_recaudacion;
-          huboCambios = true;
-        }
+      if (existente.descripcion !== payload.descripcion) {
+        existente.descripcion = payload.descripcion;
+        huboCambios = true;
+      }
+
+      const importeActual = Number(existente.importe_recaudacion);
+      const importeNuevo = Number(payload.importe_recaudacion);
+      if (!Number.isNaN(importeActual) && !Number.isNaN(importeNuevo) && importeActual !== importeNuevo) {
+        existente.importe_recaudacion = payload.importe_recaudacion;
+        huboCambios = true;
       }
 
       if (!huboCambios) {
@@ -2234,6 +2299,14 @@ export const upsertRecaudacionesRectificadasMunicipio = async (req, res) => {
     });
   } catch (error) {
     await transaction.rollback();
+    const esErrorFK =
+      error?.name === "SequelizeForeignKeyConstraintError" ||
+      error?.parent?.code === "ER_NO_REFERENCED_ROW_2";
+    if (esErrorFK) {
+      return res.status(400).json({
+        error: "No se pudo guardar porque existe una restricción de clave foránea legacy de recaudaciones rectificadas. Aplicá la migración SQL de hotfix para quitar la FK contra ovif_conceptos_recaudacion.",
+      });
+    }
     console.error("❌ Error realizando upsert de recaudaciones del municipio:", error);
     return res.status(500).json({ error: "Error guardando los recaudaciones" });
   }
@@ -2272,37 +2345,26 @@ export const generarInformeRecaudacionesRectificadasMunicipio = async (req, res)
         recaudaciones_mes: mesNum,
         municipio_id: municipioNum,
       },
+      order: [["codigo_tributo", "ASC"], ["ente_recaudador", "ASC"]],
     });
 
     if (!recaudaciones || recaudaciones.length === 0) {
       return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
     }
 
-    const conceptos = await ConceptoRecaudacion.findAll();
+    const mappedConceptos = recaudaciones
+      .map(mapearDetalleRecaudacion)
+      .sort((a, b) => {
+        if (a.codigo_tributo !== b.codigo_tributo) {
+          return a.codigo_tributo - b.codigo_tributo;
+        }
+        return (a.ente_recaudador ?? "").localeCompare(b.ente_recaudador ?? "");
+      });
 
-    const mappedConceptos = conceptos.map((concepto) => {
-      const recaudacion = recaudaciones.find(rec => rec.cod_concepto === concepto.cod_concepto);
-      const importeRecaudacion = recaudacion ? recaudacion.importe_recaudacion : null;
-
-      return {
-        cod_concepto: concepto.cod_concepto,
-        descripcion: concepto.descripcion,
-        importe_recaudacion: importeRecaudacion
-      }
-    })
-
-    const totalImporte = mappedConceptos.reduce((acumulado, recaudacion) => {
-      if (recaudacion.importe_recaudacion === null || recaudacion.importe_recaudacion === undefined) {
-        return acumulado;
-      }
-
-      const importeNumerico = Number(recaudacion.importe_recaudacion);
-      if (!Number.isFinite(importeNumerico)) {
-        return acumulado;
-      }
-
-      return acumulado + importeNumerico;
-    }, 0);
+    const totalesPorCodigo = agruparTotalesRecaudacionesPorCodigo(mappedConceptos);
+    const totalImporte = calcularTotalImporteRecaudacion(totalesPorCodigo.map((item) => ({
+      importe_recaudacion: item.importe_total_recaudacion,
+    })));
 
     const userRequest = req.user ?? null;
     const user = await Usuario.findOne({where: { usuario_id: userRequest.usuario_id }});
@@ -2316,6 +2378,7 @@ export const generarInformeRecaudacionesRectificadasMunicipio = async (req, res)
       ejercicio: ejercicioNum,
       mes: mesNum,
       conceptos: mappedConceptos,
+      totalesPorCodigo,
       totalImporte,
       usuarioNombre: `${user.nombre} ${user.apellido}`,
       convenioNombre: convenio.nombre,
@@ -2378,35 +2441,23 @@ export const generarInformeRemuneracionesRectificadasMunicipio = async (req, res
       return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
     }
 
-    const situacionesRevista = await SituacionRevista.findAll();
+    const regimenes = await RegimenLaboral.findAll({
+      attributes: ["regimen_id", "nombre"],
+    });
 
-    const tipoLiquidaciones = await TipoGasto.findAll();
+    const regimenesMap = new Map(
+      regimenes.map((regimen) => [Number(regimen.regimen_id), regimen.nombre])
+    );
 
-    const regimenes = await RegimenLaboral.findAll();
+    const remuneracionesPlanas = remuneraciones.map((remuneracion) =>
+      mapRemuneracionParaInforme(remuneracion, regimenesMap)
+    );
 
-    const regimenesPlanos = regimenes.map((regimen) => ({
-      nombre: regimen.nombre
-    }))
-
-    const remuneracionesPlanas = remuneraciones.map((remuneracion) => ({
-      cuil: remuneracion.cuil,
-      apellido_nombre: remuneracion.apellido_nombre,
-      legajo: remuneracion.legajo,
-      fecha_alta: remuneracion.fecha_alta,
-      remuneracion_neta: remuneracion.remuneracion_neta,
-      bonificacion: remuneracion.bonificacion,
-      cant_hs_extra_50: remuneracion.cant_hs_extra_50,
-      importe_hs_extra_50: remuneracion.importe_hs_extra_50,
-      cant_hs_extra_100: remuneracion.cant_hs_extra_100,
-      importe_hs_extra_100: remuneracion.importe_hs_extra_100,
-      art: remuneracion.art,
-      seguro_vida: remuneracion.seguro_vida,
-      otros_conceptos: remuneracion.otros_conceptos,
-      situacion_revista: situacionesRevista.find((sr) => sr.situacion_revista_id === remuneracion.situacion_revista_id)?.nombre ?? 'Sin especificar',
-      tipo_liquidacion: tipoLiquidaciones.find((tl) => tl.tipo_gasto_id === remuneracion.tipo_liquidacion)?.descripcion ?? 'Sin especificar',
-      regimen: regimenes.find((r) => r.regimen_id === remuneracion.regimen_id)?.nombre ?? 'Sin especificar'
-
-    }));
+    const regimenesPlanos = Array.from(
+      new Set(remuneracionesPlanas.map((item) => item.regimen_laboral))
+    )
+      .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }))
+      .map((nombre) => ({ nombre }));
 
     const userRequest = req.user ?? null;
     const user = await Usuario.findOne({where: { usuario_id: userRequest.usuario_id }});
@@ -2764,9 +2815,14 @@ const obtenerConvenioPautaEjercicioMes = async (
   fechaInicio = null,
   fechaFin = null
 ) => {
+  const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+  const fechaReferenciaConvenio = fechaFin ?? fechaInicio ?? fechaHoyArgentina;
+
   const conveniosActivos = await Convenio.findAll(
-    { 
-      where: { fecha_fin: { [Op.gt]: new Date() } }
+    {
+      where: whereDateOnly("fecha_fin", Op.gte, fechaReferenciaConvenio),
     }
   );
   const conveniosActivosIds = conveniosActivos.map(c => c.convenio_id);
@@ -2797,10 +2853,19 @@ const obtenerConvenioPautaEjercicioMes = async (
     },
     ejercicio,
     mes
+  };
+
+  const condicionesFecha = [];
+  if (fechaInicio) {
+    condicionesFecha.push(whereDateOnly("fecha_inicio", Op.lte, fechaInicio));
+  }
+  if (fechaFin) {
+    condicionesFecha.push(whereDateOnly("fecha_fin", Op.gte, fechaFin));
   }
 
-  if(fechaInicio) whereEjercicioMes.fecha_inicio = { [Op.lte]: fechaInicio };
-  if(fechaFin) whereEjercicioMes.fecha_fin = { [Op.gte]: fechaFin };
+  if (condicionesFecha.length > 0) {
+    whereEjercicioMes[Op.and] = condicionesFecha;
+  }
 
   const ejercicioMes = await EjercicioMes.findOne({
     where: whereEjercicioMes
@@ -2815,9 +2880,13 @@ const obtenerConvenioPautaEjercicioMes = async (
 }
 
 const verificarRectificacionDisponible = async (ejercicio, mes) => {
+  const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+
   const conveniosActivos = await Convenio.findAll(
-    { 
-      where: { fecha_fin: { [Op.gt]: new Date() } }
+    {
+      where: whereDateOnly("fecha_fin", Op.gte, fechaHoyArgentina),
     }
   );
   const conveniosActivosIds = conveniosActivos.map(c => c.convenio_id);
@@ -2852,11 +2921,11 @@ const verificarRectificacionDisponible = async (ejercicio, mes) => {
       pauta_id: {
         [Op.in]: pautasRectificablesIds
       },
-      fecha_fin: {
-        [Op.lt]: new Date()
-      },
       ejercicio,
-      mes
+      mes,
+      [Op.and]: [
+        whereDateOnly("fecha_fin", Op.lt, fechaHoyArgentina)
+      ],
     }
   });
 

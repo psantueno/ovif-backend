@@ -10,20 +10,21 @@ import {
 
 import { authenticateToken } from "../middlewares/auth.js";
 import { validarMunicipioAsignado } from "../middlewares/validarMunicipioAsignado.js";
-import { validarFechaLimiteDeCarga } from "../middlewares/validarFechaLimiteDeCarga.js";
+import { validarFechaLimiteDeCargaPorTipo } from "../middlewares/validarFechaLimiteDeCarga.js";
 
 const router = Router();
+const validarFechaLimiteGastosRecursos = validarFechaLimiteDeCargaPorTipo("gastos_recursos");
 
 
 // Listar
-router.get("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, listarGastos);
+router.get("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarMunicipioAsignado, validarFechaLimiteGastosRecursos, listarGastos);
 
 // Crear
-router.post("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, crearGasto);
+router.post("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, validarMunicipioAsignado, validarFechaLimiteGastosRecursos, crearGasto);
 
 
 // Actualizar
-router.put("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, actualizarGasto);
+router.put("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteGastosRecursos, actualizarGasto);
 
 // Eliminar
 // router.delete("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarGasto);
@@ -45,4 +46,3 @@ router.get(
 );
 
 export default router;
-

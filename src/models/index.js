@@ -115,11 +115,7 @@ PartidaRecurso.hasMany(ConceptoRecaudacion, {
 Poblacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
 Recaudacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
-Recaudacion.belongsTo(ConceptoRecaudacion, { foreignKey: "cod_concepto", targetKey: "cod_concepto" });
-ConceptoRecaudacion.hasMany(Recaudacion, { foreignKey: "cod_concepto", sourceKey: "cod_concepto" });
 RecaudacionRectificada.belongsTo(Municipio, { foreignKey: "municipio_id" });
-RecaudacionRectificada.belongsTo(ConceptoRecaudacion, { foreignKey: "cod_concepto", targetKey: "cod_concepto" });
-ConceptoRecaudacion.hasMany(RecaudacionRectificada, { foreignKey: "cod_concepto", sourceKey: "cod_concepto" });
 
 // PartidaGasto ↔ PartidaEconomico
 PartidaGasto.hasMany(PartidaEconomico, {
