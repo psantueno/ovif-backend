@@ -12,6 +12,17 @@ import { RemuneracionSchema } from "../validation/RemuneracionSchema.validation.
 import { EjerciciosSchema } from "../validation/EjerciciosSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
 import { MunicipiosSchema } from "../validation/MunicipiosSchema.validation.js";
+import { obtenerFechaActual } from "../utils/obtenerFechaActual.js";
+import {
+  obtenerPeriodoRectificableAnterior,
+  calcularVentanaRectificacion,
+  obtenerContextoRectificacionesPorPeriodo,
+  verificarRectificacionDisponible,
+} from "../utils/rectificaciones.js";
+import {
+  obtenerPeriodosRegularesDisponiblesPorMunicipio,
+  resolverPeriodoRegular,
+} from "../utils/periodosRegulares.js";
 
 const toISODate = (value) => {
   if (!value) return null;
@@ -376,113 +387,10 @@ export const listarEjerciciosDisponiblesPorMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const ejercicios = await EjercicioMes.findAll({
-      order: [
-        ["ejercicio", "ASC"],
-        ["mes", "ASC"],
-      ],
+    const disponibles = await obtenerPeriodosRegularesDisponiblesPorMunicipio({
+      municipioId,
+      fechaReferencia: obtenerFechaActual(),
     });
-
-    const convenioIds = new Set();
-    const pautaIds = new Set();
-    ejercicios.forEach((em) => {
-      if (em.convenio_id) convenioIds.add(em.convenio_id);
-      if (em.pauta_id) pautaIds.add(em.pauta_id);
-    });
-
-    if (ejercicios.length === 0) {
-      return res.json({
-        municipio: municipio.get(),
-        ejercicios: [],
-      });
-    }
-
-    const prorrogas = await ProrrogaMunicipio.findAll({
-      where: { municipio_id: municipioId },
-    });
-    prorrogas.forEach((p) => {
-      if (p.convenio_id) convenioIds.add(p.convenio_id);
-      if (p.pauta_id) pautaIds.add(p.pauta_id);
-    });
-
-    const prorrogaMap = new Map(
-      prorrogas.map((p) => [
-        buildCalendarioKey(p.ejercicio, p.mes, p.convenio_id, p.pauta_id),
-        p,
-      ])
-    );
-
-    const [convenios, pautas] = await Promise.all([
-      convenioIds.size
-        ? Convenio.findAll({ where: { convenio_id: [...convenioIds] } })
-        : [],
-      pautaIds.size
-        ? PautaConvenio.findAll({
-            where: { pauta_id: [...pautaIds] },
-            include: [
-              {
-                model: TipoPauta,
-                as: "TipoPauta",
-                attributes: [
-                  "tipo_pauta_id",
-                  "codigo",
-                  "nombre",
-                  "descripcion",
-                  "requiere_periodo_rectificar",
-                ],
-              },
-            ],
-          })
-        : [],
-    ]);
-
-    const convenioMap = new Map(convenios.map((c) => [c.convenio_id, c]));
-    const pautaMap = new Map(pautas.map((p) => [p.pauta_id, p]));
-
-    const hoy = toISODate(new Date());
-    const disponibles = ejercicios
-      .map((em) => {
-        const key = buildCalendarioKey(em.ejercicio, em.mes, em.convenio_id, em.pauta_id);
-        const prorroga = prorrogaMap.get(key);
-        const resolvedConvenioId = prorroga?.convenio_id ?? em.convenio_id ?? null;
-        const resolvedPautaId = prorroga?.pauta_id ?? em.pauta_id ?? null;
-        const convenio = resolvedConvenioId ? convenioMap.get(resolvedConvenioId) : null;
-        const pauta = resolvedPautaId ? pautaMap.get(resolvedPautaId) : null;
-
-        const fechaInicio = em.fecha_inicio;
-        const fechaFin = prorroga?.fecha_fin_nueva || em.fecha_fin;
-
-        const fechaFinStr = toISODate(fechaFin);
-
-        const vencido = fechaFinStr ? hoy > fechaFinStr : false;
-        const disponible = !vencido;
-
-        return {
-          ejercicio: em.ejercicio,
-          mes: em.mes,
-          fecha_inicio: toISODate(fechaInicio),
-          fecha_fin: fechaFinStr,
-          fecha_fin_oficial: toISODate(em.fecha_fin),
-          tiene_prorroga: Boolean(prorroga),
-          fecha_fin_prorroga: toISODate(prorroga?.fecha_fin_nueva) ?? null,
-          convenio_id: resolvedConvenioId,
-          pauta_id: resolvedPautaId,
-          convenio_nombre: convenio?.nombre ?? null,
-          pauta_descripcion: pauta?.descripcion ?? null,
-          tipo_pauta_id: pauta?.tipo_pauta_id ?? null,
-          tipo_pauta_codigo: pauta?.TipoPauta?.codigo ?? null,
-          tipo_pauta_nombre: pauta?.TipoPauta?.nombre ?? null,
-          tipo_pauta_descripcion: pauta?.TipoPauta?.descripcion ?? null,
-          requiere_periodo_rectificar: Boolean(
-            pauta?.TipoPauta?.requiere_periodo_rectificar
-          ),
-          fecha_cierre: fechaFinStr,
-          vencido,
-          cerrado: false,
-          disponible,
-        };
-      })
-      .filter((item) => item.disponible);
 
     return res.json({
       municipio: municipio.get(),
@@ -508,83 +416,61 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const conveniosActivos = await Convenio.findAll(
-      { 
-        where: { fecha_fin: { [Op.gt]: new Date() } }
-      }
+    const fechaActual = obtenerFechaActual();
+    const periodoRectificableAnterior =
+      obtenerPeriodoRectificableAnterior(fechaActual);
+    const {
+      ejercicioMesPeriodo,
+      conveniosMap,
+      pautasRectificablesIds,
+      pautasMap,
+    } = await obtenerContextoRectificacionesPorPeriodo(
+      periodoRectificableAnterior
     );
-    const conveniosActivosIds = conveniosActivos.map(c => c.convenio_id);
-    const conveniosMap = conveniosActivos.map(c => ({
-      convenio_id: c.convenio_id,
-      nombre: c.nombre
-    }));
 
-    const pautasRectificables = await PautaConvenio.findAll({
-      where: {
-        convenio_id: {
-          [Op.in]: conveniosActivosIds
-        },
-        [Op.and]: [
-          { cant_dias_rectifica: { [Op.ne]: null } },
-          { cant_dias_rectifica: { [Op.ne]: 0 } },
-          { plazo_mes_rectifica: { [Op.ne]: null } },
-          { plazo_mes_rectifica: { [Op.ne]: 0 } }
-        ]
-      },
-      include: [
+    console.log(
+      "🧭 DEBUG rectificaciones: periodos base backend",
+      JSON.stringify(
         {
-          model: TipoPauta,
-          as: "TipoPauta",
-          attributes: [
-            "tipo_pauta_id",
-            "codigo",
-            "nombre",
-            "descripcion",
-            "requiere_periodo_rectificar"
-          ],
-          where: {
-            requiere_periodo_rectificar: true
-          }
-        }
-      ],
-    });
-    const pautasRectificablesIds = pautasRectificables.map(p => p.pauta_id);
-    const pautasMap = pautasRectificables.map(p => ({
-      pauta_id: p.pauta_id,
-      descripcion: p.descripcion,
-      cant_dias_rectifica: p.cant_dias_rectifica,
-      plazo_mes_rectifica: p.plazo_mes_rectifica,
-      tipo_pauta_id: p.tipo_pauta_id,
-      tipo_pauta_codigo: p.TipoPauta?.codigo ?? null,
-      tipo_pauta_nombre: p.TipoPauta?.nombre ?? null,
-      tipo_pauta_descripcion: p.TipoPauta?.descripcion ?? null,
-      requiere_periodo_rectificar: Boolean(p.TipoPauta?.requiere_periodo_rectificar)
-    }))
-
-    const ejercicioMesRectificables = await EjercicioMes.findAll({
-      where: {
-        pauta_id: {
-          [Op.in]: pautasRectificablesIds
+          municipio_id: municipioId,
+          fecha_hoy_argentina: fechaActual,
+          periodo_rectificable_anterior: periodoRectificableAnterior,
+          pautas_rectificables_ids: pautasRectificablesIds,
+          periodos_base: ejercicioMesPeriodo.map((em) => ({
+            ejercicio: em.ejercicio,
+            mes: em.mes,
+            convenio_id: em.convenio_id,
+            pauta_id: em.pauta_id,
+            fecha_inicio: toISODate(em.fecha_inicio),
+            fecha_fin: toISODate(em.fecha_fin),
+          })),
         },
-        fecha_fin: {
-          [Op.lt]: new Date()
-        },
-      }
-    });
+        null,
+        2
+      )
+    );
 
-    if (ejercicioMesRectificables.length === 0) {
+    if (ejercicioMesPeriodo.length === 0) {
       return res.json({
         municipio: municipio.get(),
         ejercicios: [],
       });
     }
 
-    const disponibles = ejercicioMesRectificables.map((em) => {
+    const disponibles = ejercicioMesPeriodo
+      .map((em) => {
         const pauta = pautasMap.find(p => p.pauta_id === em.pauta_id);
+        if (!pauta) {
+          return null;
+        }
         const convenio = conveniosMap.find(c => c.convenio_id === em.convenio_id);
+        const ventanaRectificacion = calcularVentanaRectificacion(
+          em.fecha_inicio,
+          pauta?.plazo_mes_rectifica,
+          pauta?.cant_dias_rectifica,
+          fechaActual
+        );
 
-        const disponible = verificarPeriodoRectificacionDisponible(em.fecha_fin, pauta.plazo_mes_rectifica, pauta.cant_dias_rectifica);
-        const fechaCierreRectificacion = obtenerFechaCierrerectificacion(em.fecha_fin, pauta.plazo_mes_rectifica, pauta.cant_dias_rectifica);
         return {
           ejercicio: em.ejercicio,
           mes: em.mes,
@@ -599,16 +485,64 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
           tipo_pauta_nombre: pauta?.tipo_pauta_nombre ?? null,
           tipo_pauta_descripcion: pauta?.tipo_pauta_descripcion ?? null,
           requiere_periodo_rectificar: Boolean(pauta?.requiere_periodo_rectificar),
-          fecha_cierre: toISODate(fechaCierreRectificacion),
-          vencido: !disponible,
+          cant_dias_rectifica: pauta?.cant_dias_rectifica ?? null,
+          plazo_mes_rectifica: pauta?.plazo_mes_rectifica ?? null,
+          fecha_inicio_rectificacion: ventanaRectificacion.fecha_inicio_rectificacion,
+          fecha_cierre: ventanaRectificacion.fecha_cierre,
+          vencido: !ventanaRectificacion.disponible,
           cerrado: false,
-          disponible,
+          disponible: ventanaRectificacion.disponible,
         };
-    }).filter(item => item.disponible);
+    })
+      .filter(Boolean);
+
+    console.log(
+      "🧮 DEBUG rectificaciones: calculo por periodo",
+      JSON.stringify(
+        {
+          municipio_id: municipioId,
+          fecha_hoy_argentina: fechaActual,
+          calculos: disponibles.map((item) => ({
+            ejercicio: item.ejercicio,
+            mes: item.mes,
+            convenio_id: item.convenio_id,
+            convenio_nombre: item.convenio_nombre,
+            pauta_id: item.pauta_id,
+            pauta_descripcion: item.pauta_descripcion,
+            fecha_inicio: item.fecha_inicio,
+            fecha_fin: item.fecha_fin,
+            cant_dias_rectifica: item.cant_dias_rectifica,
+            plazo_mes_rectifica: item.plazo_mes_rectifica,
+            fecha_inicio_rectificacion: item.fecha_inicio_rectificacion,
+            fecha_cierre: item.fecha_cierre,
+            disponible: item.disponible,
+            vencido: item.vencido,
+          })),
+        },
+        null,
+        2
+      )
+    );
+
+    const periodosDisponibles = disponibles.filter((item) => item.disponible);
+
+    console.log(
+      "📦 DEBUG rectificaciones: payload final helper",
+      JSON.stringify(
+        {
+          municipio_id: municipioId,
+          fecha_hoy_argentina: fechaActual,
+          periodo_rectificable_anterior: periodoRectificableAnterior,
+          ejercicios: periodosDisponibles,
+        },
+        null,
+        2
+      )
+    );
 
     return res.json({
       municipio: municipio.get(),
-      ejercicios: disponibles,
+      ejercicios: periodosDisponibles,
     });
   } catch (error) {
     console.error("❌ Error listando ejercicios disponibles:", error);
@@ -1131,7 +1065,11 @@ export const upsertGastosMunicipio = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
-    const disponible = await verificarGastosRecursosDisponibles(ejercicioNum, mesNum);
+    const disponible = await verificarGastosRecursosDisponibles(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
     if (!disponible) {
       await transaction.rollback();
       return res.status(400).json({ error: "El período no está disponible para modificar gastos" });
@@ -1267,7 +1205,11 @@ export const upsertRecursosMunicipio = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
-    const disponible = await verificarGastosRecursosDisponibles(ejercicioNum, mesNum);
+    const disponible = await verificarGastosRecursosDisponibles(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
     if (!disponible) {
       await transaction.rollback();
       return res.status(400).json({ error: "El período no está disponible para modificar recursos" });
@@ -1382,7 +1324,11 @@ export const generarInformeGastosMunicipio = async (req, res) => {
   }
 
   try {
-    const disponible = await verificarGastosRecursosDisponibles(ejercicioNum, mesNum);
+    const disponible = await verificarGastosRecursosDisponibles(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
     if (!disponible) {
       return res.status(400).json({ error: "El período no está disponible para generar informes" });
     }
@@ -1472,7 +1418,11 @@ export const generarInformeRecursosMunicipio = async (req, res) => {
   }
 
   try {
-    const disponible = await verificarGastosRecursosDisponibles(ejercicioNum, mesNum);
+    const disponible = await verificarGastosRecursosDisponibles(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
     if (!disponible) {
       return res.status(400).json({ error: "El período no está disponible para generar informes" });
     }
@@ -1605,7 +1555,11 @@ export const upsertRecaudacionesMunicipio = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
-    const disponible = await verificarRecaudacionRemuneracionDisponible(ejercicioNum, mesNum);
+    const disponible = await verificarRecaudacionRemuneracionDisponible(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
     if (!disponible) {
       await transaction.rollback();
       return res.status(400).json({ error: "El período no está disponible para modificar recaudaciones" });
@@ -1722,7 +1676,11 @@ export const generarInformeRecaudacionesMunicipio = async (req, res) => {
   }
 
   try {
-    const disponible = await verificarRecaudacionRemuneracionDisponible(ejercicioNum, mesNum);
+    const disponible = await verificarRecaudacionRemuneracionDisponible(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
     if (!disponible) {
       return res.status(400).json({ error: "El período no está disponible para generar informes" });
     }
@@ -1811,7 +1769,11 @@ export const generarInformeRemuneracionesMunicipio = async (req, res) => {
   }
 
   try {
-    const disponible = await verificarRecaudacionRemuneracionDisponible(ejercicioNum, mesNum);
+    const disponible = await verificarRecaudacionRemuneracionDisponible(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
     if (!disponible) {
       return res.status(400).json({ error: "El período no está disponible para generar infromes" });
     }
@@ -1906,7 +1868,11 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
-    const disponible = await verificarRecaudacionRemuneracionDisponible(ejercicioNum, mesNum);
+    const disponible = await verificarRecaudacionRemuneracionDisponible(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
     if (!disponible) {
       await transaction.rollback();
       return res.status(400).json({ error: "El período no está disponible para modificar remuneraciones" });
@@ -2747,191 +2713,30 @@ const esMunicipioModificable = async (municipioId) => {
   return true;
 }
 
-const verificarGastosRecursosDisponibles = async (ejercicio, mes) => {
-  const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
-    timeZone: "America/Argentina/Buenos_Aires"
-  });
-  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(
+const verificarGastosRecursosDisponibles = async (municipioId, ejercicio, mes) => {
+  const resultado = await resolverPeriodoRegular({
+    municipioId,
     ejercicio,
     mes,
-    "gastos_recursos",
-    fechaHoyArgentina,
-    fechaHoyArgentina
-  );
-  if(!ejercicioMes) return false;
-
-  return true;
-}
-
-const verificarRecaudacionRemuneracionDisponible = async (ejercicio, mes) => {
-  const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
-    timeZone: "America/Argentina/Buenos_Aires"
+    tipoPautaCodigo: "gastos_recursos",
+    fechaReferencia: obtenerFechaActual(),
   });
-  const { ejercicioMes } = await obtenerConvenioPautaEjercicioMes(
-    ejercicio,
-    mes,
-    "recaudaciones_remuneraciones",
-    fechaHoyArgentina,
-    fechaHoyArgentina
-  );
-  if(!ejercicioMes) return false;
 
-  return true;
+  return resultado.disponible;
 }
 
-const obtenerFechaCierrerectificacion = (fechaFin, plazoMesRectifica, cantDiasRectifica) => {
-  const fechaFinDate = new Date(fechaFin);
-
-  const fechaRectificacion = new Date(
-    fechaFinDate.getFullYear(),
-    fechaFinDate.getMonth() + plazoMesRectifica,
-    cantDiasRectifica
-  )
-  return fechaRectificacion;
-}
-
-const verificarPeriodoRectificacionDisponible = (fechaFin, plazoMesRectifica, cantDiasRectifica) => {
-  const fechaFinDate = new Date(fechaFin);
-  const hoy = new Date();
-  let disponible = false;
-
-  const fechaRectificacion = new Date(
-    fechaFinDate.getFullYear(),
-    fechaFinDate.getMonth() + plazoMesRectifica,
-    1
-  )
-  if(fechaRectificacion < hoy){
-    fechaRectificacion.setDate(fechaRectificacion.getDate() + (cantDiasRectifica - 1));
-    disponible = hoy <= fechaRectificacion;
-  }
-
-  return disponible;
-}
-
-const obtenerConvenioPautaEjercicioMes = async (
+const verificarRecaudacionRemuneracionDisponible = async (
+  municipioId,
   ejercicio,
-  mes,
-  tipoPautaCodigo,
-  fechaInicio = null,
-  fechaFin = null
+  mes
 ) => {
-  const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
-    timeZone: "America/Argentina/Buenos_Aires",
-  });
-  const fechaReferenciaConvenio = fechaFin ?? fechaInicio ?? fechaHoyArgentina;
-
-  const conveniosActivos = await Convenio.findAll(
-    {
-      where: whereDateOnly("fecha_fin", Op.gte, fechaReferenciaConvenio),
-    }
-  );
-  const conveniosActivosIds = conveniosActivos.map(c => c.convenio_id);
-
-  const pautas = await PautaConvenio.findAll({
-    where: {
-      convenio_id: {
-        [Op.in]: conveniosActivosIds
-      }
-    },
-    include: [
-      {
-        model: TipoPauta,
-        as: "TipoPauta",
-        attributes: ["tipo_pauta_id", "codigo"],
-        required: true,
-        where: { codigo: tipoPautaCodigo },
-      },
-    ],
-  });
-
-  if(!pautas || pautas.length === 0) return { convenio: null, pauta: null, ejercicioMes: null };
-  const pautasIds = pautas.map(p => p.pauta_id);
-
-  const whereEjercicioMes = {
-    pauta_id: {
-      [Op.in]: pautasIds
-    },
+  const resultado = await resolverPeriodoRegular({
+    municipioId,
     ejercicio,
-    mes
-  };
-
-  const condicionesFecha = [];
-  if (fechaInicio) {
-    condicionesFecha.push(whereDateOnly("fecha_inicio", Op.lte, fechaInicio));
-  }
-  if (fechaFin) {
-    condicionesFecha.push(whereDateOnly("fecha_fin", Op.gte, fechaFin));
-  }
-
-  if (condicionesFecha.length > 0) {
-    whereEjercicioMes[Op.and] = condicionesFecha;
-  }
-
-  const ejercicioMes = await EjercicioMes.findOne({
-    where: whereEjercicioMes
+    mes,
+    tipoPautaCodigo: "recaudaciones_remuneraciones",
+    fechaReferencia: obtenerFechaActual(),
   });
 
-  if(!ejercicioMes) return { convenio: null, pauta: null, ejercicioMes: null };
-
-  const convenio = conveniosActivos.find(c => c.convenio_id === ejercicioMes.convenio_id);
-  const pauta = pautas.find(p => p.pauta_id === ejercicioMes.pauta_id);
-
-  return { convenio, pauta, ejercicioMes };
-}
-
-const verificarRectificacionDisponible = async (ejercicio, mes) => {
-  const fechaHoyArgentina = new Date().toLocaleDateString("sv-SE", {
-    timeZone: "America/Argentina/Buenos_Aires",
-  });
-
-  const conveniosActivos = await Convenio.findAll(
-    {
-      where: whereDateOnly("fecha_fin", Op.gte, fechaHoyArgentina),
-    }
-  );
-  const conveniosActivosIds = conveniosActivos.map(c => c.convenio_id);
-
-  const pautasRectificables = await PautaConvenio.findAll({
-    where: {
-      [Op.and]: [
-        {
-          cant_dias_rectifica: {
-            [Op.ne]: null,
-            [Op.ne]: 0
-          }
-        },
-        {
-          plazo_mes_rectifica: {
-            [Op.ne]: null,
-            [Op.ne]: 0
-          }
-        },
-        {
-          convenio_id: {
-            [Op.in]: conveniosActivosIds
-          }
-        }
-      ]
-    },
-  });
-  const pautasRectificablesIds = pautasRectificables.map(p => p.pauta_id);
-
-  const ejercicioMesRectificable = await EjercicioMes.findOne({
-    where: {
-      pauta_id: {
-        [Op.in]: pautasRectificablesIds
-      },
-      ejercicio,
-      mes,
-      [Op.and]: [
-        whereDateOnly("fecha_fin", Op.lt, fechaHoyArgentina)
-      ],
-    }
-  });
-
-  if(!ejercicioMesRectificable) return false;
-
-  const pauta = pautasRectificables.find(p => p.pauta_id === ejercicioMesRectificable.pauta_id);
-
-  return verificarPeriodoRectificacionDisponible(ejercicioMesRectificable.fecha_fin, pauta.plazo_mes_rectifica, pauta.cant_dias_rectifica);
+  return resultado.disponible;
 }
