@@ -15,8 +15,7 @@ import { MunicipiosSchema } from "../validation/MunicipiosSchema.validation.js";
 import { obtenerFechaActual } from "../utils/obtenerFechaActual.js";
 import {
   obtenerPeriodoRectificableAnterior,
-  calcularVentanaRectificacion,
-  obtenerContextoRectificacionesPorPeriodo,
+  evaluarPeriodosRectificacion,
   verificarRectificacionDisponible,
 } from "../utils/rectificaciones.js";
 import {
@@ -421,11 +420,12 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
       obtenerPeriodoRectificableAnterior(fechaActual);
     const {
       ejercicioMesPeriodo,
-      conveniosMap,
       pautasRectificablesIds,
-      pautasMap,
-    } = await obtenerContextoRectificacionesPorPeriodo(
-      periodoRectificableAnterior
+      periodosEvaluados,
+    } = await evaluarPeriodosRectificacion(
+      municipioId,
+      periodoRectificableAnterior,
+      fechaActual
     );
 
     console.log(
@@ -457,44 +457,11 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
       });
     }
 
-    const disponibles = ejercicioMesPeriodo
-      .map((em) => {
-        const pauta = pautasMap.find(p => p.pauta_id === em.pauta_id);
-        if (!pauta) {
-          return null;
-        }
-        const convenio = conveniosMap.find(c => c.convenio_id === em.convenio_id);
-        const ventanaRectificacion = calcularVentanaRectificacion(
-          em.fecha_inicio,
-          pauta?.plazo_mes_rectifica,
-          pauta?.cant_dias_rectifica,
-          fechaActual
-        );
-
-        return {
-          ejercicio: em.ejercicio,
-          mes: em.mes,
-          fecha_inicio: toISODate(em.fecha_inicio),
-          fecha_fin: toISODate(em.fecha_fin),
-          convenio_id: em.convenio_id,
-          pauta_id: em.pauta_id,
-          convenio_nombre: convenio?.nombre ?? null,
-          pauta_descripcion: pauta?.descripcion ?? null,
-          tipo_pauta_id: pauta?.tipo_pauta_id ?? null,
-          tipo_pauta_codigo: pauta?.tipo_pauta_codigo ?? null,
-          tipo_pauta_nombre: pauta?.tipo_pauta_nombre ?? null,
-          tipo_pauta_descripcion: pauta?.tipo_pauta_descripcion ?? null,
-          requiere_periodo_rectificar: Boolean(pauta?.requiere_periodo_rectificar),
-          cant_dias_rectifica: pauta?.cant_dias_rectifica ?? null,
-          plazo_mes_rectifica: pauta?.plazo_mes_rectifica ?? null,
-          fecha_inicio_rectificacion: ventanaRectificacion.fecha_inicio_rectificacion,
-          fecha_cierre: ventanaRectificacion.fecha_cierre,
-          vencido: !ventanaRectificacion.disponible,
-          cerrado: false,
-          disponible: ventanaRectificacion.disponible,
-        };
-    })
-      .filter(Boolean);
+    const disponibles = periodosEvaluados.map((item) => ({
+      ...item,
+      vencido: !item.disponible,
+      cerrado: false,
+    }));
 
     console.log(
       "🧮 DEBUG rectificaciones: calculo por periodo",
@@ -511,8 +478,14 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
             pauta_descripcion: item.pauta_descripcion,
             fecha_inicio: item.fecha_inicio,
             fecha_fin: item.fecha_fin,
+            fecha_cierre_regular_base: item.fecha_cierre_regular_base,
+            fecha_cierre_regular_efectiva: item.fecha_cierre_regular_efectiva,
+            tiene_prorroga: item.tiene_prorroga,
+            fecha_fin_prorroga: item.fecha_fin_prorroga,
             cant_dias_rectifica: item.cant_dias_rectifica,
             plazo_mes_rectifica: item.plazo_mes_rectifica,
+            fecha_inicio_rectificacion_teorica:
+              item.fecha_inicio_rectificacion_teorica,
             fecha_inicio_rectificacion: item.fecha_inicio_rectificacion,
             fecha_cierre: item.fecha_cierre,
             disponible: item.disponible,
@@ -2125,7 +2098,7 @@ export const obtenerConceptosRecaudacionRectificadaMunicipio = async (req, res) 
   }
 
   try {
-    const disponible = await verificarRectificacionDisponible(ejercicioNum, mesNum);
+    const disponible = await verificarRectificacionDisponible(municipioNum, ejercicioNum, mesNum);
     if (!disponible) {
       return res.status(400).json({ error: "La rectificación no está disponible para este ejercicio y mes" });
     }
@@ -2181,7 +2154,7 @@ export const upsertRecaudacionesRectificadasMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const disponible = await verificarRectificacionDisponible(ejercicioNum, mesNum);
+    const disponible = await verificarRectificacionDisponible(municipioNum, ejercicioNum, mesNum);
     if (!disponible) {
       await transaction.rollback();
       return res.status(400).json({ error: "La rectificación no está disponible para este ejercicio y mes" });
@@ -2292,7 +2265,7 @@ export const generarInformeRecaudacionesRectificadasMunicipio = async (req, res)
   }
 
   try {
-    const disponible = await verificarRectificacionDisponible(ejercicioNum, mesNum);
+    const disponible = await verificarRectificacionDisponible(municipioNum, ejercicioNum, mesNum);
     if (!disponible) {
       return res.status(400).json({ error: "La rectificación no está disponible para este ejercicio y mes" });
     }
@@ -2382,7 +2355,7 @@ export const generarInformeRemuneracionesRectificadasMunicipio = async (req, res
   }
 
   try {
-    const disponible = await verificarRectificacionDisponible(ejercicioNum, mesNum);
+    const disponible = await verificarRectificacionDisponible(municipioNum, ejercicioNum, mesNum);
     if (!disponible) {
       return res.status(400).json({ error: "La rectificación no está disponible para este ejercicio y mes" });
     }
@@ -2478,7 +2451,7 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
-    const disponible = await verificarRectificacionDisponible(ejercicioNum, mesNum);
+    const disponible = await verificarRectificacionDisponible(municipioNum, ejercicioNum, mesNum);
     if (!disponible) {
       return res.status(400).json({ error: "La rectificación no está disponible para este ejercicio y mes" });
     }

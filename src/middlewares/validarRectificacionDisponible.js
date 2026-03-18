@@ -4,17 +4,23 @@ import {
 } from "../utils/rectificaciones.js";
 
 export const validarRectificacionDisponible = async (req, res, next) => {
+  const municipioNum = Number(req.params.municipioId ?? req.params.id ?? req.params.municipio);
   const ejercicioNum = Number(req.params.ejercicio);
   const mesNum = Number(req.params.mes);
 
-  if (!Number.isInteger(ejercicioNum) || !Number.isInteger(mesNum)) {
+  if (
+    !Number.isInteger(municipioNum) ||
+    !Number.isInteger(ejercicioNum) ||
+    !Number.isInteger(mesNum)
+  ) {
     return res.status(400).json({
-      error: "Parámetros de ejercicio/mes inválidos para validar la rectificación.",
+      error: "Parámetros de municipio/ejercicio/mes inválidos para validar la rectificación.",
     });
   }
 
   try {
     const resultado = await obtenerDisponibilidadRectificacion(
+      municipioNum,
       ejercicioNum,
       mesNum
     );
