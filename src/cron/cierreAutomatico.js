@@ -79,6 +79,50 @@ const mapRemuneracionParaInforme = (remuneracion, regimenesMap = new Map()) => {
   };
 };
 
+const obtenerNombreConvenioSeguro = (convenio, convenioId) =>
+  convenio?.nombre ?? `Convenio ${convenioId}`;
+
+const existeCierreModulo = async ({
+  ejercicio,
+  mes,
+  municipioId,
+  convenioId,
+  pautaId,
+  modulo,
+  tipoCierre,
+}) =>
+  CierreModulo.findOne({
+    where: {
+      ejercicio,
+      mes,
+      municipio_id: municipioId,
+      convenio_id: convenioId,
+      pauta_id: pautaId,
+      modulo,
+      tipo_cierre: tipoCierre,
+    },
+  });
+
+const obtenerDatosPorModulo = async (modulo, municipioId, ejercicio, mes) => {
+  if (modulo === "Gastos") {
+    return obtenerDatosGastos(municipioId, ejercicio, mes);
+  }
+
+  if (modulo === "Recursos") {
+    return obtenerDatosRecursos(municipioId, ejercicio, mes);
+  }
+
+  if (modulo === "Recaudaciones") {
+    return obtenerDatosRecaudaciones(municipioId, ejercicio, mes);
+  }
+
+  if (modulo === "Remuneraciones") {
+    return obtenerDatosRemuneraciones(municipioId, ejercicio, mes);
+  }
+
+  throw new Error(`Módulo no soportado para cierre automático: ${modulo}`);
+};
+
 // 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
 cron.schedule(
   "0 2 * * *",
@@ -101,32 +145,15 @@ cron.schedule(
       .split("T")[0];
 
     try {
-      // Buscar ejercicios con fecha_fin < CURRENT_DATE
-      const ejercicios = await EjercicioMes.findAll({
+      // Buscar ejercicios vencidos recientemente por su fecha de cierre real
+      const ejerciciosFiltrados = await EjercicioMes.findAll({
         where: {
           fecha_fin: {
-            [Op.lt]: hoyArg
+            [Op.lt]: hoyArg,
+            [Op.gte]: fechaMenosTresMesesStr,
           },
-          fecha_inicio: {
-            [Op.gt]: fechaMenosTresMesesStr
-          }
-        }
+        },
       });
-
-      // Filtrar los que no están cerrados (no tienen CierreModulo para todos los módulos)
-      const ejerciciosFiltrados = [];
-      for (const ej of ejercicios) {
-        const cierres = await CierreModulo.findOne({
-          where: { ejercicio: ej.ejercicio, mes: ej.mes, convenio_id: ej.convenio_id, pauta_id: ej.pauta_id, tipo_cierre: "REGULAR" }
-        });
-
-        const fechaHoy = new Date(hoyArg);
-        const fechaEjercicio = new Date(ej.fecha_fin);
-        const correspondeCerrar = fechaHoy > fechaEjercicio
-        if (!cierres && correspondeCerrar) {
-          ejerciciosFiltrados.push(ej);
-        }
-      };
 
       // Buscar municipios
       const municipios = await Municipio.findAll({ attributes: ["municipio_id", "municipio_nombre"] });
@@ -140,19 +167,7 @@ cron.schedule(
         }
       });
 
-      const prorrogasFiltradas = [];
-      for (const pr of prorrogas) {
-        const cierres = await CierreModulo.findOne({
-          where: { ejercicio: pr.ejercicio, mes: pr.mes, convenio_id: pr.convenio_id, pauta_id: pr.pauta_id, tipo_cierre: "PRORROGA" }
-        });
-
-        const fechaHoy = new Date(hoyArg);
-        const fechaEjercicio = new Date(pr.fecha_fin_nueva);
-        const correspondeCerrar = fechaHoy > fechaEjercicio
-        if (!cierres && correspondeCerrar) {
-          prorrogasFiltradas.push(pr);
-        }
-      };
+      const prorrogasFiltradas = prorrogas;
       // Procesar ejercicios
       for (const ej of ejerciciosFiltrados) {
         const { ejercicio, mes, convenio_id, pauta_id } = ej;
@@ -175,24 +190,43 @@ cron.schedule(
           continue;
         }
         const convenio = await Convenio.findByPk(convenio_id);
+        const convenioNombre = obtenerNombreConvenioSeguro(convenio, convenio_id);
 
         for (const municipio of municipios) {
           for (const modulo of modulos) {
             let informePath = null;
             try {
-              const numero = await generarNumeroUnico();
-              let datos;
-              if (modulo === 'Gastos') {
-                datos = await obtenerDatosGastos(municipio.municipio_id, ejercicio, mes);
-              } else if (modulo === 'Recursos') {
-                datos = await obtenerDatosRecursos(municipio.municipio_id, ejercicio, mes);
-              } else if (modulo === 'Recaudaciones') {
-                datos = await obtenerDatosRecaudaciones(municipio.municipio_id, ejercicio, mes);
-              } else if (modulo === 'Remuneraciones') {
-                datos = await obtenerDatosRemuneraciones(municipio.municipio_id, ejercicio, mes);
+              const cierreExistente = await existeCierreModulo({
+                ejercicio,
+                mes,
+                municipioId: municipio.municipio_id,
+                convenioId: convenio_id,
+                pautaId: pauta_id,
+                modulo,
+                tipoCierre: "REGULAR",
+              });
+
+              if (cierreExistente) {
+                continue;
               }
 
-              informePath = await generarPDF(modulo, datos, municipio.municipio_nombre, ejercicio, mes, convenio.nombre, numero);
+              const numero = await generarNumeroUnico();
+              const datos = await obtenerDatosPorModulo(
+                modulo,
+                municipio.municipio_id,
+                ejercicio,
+                mes
+              );
+
+              informePath = await generarPDF(
+                modulo,
+                datos,
+                municipio.municipio_nombre,
+                ejercicio,
+                mes,
+                convenioNombre,
+                numero
+              );
 
               await CierreModulo.create({
                 ejercicio,
@@ -258,24 +292,44 @@ cron.schedule(
           continue;
         }
         const convenio = await Convenio.findByPk(convenio_id);
+        const convenioNombre = obtenerNombreConvenioSeguro(convenio, convenio_id);
 
         for (const municipio of municipios) {
           if (municipio.municipio_id !== prorroga.municipio_id) continue;
           for (const modulo of modulos) {
+            let informePath = null;
             try {
-              const numero = await generarNumeroUnico();
-              let datos;
-              if (modulo === 'Gastos') {
-                datos = await obtenerDatosGastos(municipio.municipio_id, ejercicio, mes);
-              } else if (modulo === 'Recursos') {
-                datos = await obtenerDatosRecursos(municipio.municipio_id, ejercicio, mes);
-              } else if (modulo === 'Recaudaciones') {
-                datos = await obtenerDatosRecaudaciones(municipio.municipio_id, ejercicio, mes);
-              } else if (modulo === 'Remuneraciones') {
-                datos = await obtenerDatosRemuneraciones(municipio.municipio_id, ejercicio, mes);
+              const cierreExistente = await existeCierreModulo({
+                ejercicio,
+                mes,
+                municipioId: municipio.municipio_id,
+                convenioId: convenio_id,
+                pautaId: pauta_id,
+                modulo,
+                tipoCierre: "PRORROGA",
+              });
+
+              if (cierreExistente) {
+                continue;
               }
 
-              const informePath = await generarPDF(modulo, datos, municipio.municipio_nombre, ejercicio, mes, convenio.nombre, numero);
+              const numero = await generarNumeroUnico();
+              const datos = await obtenerDatosPorModulo(
+                modulo,
+                municipio.municipio_id,
+                ejercicio,
+                mes
+              );
+
+              informePath = await generarPDF(
+                modulo,
+                datos,
+                municipio.municipio_nombre,
+                ejercicio,
+                mes,
+                convenioNombre,
+                numero
+              );
 
               await CierreModulo.create({
                 ejercicio,
@@ -303,6 +357,9 @@ cron.schedule(
             } catch (error) {
               errores++;
               console.error(`❌ Error cerrando módulo ${modulo} para municipio ${municipio.municipio_id} por prorroga:`, error.message);
+              if(informePath){
+                await fs.promises.unlink(informePath);
+              }
               await CronLog.create({
                 nombre_tarea: "Resumen municipio",
                 ejercicio,

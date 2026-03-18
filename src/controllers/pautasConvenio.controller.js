@@ -235,12 +235,6 @@ export const crearPauta = async (req, res) => {
       return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(",") });
     }
 
-    const pautaDuplicada = await PautaConvenio.findOne({ where: { descripcion } });
-
-    if (pautaDuplicada) {
-      return res.status(400).json({ error: "Ya existe otra pauta con esta descripción" });
-    }
-
     const [convenio, tipoPauta] = await Promise.all([
       Convenio.findOne({ where: { convenio_id } }),
       TipoPauta.findByPk(tipo_pauta_id),
@@ -337,14 +331,6 @@ export const actualizarPauta = async (req, res) => {
 
     if (!tipoPauta) {
       return res.status(400).json({ error: "No existe el tipo de pauta seleccionado" });
-    }
-
-    if (descripcion && descripcion !== pauta.descripcion) {
-      const pautaDuplicada = await PautaConvenio.findOne({ where: { descripcion } });
-
-      if (pautaDuplicada && pautaDuplicada.pauta_id !== pauta.pauta_id) {
-        return res.status(400).json({ error: "Ya existe otra pauta con esta descripción" });
-      }
     }
 
     const payloadRectificacion = validarRectificacionSegunTipo(tipoPauta, {

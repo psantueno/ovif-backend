@@ -31,6 +31,7 @@ import {
 import { authenticateToken } from "../middlewares/auth.js";
 import { validarMunicipioAsignado } from "../middlewares/validarMunicipioAsignado.js";
 import { validarFechaLimiteDeCargaPorTipo } from "../middlewares/validarFechaLimiteDeCarga.js";
+import { validarRectificacionDisponible } from "../middlewares/validarRectificacionDisponible.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
 
 const router = Router();
@@ -150,6 +151,7 @@ router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas/conceptos",
   authenticateToken,
   validarMunicipioAsignado,
+  validarRectificacionDisponible,
   obtenerConceptosRecaudacionRectificadaMunicipio
 );
 
@@ -157,7 +159,7 @@ router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas",
   authenticateToken,
   validarMunicipioAsignado,
-  validarFechaLimiteRecaudacionesRemuneraciones,
+  validarRectificacionDisponible,
   upsertRecaudacionesRectificadasMunicipio
 );
 
@@ -165,6 +167,7 @@ router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas/informe",
   authenticateToken,
   validarMunicipioAsignado,
+  validarRectificacionDisponible,
   generarInformeRecaudacionesRectificadasMunicipio
 );
 
@@ -172,7 +175,7 @@ router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones-rectificadas",
   authenticateToken,
   validarMunicipioAsignado,
-  validarFechaLimiteRecaudacionesRemuneraciones,
+  validarRectificacionDisponible,
   upsertRemuneracionesRectificadasMunicipio
 );
 
@@ -180,6 +183,7 @@ router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones-rectificadas/informe",
   authenticateToken,
   validarMunicipioAsignado,
+  validarRectificacionDisponible,
   generarInformeRemuneracionesRectificadasMunicipio
 );
 

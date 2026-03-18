@@ -1,37 +1,12 @@
 /*
-Este middleware verifica si la fecha límite para cargar datos
-de un ejercicio/mes para un municipio específico ha pasado.
-Si la fecha límite ha pasado, responde con un error 400.
-Si está dentro del plazo, llama a next() para continuar.
+Este middleware valida la disponibilidad de un período regular de carga
+tomando como fuente de verdad el calendario oficial (EjercicioMes) y la
+prórroga del municipio cuando exista. No depende de si el convenio sigue
+activo al día de hoy.
 */
 
-import { Op, fn, col, where as sequelizeWhere } from "sequelize";
-import {
-  Convenio,
-  EjercicioMes,
-  PautaConvenio,
-  ProrrogaMunicipio,
-  TipoPauta,
-} from "../models/index.js";
-
-const whereDateOnly = (field, operator, value) =>
-  sequelizeWhere(fn("DATE", col(field)), operator, value);
-
-const obtenerFechaHoyArgentina = () =>
-  new Date().toLocaleDateString("sv-SE", {
-    timeZone: "America/Argentina/Buenos_Aires",
-  });
-
-const toISODate = (value) => {
-  if (!value) return null;
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value;
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().split("T")[0];
-};
+import { resolverPeriodoRegular } from "../utils/periodosRegulares.js";
+import { obtenerFechaActual } from "../utils/obtenerFechaActual.js";
 
 const resolveTipoPautaCodigo = (tipoPautaCodigo, req) => {
   if (tipoPautaCodigo) return tipoPautaCodigo;
@@ -49,7 +24,7 @@ const resolveTipoPautaCodigo = (tipoPautaCodigo, req) => {
 const crearValidadorFechaLimiteDeCarga = (tipoPautaCodigo = null) => async (req, res, next) => {
   const { ejercicio, mes } = req.params;
   const municipioId = req.params.municipioId ?? req.params.municipio;
-  const fechaHoy = obtenerFechaHoyArgentina();
+  const fechaActual = obtenerFechaActual();
   const tipoPautaResuelto = resolveTipoPautaCodigo(tipoPautaCodigo, req);
 
   try {
@@ -59,94 +34,37 @@ const crearValidadorFechaLimiteDeCarga = (tipoPautaCodigo = null) => async (req,
       });
     }
 
-    const conveniosActivos = await Convenio.findAll({
-      attributes: ["convenio_id"],
-      where: whereDateOnly("fecha_fin", Op.gte, fechaHoy),
-      raw: true,
-    });
-    const conveniosActivosIds = conveniosActivos.map((item) => item.convenio_id);
-
-    if (!conveniosActivosIds.length) {
-      return res.status(400).json({
-        error: "⛔ No hay convenios activos para validar el período de carga",
-      });
-    }
-
-    const pautas = await PautaConvenio.findAll({
-      attributes: ["pauta_id"],
-      where: {
-        convenio_id: { [Op.in]: conveniosActivosIds },
-      },
-      include: [
-        {
-          model: TipoPauta,
-          as: "TipoPauta",
-          attributes: ["tipo_pauta_id", "codigo"],
-          required: true,
-          where: { codigo: tipoPautaResuelto },
-        },
-      ],
-      raw: true,
-      nest: true,
-    });
-    const pautasIds = pautas.map((item) => item.pauta_id);
-
-    if (!pautasIds.length) {
-      return res.status(400).json({
-        error: "No hay pauta activa para el tipo de carga solicitado",
-      });
-    }
-
-    const oficial = await EjercicioMes.findOne({
-      where: {
-        ejercicio,
-        mes,
-        pauta_id: { [Op.in]: pautasIds },
-      },
-      order: [["fecha_fin", "DESC"]],
+    const resultado = await resolverPeriodoRegular({
+      municipioId,
+      ejercicio,
+      mes,
+      tipoPautaCodigo: tipoPautaResuelto,
+      fechaReferencia: fechaActual,
     });
 
-    if (!oficial) {
-      return res.status(404).json({
-        error: "Ejercicio/Mes no encontrado en calendario oficial para el tipo de pauta",
-      });
+    if (!resultado.disponible) {
+      const payload = {
+        error: resultado.error,
+        detalle: resultado.detalle,
+        motivo: resultado.motivo,
+        fecha_inicio: resultado.fecha_inicio ?? null,
+        fecha_limite_original: resultado.fecha_limite_original ?? null,
+        fecha_limite_prorroga: resultado.fecha_limite_prorroga ?? null,
+        puede_solicitar_prorroga: Boolean(resultado.puede_solicitar_prorroga),
+        sugerencia: resultado.sugerencia ?? null,
+      };
+
+      if (resultado.motivo === "configuracion_ambigua") {
+        return res.status(409).json(payload);
+      }
+
+      if (resultado.motivo === "sin_calendario") {
+        return res.status(404).json(payload);
+      }
+
+      return res.status(400).json(payload);
     }
 
-    const fechaInicio = toISODate(oficial.fecha_inicio);
-    const fechaFinOficial = toISODate(oficial.fecha_fin);
-
-    if (fechaInicio && fechaHoy < fechaInicio) {
-      return res.status(400).json({
-        error: "⛔ El período de carga aún no inició",
-        fecha_inicio: fechaInicio,
-      });
-    }
-
-    // 2. Buscar prórroga del municipio (si existe)
-    let prorroga = null;
-    if (municipioId !== undefined) {
-      prorroga = await ProrrogaMunicipio.findOne({
-        where: {
-          ejercicio,
-          mes,
-          municipio_id: municipioId,
-          convenio_id: oficial.convenio_id,
-          pauta_id: oficial.pauta_id,
-        },
-      });
-    }
-
-    const fechaLimite = toISODate(prorroga?.fecha_fin_nueva) ?? fechaFinOficial;
-
-    // 3. Validar contra fecha actual
-    if (!fechaLimite || fechaHoy > fechaLimite) {
-      return res.status(400).json({
-        error: "⛔ El plazo de carga ya venció, no puede cargar información",
-        fecha_limite: fechaLimite,
-      });
-    }
-
-    // 4. Si está dentro del plazo → continuar
     next();
   } catch (error) {
     console.error("❌ Error en validarFechaLimite:", error);
