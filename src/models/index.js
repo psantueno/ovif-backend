@@ -38,6 +38,7 @@ import TipoPauta from './TipoPauta.js';
 import ProrrogaMunicipio from './ProrrogaMunicipio.js';
 import AuditoriaProrrogaMunicipio from './AuditoriaProrrogaMunicipio.js';
 import Parametros from './Parametros.js';
+import MunicipioMail from './moduloEjercicios/MunicipioMail.js';
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
@@ -196,4 +197,5 @@ export {
   RecaudacionRectificada,
   RemuneracionRectificada,
   Parametros,
+  MunicipioMail
 };
