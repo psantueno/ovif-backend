@@ -18,12 +18,14 @@ import {
   PautaConvenio,
   TipoPauta,
   Convenio, 
-  Parametros
+  Parametros,
+  MunicipioMail
 } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
+import { enviarMensajeCierreModulos } from "../services/mailer.js";
 import crypto from "crypto";
 
 const MODULOS_POR_TIPO_PAUTA = {
@@ -139,7 +141,8 @@ cron.schedule(
 
     // Crear copia para no mutar la fecha original
     const fechaMenosTresMeses = new Date(hoyArg);
-    fechaMenosTresMeses.setMonth(fechaMenosTresMeses.getMonth() - 3);
+    // getMonth utiliza valores 0-11. Actual: 6 meses atras
+    fechaMenosTresMeses.setMonth(fechaMenosTresMeses.getMonth() - 5);
     const fechaMenosTresMesesStr = fechaMenosTresMeses
       .toISOString()
       .split("T")[0];
@@ -168,6 +171,10 @@ cron.schedule(
       });
 
       const prorrogasFiltradas = prorrogas;
+
+      // Mails
+      const mailsParaEnviar = [];
+
       // Procesar ejercicios
       for (const ej of ejerciciosFiltrados) {
         const { ejercicio, mes, convenio_id, pauta_id } = ej;
@@ -267,6 +274,25 @@ cron.schedule(
               });
             }
           }
+
+          //if(municipio.municipio_id == 37){
+            const municipioMails = await MunicipioMail.findAll({
+              where: { 
+                municipio_id: municipio.municipio_id
+              }
+            })
+
+            municipioMails.forEach((mm) => {
+              mailsParaEnviar.push({
+                to: mm.email,
+                nombre: mm.nombre,
+                ejercicio,
+                mes,
+                modulos,
+                esProrroga: false
+              })
+            })
+          //}
         }
       }
 
@@ -370,6 +396,25 @@ cron.schedule(
               });
             }
           }
+
+          //if(municipio.municipio_id == 37){
+            const municipioMails = await MunicipioMail.findAll({
+              where: { 
+                municipio_id: municipio.municipio_id
+              }
+            })
+
+            municipioMails.forEach((mm) => {
+              mailsParaEnviar.push({
+                to: mm.email,
+                nombre: mm.nombre,
+                ejercicio,
+                mes,
+                modulos,
+                esProrroga: true
+              })
+            })
+          //}
         }
       }
 
@@ -383,6 +428,11 @@ cron.schedule(
       console.log(
         `🟢 [CRON ${hoy}] Cierre automático completado (${cierresRealizados} cierres, ${errores} errores).`
       );
+
+      // Enviar mails
+      mailsParaEnviar.forEach(async (m) => {
+        await enviarMensajeCierreModulos(m.to, m.nombre, m.ejercicio, m.mes, m.modulos, m.esProrroga)
+      })
     } catch (error) {
       console.error("💥 Error general en cierre automático:", error);
       try {
