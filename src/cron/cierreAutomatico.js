@@ -141,7 +141,8 @@ cron.schedule(
 
     // Crear copia para no mutar la fecha original
     const fechaMenosTresMeses = new Date(hoyArg);
-    fechaMenosTresMeses.setMonth(fechaMenosTresMeses.getMonth() - 3);
+    // getMonth utiliza valores 0-11. Actual: 6 meses atras
+    fechaMenosTresMeses.setMonth(fechaMenosTresMeses.getMonth() - 5);
     const fechaMenosTresMesesStr = fechaMenosTresMeses
       .toISOString()
       .split("T")[0];
@@ -274,7 +275,7 @@ cron.schedule(
             }
           }
 
-          if(municipio.municipio_id == 37){
+          //if(municipio.municipio_id == 37){
             const municipioMails = await MunicipioMail.findAll({
               where: { 
                 municipio_id: municipio.municipio_id
@@ -291,7 +292,7 @@ cron.schedule(
                 esProrroga: false
               })
             })
-          }
+          //}
         }
       }
 
@@ -396,7 +397,7 @@ cron.schedule(
             }
           }
 
-          if(municipio.municipio_id == 37){
+          //if(municipio.municipio_id == 37){
             const municipioMails = await MunicipioMail.findAll({
               where: { 
                 municipio_id: municipio.municipio_id
@@ -413,7 +414,7 @@ cron.schedule(
                 esProrroga: true
               })
             })
-          }
+          //}
         }
       }
 

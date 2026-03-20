@@ -12,7 +12,6 @@ const MunicipioMail = sequelize.define("MunicipioMail", {
     },
     nombre: {
         type: DataTypes.STRING(255),
-        primaryKey: true,
         allowNull: false
     }
 }, {

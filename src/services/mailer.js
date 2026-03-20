@@ -113,7 +113,7 @@ const obtenerNombreMes = (mesNumero) => {
 }
 
 const armarMensajeCierreModulos = (ejercicio, mes, modulos, esProrroga) => {
-    const fallback = "Le informamos que se cerró el plazo de entrega de importes";
+    const fallback = "Le informamos que se cerró el plazo de entrega de información";
 
     if(!Number(ejercicio) && !Number(mes)) return fallback;
 
@@ -121,7 +121,7 @@ const armarMensajeCierreModulos = (ejercicio, mes, modulos, esProrroga) => {
 
     const seccionEjercicioMes = `${obtenerNombreMes(mes)} ${ejercicio}`
 
-    let mensajeCierre = `Le informamos que se cerró el plazo de entrega de importes para los módulos ${modulos[0]} y ${modulos[1]}`
+    let mensajeCierre = `Le informamos que se cerró el plazo de entrega de información para los módulos ${modulos[0]} y ${modulos[1]}`
 
     if (esProrroga) {
         mensajeCierre += ` correspondientes a la prorroga para el período ${seccionEjercicioMes}`;
