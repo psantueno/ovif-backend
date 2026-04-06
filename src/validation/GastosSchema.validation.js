@@ -1,14 +1,20 @@
 import { z } from 'zod';
 
+const decimalField = (label) =>
+    z.number({ message: `${label} debe ser un número` }).refine((value) => {
+        const str = value.toString();
+        return /^-?\d{1,34}(\.\d{1,2})?$/.test(str);
+    }, {
+        message: `${label} debe tener hasta 34 dígitos enteros y hasta 2 decimales`,
+    });
+
 export const GastosSchema = z.object({
-    partidas_gastos_codigo: z.number({ message: "El código de la partida debe ser un número entero" }).int({ message: "El código de la partida debe ser un número entero" }),
-    gastos_importe_devengado: z.number({ message: "El importe devengado debe ser un número" }).refine((value) => 
-        {
-            const str = value.toString();
-            return /^\d{1,15}(\.\d{1,2})?$/.test(str);
-        },
-        {
-            message: "El número debe tener hasta 10 dígitos enteros y hasta 2 decimales",
-        }
-    ),
+    codigo_partida: z.number({ message: "El código de la partida debe ser un número entero" }).int({ message: "El código de la partida debe ser un número entero" }),
+    descripcion: z.string({ message: "La descripción es requerida" }).max(255, { message: "La descripción no puede superar los 255 caracteres" }),
+    codigo_fuente_financiera: z.number({ message: "El código de fuente financiera debe ser un número entero" }).int({ message: "El código de fuente financiera debe ser un número entero" }),
+    descripcion_fuente: z.string({ message: "La descripción de fuente es requerida" }).max(255, { message: "La descripción de fuente no puede superar los 255 caracteres" }),
+    formulado: decimalField("Formulado"),
+    modificado: decimalField("Modificado"),
+    vigente: decimalField("Vigente"),
+    devengado: decimalField("Devengado"),
 });

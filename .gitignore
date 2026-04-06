@@ -41,3 +41,6 @@ migrations/
 
 # Temporary files
 tmp/
+
+# Claude
+.claude

@@ -1,4 +1,3 @@
-
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/db.js";
 
@@ -11,7 +10,7 @@ const Recurso = sequelize.define("Recurso", {
     type: DataTypes.INTEGER,
     primaryKey: true
   },
-  partidas_recursos_codigo: {
+  codigo_recurso: {
     type: DataTypes.INTEGER,
     primaryKey: true
   },
@@ -19,8 +18,24 @@ const Recurso = sequelize.define("Recurso", {
     type: DataTypes.INTEGER,
     primaryKey: true
   },
-  recursos_importe_percibido: {
-    type: DataTypes.DECIMAL(20,2),
+  descripcion: {
+    type: DataTypes.STRING(255),
+    allowNull: false
+  },
+  codigo_fuente_financiera: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  descripcion_fuente: {
+    type: DataTypes.STRING(255),
+    allowNull: false
+  },
+  vigente: {
+    type: DataTypes.DECIMAL(36, 2),
+    allowNull: false
+  },
+  percibido: {
+    type: DataTypes.DECIMAL(36, 2),
     allowNull: false
   }
 }, {
@@ -31,4 +46,3 @@ const Recurso = sequelize.define("Recurso", {
 });
 
 export default Recurso;
-

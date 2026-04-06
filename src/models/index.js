@@ -94,13 +94,8 @@ AuditoriaProrrogaMunicipio.belongsTo(Usuario, { foreignKey: "gestionado_por" });
 ProrrogaMunicipio.hasMany(AuditoriaProrrogaMunicipio, { foreignKey: "prorroga_id" });
 
 Gasto.belongsTo(Municipio, { foreignKey: "municipio_id" });
-Gasto.belongsTo(PartidaGasto, {
-  foreignKey: "partidas_gastos_codigo",
-  targetKey: "partidas_gastos_codigo"
-});
 
 Recurso.belongsTo(Municipio, { foreignKey: "municipio_id" });
-Recurso.belongsTo(PartidaRecurso, { foreignKey: "partidas_recursos_codigo", targetKey: "partidas_recursos_codigo" });
 
 Archivo.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
