@@ -28,7 +28,7 @@ const CierreModulo = sequelize.define("CierreModulo", {
     allowNull: false,
   },
   modulo: {
-    type: DataTypes.ENUM("GASTOS", "RECURSOS", "RECAUDACIONES", "PERSONAL"),
+    type: DataTypes.ENUM("GASTOS", "RECURSOS", "RECAUDACIONES", "REMUNERACIONES"),
     allowNull: false,
   },
   fecha_cierre: {
@@ -45,9 +45,9 @@ const CierreModulo = sequelize.define("CierreModulo", {
     allowNull: true,
   },
   tipo_cierre: {
-    type: DataTypes.ENUM("AUTOMATICO", "MANUAL"),
+    type: DataTypes.ENUM("REGULAR", "PRORROGA"),
     allowNull: false,
-    defaultValue: "AUTOMATICO",
+    defaultValue: "REGULAR",
   },
   fecha_creacion: {
     type: DataTypes.DATE,
@@ -55,7 +55,7 @@ const CierreModulo = sequelize.define("CierreModulo", {
     defaultValue: DataTypes.NOW,
   },
   id_documento: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.BIGINT,
     allowNull: true,
   }
 }, {

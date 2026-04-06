@@ -10,7 +10,7 @@ const Gasto = sequelize.define("Gasto", {
     type: DataTypes.INTEGER,
     primaryKey: true
   },
-  partidas_gastos_codigo: {
+  codigo_partida: {
     type: DataTypes.INTEGER,
     primaryKey: true
   },
@@ -18,8 +18,32 @@ const Gasto = sequelize.define("Gasto", {
     type: DataTypes.INTEGER,
     primaryKey: true
   },
-  gastos_importe_devengado: {
-    type: DataTypes.DECIMAL(20,2),
+  descripcion: {
+    type: DataTypes.STRING(255),
+    allowNull: false
+  },
+  codigo_fuente_financiera: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  descripcion_fuente: {
+    type: DataTypes.STRING(255),
+    allowNull: false
+  },
+  formulado: {
+    type: DataTypes.DECIMAL(36, 2),
+    allowNull: false
+  },
+  modificado: {
+    type: DataTypes.DECIMAL(36, 2),
+    allowNull: false
+  },
+  vigente: {
+    type: DataTypes.DECIMAL(36, 2),
+    allowNull: false
+  },
+  devengado: {
+    type: DataTypes.DECIMAL(36, 2),
     allowNull: false
   }},
   {

@@ -1,5 +1,5 @@
 // Modelo
-import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario, Archivo, CierreModulo, EjercicioMesCerrado, Poblacion, UsuarioMunicipio, RecaudacionRectificada, RemuneracionRectificada, TipoPauta } from "../models/index.js";
+import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, Recurso, Convenio, PautaConvenio, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario, Archivo, CierreModulo, EjercicioMesCerrado, Poblacion, UsuarioMunicipio, RecaudacionRectificada, RemuneracionRectificada, TipoPauta } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
@@ -76,190 +76,30 @@ const whereDateOnly = (field, operator, value) =>
 const buildCalendarioKey = (ejercicio, mes, convenioId, pautaId) =>
   `${ejercicio}-${mes}-${convenioId ?? "null"}-${pautaId ?? "null"}`;
 
-const construirJerarquiaPartidas = async (municipioId, ejercicio, mes) => {
-  const [partidas, gastosGuardados] = await Promise.all([
-    PartidaGasto.findAll({
-      order: [
-        ["partidas_gastos_padre", "ASC"],
-        ["partidas_gastos_codigo", "ASC"],
-      ],
-    }),
-    Gasto.findAll({
-      where: {
-        gastos_ejercicio: ejercicio,
-        gastos_mes: mes,
-        municipio_id: municipioId,
-      },
-    }),
-  ]);
-
-  const gastosMap = new Map();
-  gastosGuardados.forEach((gasto) => {
-    const importe = gasto.gastos_importe_devengado;
-    gastosMap.set(
-      gasto.partidas_gastos_codigo,
-      importe === null ? null : importe
-    );
+const obtenerGastosMunicipio = async (municipioId, ejercicio, mes) => {
+  const gastos = await Gasto.findAll({
+    where: {
+      gastos_ejercicio: ejercicio,
+      gastos_mes: mes,
+      municipio_id: municipioId,
+    },
+    order: [["codigo_partida", "ASC"]],
   });
 
-  const partidasMap = new Map();
-  partidas.forEach((partida) => {
-    const codigo = partida.partidas_gastos_codigo;
-    partidasMap.set(codigo, {
-      ...partida.toJSON(),
-      partidas_gastos_padre_descripcion: null,
-      puede_cargar: Boolean(partida.partidas_gastos_carga),
-      importe_devengado: gastosMap.has(codigo) ? gastosMap.get(codigo) : null,
-      children: [],
-    });
-  });
-
-  const jerarquia = [];
-
-  partidasMap.forEach((partida) => {
-    const parentId = partida.partidas_gastos_padre;
-    const esRaiz =
-      parentId === null ||
-      parentId === undefined ||
-      parentId === 0 ||
-      parentId === partida.partidas_gastos_codigo ||
-      !partidasMap.has(parentId);
-
-    if (esRaiz) {
-      jerarquia.push(partida);
-      return;
-    }
-
-    const padre = partidasMap.get(parentId);
-    if (padre) {
-      partida.partidas_gastos_padre_descripcion = padre.partidas_gastos_descripcion;
-      padre.children.push(partida);
-    } else {
-      jerarquia.push(partida);
-    }
-  });
-
-  return { jerarquia, gastosGuardados };
+  return gastos.map((g) => g.toJSON());
 };
 
-const aplanarJerarquiaPartidas = (nodos, nivel = 0) => {
-  const resultado = [];
-
-  nodos.forEach((nodo) => {
-    resultado.push({
-      codigo: nodo.partidas_gastos_codigo,
-      descripcion: nodo.partidas_gastos_descripcion,
-      nivel,
-      puedeCargar: nodo.puede_cargar,
-      importe: nodo.importe_devengado,
-    });
-
-    if (Array.isArray(nodo.children) && nodo.children.length > 0) {
-      resultado.push(...aplanarJerarquiaPartidas(nodo.children, nivel + 1));
-    }
+const obtenerRecursosMunicipio = async (municipioId, ejercicio, mes) => {
+  const recursos = await Recurso.findAll({
+    where: {
+      recursos_ejercicio: ejercicio,
+      recursos_mes: mes,
+      municipio_id: municipioId,
+    },
+    order: [["codigo_recurso", "ASC"]],
   });
 
-  return resultado;
-};
-
-const construirJerarquiaPartidasRecursos = async (municipioId, ejercicio, mes) => {
-  const [partidas, recursosGuardados] = await Promise.all([
-    PartidaRecurso.findAll({
-      order: [
-        ["partidas_recursos_padre", "ASC"],
-        ["partidas_recursos_codigo", "ASC"],
-      ],
-    }),
-    Recurso.findAll({
-      where: {
-        recursos_ejercicio: ejercicio,
-        recursos_mes: mes,
-        municipio_id: municipioId,
-      },
-    }),
-  ]);
-
-  const recursosMap = new Map();
-  recursosGuardados.forEach((recurso) => {
-    const importe = recurso.recursos_importe_percibido;
-    const contribuyentes = recurso.recursos_cantidad_contribuyentes;
-    const pagaron = recurso.recursos_cantidad_pagaron;
-
-    recursosMap.set(recurso.partidas_recursos_codigo, {
-      importe: importe === null ? null : importe,
-      contribuyentes:
-        contribuyentes === null || contribuyentes === undefined
-          ? null
-          : Number(contribuyentes),
-      pagaron:
-        pagaron === null || pagaron === undefined ? null : Number(pagaron),
-    });
-  });
-
-  const partidasMap = new Map();
-  partidas.forEach((partida) => {
-    const codigo = partida.partidas_recursos_codigo;
-    const valoresGuardados = recursosMap.get(codigo);
-
-    partidasMap.set(codigo, {
-      ...partida.toJSON(),
-      partidas_recursos_padre_descripcion: null,
-      puede_cargar: Boolean(partida.partidas_recursos_carga),
-      es_sin_liquidacion: Boolean(partida.partidas_recursos_sl),
-      recursos_importe_percibido: valoresGuardados?.importe ?? null,
-      recursos_cantidad_contribuyentes: valoresGuardados?.contribuyentes ?? null,
-      recursos_cantidad_pagaron: valoresGuardados?.pagaron ?? null,
-      children: [],
-    });
-  });
-
-  const jerarquia = [];
-
-  partidasMap.forEach((partida) => {
-    const parentId = partida.partidas_recursos_padre;
-    const esRaiz =
-      parentId === null ||
-      parentId === undefined ||
-      parentId === 0 ||
-      parentId === partida.partidas_recursos_codigo ||
-      !partidasMap.has(parentId);
-
-    if (esRaiz) {
-      jerarquia.push(partida);
-      return;
-    }
-
-    const padre = partidasMap.get(parentId);
-    if (padre) {
-      partida.partidas_recursos_padre_descripcion = padre.partidas_recursos_descripcion;
-      padre.children.push(partida);
-    } else {
-      jerarquia.push(partida);
-    }
-  });
-
-  return { jerarquia, recursosGuardados };
-};
-
-const aplanarJerarquiaPartidasRecursos = (nodos, nivel = 0) => {
-  const resultado = [];
-
-  nodos.forEach((nodo) => {
-    resultado.push({
-      codigo: nodo.partidas_recursos_codigo,
-      descripcion: nodo.partidas_recursos_descripcion,
-      nivel,
-      puedeCargar: nodo.puede_cargar,
-      esSinLiquidacion: nodo.es_sin_liquidacion,
-      importePercibido: nodo.recursos_importe_percibido,
-    });
-
-    if (Array.isArray(nodo.children) && nodo.children.length > 0) {
-      resultado.push(...aplanarJerarquiaPartidasRecursos(nodo.children, nivel + 1));
-    }
-  });
-
-  return resultado;
+  return recursos.map((r) => r.toJSON());
 };
 
 const obtenerImporteNumerico = (importe) => {
@@ -880,9 +720,9 @@ export const obtenerPartidasGastosMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const { jerarquia } = await construirJerarquiaPartidas(municipioNum, ejercicioNum, mesNum);
+    const gastos = await obtenerGastosMunicipio(municipioNum, ejercicioNum, mesNum);
 
-    return res.json(jerarquia);
+    return res.json(gastos);
   } catch (error) {
     console.error("❌ Error obteniendo partidas de gastos del municipio:", error);
     return res.status(500).json({ error: "Error obteniendo partidas de gastos" });
@@ -910,13 +750,9 @@ export const obtenerPartidasRecursosMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const { jerarquia } = await construirJerarquiaPartidasRecursos(
-      municipioNum,
-      ejercicioNum,
-      mesNum
-    );
+    const recursos = await obtenerRecursosMunicipio(municipioNum, ejercicioNum, mesNum);
 
-    return res.json(jerarquia);
+    return res.json(recursos);
   } catch (error) {
     console.error("❌ Error obteniendo partidas de recursos del municipio:", error);
     return res.status(500).json({ error: "Error obteniendo partidas de recursos" });
@@ -1088,35 +924,23 @@ export const upsertGastosMunicipio = async (req, res) => {
 
     for (const item of partidas) {
       try{
-        const codigo = Number(item?.partidas_gastos_codigo);
+        const codigo = Number(item?.codigo_partida);
 
-        const partidaGasto = await PartidaGasto.findOne({ where: { partidas_gastos_codigo: codigo } });
+        const datosGasto = {
+          codigo_partida: codigo,
+          descripcion: item?.descripcion ?? "",
+          codigo_fuente_financiera: Number(item?.codigo_fuente_financiera),
+          descripcion_fuente: item?.descripcion_fuente ?? "",
+          formulado: Number(item?.formulado ?? 0),
+          modificado: Number(item?.modificado ?? 0),
+          vigente: Number(item?.vigente ?? 0),
+          devengado: Number(item?.devengado ?? 0),
+        };
 
-        if (!partidaGasto) {
-          errores.push(`La partida con código ${item?.partidas_gastos_codigo} no existe en el catálogo de partidas de gastos.`);
-          continue;
-        }
-
-        if(partidaGasto && !partidaGasto.partidas_gastos_carga){
-          errores.push(`La partida con código ${item?.partidas_gastos_codigo} no permite carga de gastos.`);
-          continue;
-        }
-
-        const tieneImporte = Object.prototype.hasOwnProperty.call(item, "gastos_importe_devengado");
-        const importeValor = item?.gastos_importe_devengado;
-        let importeParsed;
-
-        if (tieneImporte) {
-          const normalizado = importeValor === null || importeValor === "" ? 0 : importeValor;
-          importeParsed = Number(normalizado);
-        }
-        const validGasto = GastosSchema.safeParse({
-          partidas_gastos_codigo: codigo,
-          gastos_importe_devengado: importeParsed,
-        });
+        const validGasto = GastosSchema.safeParse(datosGasto);
 
         if (!validGasto.success) {
-          errores.push(`Error procesando la partida con código ${item?.partidas_gastos_codigo}: ${zodErrorsToArray(validGasto.error.issues).join(", ")}`);
+          errores.push(`Error procesando la partida con código ${item?.codigo_partida}: ${zodErrorsToArray(validGasto.error.issues).join(", ")}`);
           continue;
         }
 
@@ -1124,7 +948,7 @@ export const upsertGastosMunicipio = async (req, res) => {
           gastos_ejercicio: ejercicioNum,
           gastos_mes: mesNum,
           municipio_id: municipioNum,
-          partidas_gastos_codigo: codigo,
+          codigo_partida: codigo,
         };
 
         const existente = await Gasto.findOne({ where, transaction });
@@ -1133,7 +957,7 @@ export const upsertGastosMunicipio = async (req, res) => {
           await Gasto.create(
             {
               ...where,
-              gastos_importe_devengado: importeParsed,
+              ...datosGasto,
             },
             { transaction }
           );
@@ -1141,27 +965,25 @@ export const upsertGastosMunicipio = async (req, res) => {
           continue;
         }
 
-        if (!tieneImporte) {
+        const cambiado =
+          existente.descripcion !== datosGasto.descripcion ||
+          Number(existente.codigo_fuente_financiera) !== datosGasto.codigo_fuente_financiera ||
+          existente.descripcion_fuente !== datosGasto.descripcion_fuente ||
+          Number(existente.formulado) !== datosGasto.formulado ||
+          Number(existente.modificado) !== datosGasto.modificado ||
+          Number(existente.vigente) !== datosGasto.vigente ||
+          Number(existente.devengado) !== datosGasto.devengado;
+
+        if (!cambiado) {
           sinCambios += 1;
           continue;
         }
 
-        const importeActual = Number(existente.gastos_importe_devengado);
-        if (!Number.isNaN(importeActual) && importeActual === importeParsed) {
-          sinCambios += 1;
-          continue;
-        }
-
-        await existente.update(
-          {
-            gastos_importe_devengado: importeParsed,
-          },
-          { transaction }
-        );
+        await existente.update(datosGasto, { transaction });
 
         actualizados += 1;
       } catch (error) {
-        errores.push(`Error procesando partida ${item?.partidas_gastos_codigo}: ${error.message}`);
+        errores.push(`Error procesando partida ${item?.codigo_partida}: ${error.message}`);
       }
     }
 
@@ -1227,70 +1049,57 @@ export const upsertRecursosMunicipio = async (req, res) => {
     let errores = [];
 
     for (const item of partidas) {
-      const tieneImporte = Object.prototype.hasOwnProperty.call(item, "recursos_importe_percibido");
+      try {
+        const codigo = Number(item?.codigo_recurso);
 
-      const validRecurso = RecursosSchema.safeParse({
-        partidas_recursos_codigo: item?.partidas_recursos_codigo,
-        recursos_importe_percibido: item?.recursos_importe_percibido,
-      });
+        const datosRecurso = {
+          codigo_recurso: codigo,
+          descripcion: item?.descripcion ?? "",
+          codigo_fuente_financiera: Number(item?.codigo_fuente_financiera),
+          descripcion_fuente: item?.descripcion_fuente ?? "",
+          vigente: Number(item?.vigente ?? 0),
+          percibido: Number(item?.percibido ?? 0),
+        };
 
-      if (!validRecurso.success) {
-        errores.push(`Error procesando la partida con código ${item?.partidas_recursos_codigo}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
-        continue;
-      }
+        const validRecurso = RecursosSchema.safeParse(datosRecurso);
 
-      const codigo = Number(item?.partidas_recursos_codigo);
-
-      const partidaRecurso = await PartidaRecurso.findOne({ where: { partidas_recursos_codigo: codigo } });
-      if (!partidaRecurso) {
-        errores.push(`La partida con código ${item?.partidas_recursos_codigo} no existe en el catálogo de partidas de recursos.`);
-        continue;
-      }
-
-      if(partidaRecurso && !partidaRecurso.partidas_recursos_carga){
-        errores.push(`La partida con código ${item?.partidas_recursos_codigo} no permite carga de recursos.`);
-        continue;
-      }
-
-      const where = {
-        recursos_ejercicio: ejercicioNum,
-        recursos_mes: mesNum,
-        municipio_id: municipioNum,
-        partidas_recursos_codigo: codigo,
-      };
-
-      const existente = await Recurso.findOne({ where, transaction });
-
-      if (!existente) {
-        const data = { ...where, recursos_importe_percibido: item.recursos_importe_percibido };
-
-        await Recurso.create(
-          {
-            ...data,
-          },
-          { transaction }
-        );
-        creados += 1;
-        continue;
-      }
-
-      let huboCambios = false;
-
-      if (tieneImporte) {
-        const importeActual = Number(existente.recursos_importe_percibido);
-        if (!Number.isNaN(importeActual) && importeActual !== item.recursos_importe_percibido) {
-          existente.recursos_importe_percibido = item.recursos_importe_percibido;
-          huboCambios = true;
+        if (!validRecurso.success) {
+          errores.push(`Error procesando el recurso con código ${item?.codigo_recurso}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
+          continue;
         }
-      }
 
-      if (!huboCambios) {
-        sinCambios += 1;
-        continue;
-      }
+        const where = {
+          recursos_ejercicio: ejercicioNum,
+          recursos_mes: mesNum,
+          municipio_id: municipioNum,
+          codigo_recurso: codigo,
+        };
 
-      await existente.save({ transaction });
-      actualizados += 1;
+        const existente = await Recurso.findOne({ where, transaction });
+
+        if (!existente) {
+          await Recurso.create({ ...where, ...datosRecurso }, { transaction });
+          creados += 1;
+          continue;
+        }
+
+        const cambiado =
+          existente.descripcion !== datosRecurso.descripcion ||
+          Number(existente.codigo_fuente_financiera) !== datosRecurso.codigo_fuente_financiera ||
+          existente.descripcion_fuente !== datosRecurso.descripcion_fuente ||
+          Number(existente.vigente) !== datosRecurso.vigente ||
+          Number(existente.percibido) !== datosRecurso.percibido;
+
+        if (!cambiado) {
+          sinCambios += 1;
+          continue;
+        }
+
+        await existente.update(datosRecurso, { transaction });
+        actualizados += 1;
+      } catch (error) {
+        errores.push(`Error procesando recurso ${item?.codigo_recurso}: ${error.message}`);
+      }
     }
 
     await transaction.commit();
@@ -1341,34 +1150,19 @@ export const generarInformeGastosMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const { jerarquia, gastosGuardados } = await construirJerarquiaPartidas(
-      municipioNum,
-      ejercicioNum,
-      mesNum
-    );
+    const gastos = await obtenerGastosMunicipio(municipioNum, ejercicioNum, mesNum);
 
-    if (!gastosGuardados || gastosGuardados.length === 0) {
+    if (!gastos || gastos.length === 0) {
       return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
     }
 
-    const partidasPlanas = aplanarJerarquiaPartidas(jerarquia);
-
-    const totalImporte = partidasPlanas.reduce((acumulado, partida) => {
-      if (!partida.puedeCargar) {
-        return acumulado;
-      }
-
-      if (partida.importe === null || partida.importe === undefined) {
-        return acumulado;
-      }
-
-      const importeNumerico = Number(partida.importe);
-      if (!Number.isFinite(importeNumerico)) {
-        return acumulado;
-      }
-
-      return acumulado + importeNumerico;
-    }, 0);
+    const totales = gastos.reduce((acc, g) => {
+      acc.formulado += Number(g.formulado) || 0;
+      acc.modificado += Number(g.modificado) || 0;
+      acc.vigente += Number(g.vigente) || 0;
+      acc.devengado += Number(g.devengado) || 0;
+      return acc;
+    }, { formulado: 0, modificado: 0, vigente: 0, devengado: 0 });
 
     const userRequest = req.user ?? null;
     const user = await Usuario.findOne({where: { usuario_id: userRequest.usuario_id }});
@@ -1381,8 +1175,8 @@ export const generarInformeGastosMunicipio = async (req, res) => {
       municipioNombre: municipio.municipio_nombre,
       ejercicio: ejercicioNum,
       mes: mesNum,
-      partidas: partidasPlanas,
-      totalImporte,
+      gastos,
+      totales,
       usuarioNombre: `${user.nombre} ${user.apellido}`,
       convenioNombre: convenio.nombre
     });
@@ -1435,34 +1229,17 @@ export const generarInformeRecursosMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const { jerarquia, recursosGuardados } = await construirJerarquiaPartidasRecursos(
-      municipioNum,
-      ejercicioNum,
-      mesNum
-    );
+    const recursos = await obtenerRecursosMunicipio(municipioNum, ejercicioNum, mesNum);
 
-    if (!recursosGuardados || recursosGuardados.length === 0) {
+    if (!recursos || recursos.length === 0) {
       return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
     }
 
-    const partidasPlanas = aplanarJerarquiaPartidasRecursos(jerarquia);
-
-    const totalImporte = partidasPlanas.reduce((acumulado, partida) => {
-      if (!partida.puedeCargar) {
-        return acumulado;
-      }
-
-      if (partida.importePercibido === null || partida.importePercibido === undefined) {
-        return acumulado;
-      }
-
-      const importeNumerico = Number(partida.importePercibido);
-      if (!Number.isFinite(importeNumerico)) {
-        return acumulado;
-      }
-
-      return acumulado + importeNumerico;
-    }, 0);
+    const totales = recursos.reduce((acc, r) => {
+      acc.vigente += Number(r.vigente) || 0;
+      acc.percibido += Number(r.percibido) || 0;
+      return acc;
+    }, { vigente: 0, percibido: 0 });
 
     const userRequest = req.user ?? null;
     const user = await Usuario.findOne({where: { usuario_id: userRequest.usuario_id }});
@@ -1475,8 +1252,8 @@ export const generarInformeRecursosMunicipio = async (req, res) => {
       municipioNombre: municipio.municipio_nombre,
       ejercicio: ejercicioNum,
       mes: mesNum,
-      partidas: partidasPlanas,
-      totalImporte,
+      recursos,
+      totales,
       usuarioNombre: `${user.nombre} ${user.apellido}`,
       convenioNombre: convenio.nombre
     });

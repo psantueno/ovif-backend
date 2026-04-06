@@ -2,9 +2,7 @@ import cron from "node-cron";
 import fs from "fs";
 import path from "path";
 import { Op } from "sequelize";
-import { 
-  PartidaGasto,
-  PartidaRecurso,
+import {
   RegimenLaboral,
   Gasto,
   Recurso,
@@ -29,8 +27,8 @@ import { enviarMensajeCierreModulos } from "../services/mailer.js";
 import crypto from "crypto";
 
 const MODULOS_POR_TIPO_PAUTA = {
-  gastos_recursos: ["Gastos", "Recursos"],
-  recaudaciones_remuneraciones: ["Recaudaciones", "Remuneraciones"],
+  gastos_recursos: ["GASTOS", "RECURSOS"],
+  recaudaciones_remuneraciones: ["RECAUDACIONES", "REMUNERACIONES"],
 };
 
 const obtenerModulosPorTipoPauta = (codigoTipoPauta) => {
@@ -106,616 +104,71 @@ const existeCierreModulo = async ({
   });
 
 const obtenerDatosPorModulo = async (modulo, municipioId, ejercicio, mes) => {
-  if (modulo === "Gastos") {
+  if (modulo === "GASTOS") {
     return obtenerDatosGastos(municipioId, ejercicio, mes);
   }
 
-  if (modulo === "Recursos") {
+  if (modulo === "RECURSOS") {
     return obtenerDatosRecursos(municipioId, ejercicio, mes);
   }
 
-  if (modulo === "Recaudaciones") {
+  if (modulo === "RECAUDACIONES") {
     return obtenerDatosRecaudaciones(municipioId, ejercicio, mes);
   }
 
-  if (modulo === "Remuneraciones") {
+  if (modulo === "REMUNERACIONES") {
     return obtenerDatosRemuneraciones(municipioId, ejercicio, mes);
   }
 
   throw new Error(`Módulo no soportado para cierre automático: ${modulo}`);
 };
 
-// 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
-cron.schedule(
-  "0 2 * * *",
-  //"*/60 * * * * *",
-  async () => {
-    const hoy = new Date();
-
-    let cierresRealizados = 0;
-    let errores = 0;
-
-    const hoyArg = new Date().toLocaleDateString("sv-SE", {
-      timeZone: "America/Argentina/Buenos_Aires"
-    })
-
-    // Crear copia para no mutar la fecha original
-    const fechaMenosTresMeses = new Date(hoyArg);
-    // getMonth utiliza valores 0-11. Actual: 6 meses atras
-    fechaMenosTresMeses.setMonth(fechaMenosTresMeses.getMonth() - 5);
-    const fechaMenosTresMesesStr = fechaMenosTresMeses
-      .toISOString()
-      .split("T")[0];
-
-    try {
-      // Buscar ejercicios vencidos recientemente por su fecha de cierre real
-      const ejerciciosFiltrados = await EjercicioMes.findAll({
-        where: {
-          fecha_fin: {
-            [Op.lt]: hoyArg,
-            [Op.gte]: fechaMenosTresMesesStr,
-          },
-        },
-      });
-
-      // Buscar municipios
-      const municipios = await Municipio.findAll({ attributes: ["municipio_id", "municipio_nombre"] });
-
-      // Buscar prorrogas con fecha_fin_nueva < CURRENT_DATE
-      const prorrogas = await ProrrogaMunicipio.findAll({
-        where: {
-          fecha_fin_nueva: {
-            [Op.lt]: hoyArg
-          }
-        }
-      });
-
-      const prorrogasFiltradas = prorrogas;
-
-      // Mails
-      const mailsParaEnviar = [];
-
-      // Procesar ejercicios
-      for (const ej of ejerciciosFiltrados) {
-        const { ejercicio, mes, convenio_id, pauta_id } = ej;
-        const pauta = await PautaConvenio.findByPk(pauta_id, {
-          include: [
-            {
-              model: TipoPauta,
-              as: "TipoPauta",
-              attributes: ["codigo", "nombre"],
-            },
-          ],
-        });
-        const tipoCodigo = pauta?.TipoPauta?.codigo ?? null;
-        const tipoNombre = pauta?.TipoPauta?.nombre ?? null;
-        const modulos = obtenerModulosPorTipoPauta(tipoCodigo);
-        if (!modulos.length) {
-          console.warn(
-            `⚠️ Cierre automático omitido para pauta ${pauta_id}: tipo de pauta no mapeado (${tipoCodigo ?? "sin-codigo"} - ${tipoNombre ?? "sin-nombre"})`
-          );
-          continue;
-        }
-        const convenio = await Convenio.findByPk(convenio_id);
-        const convenioNombre = obtenerNombreConvenioSeguro(convenio, convenio_id);
-
-        for (const municipio of municipios) {
-          for (const modulo of modulos) {
-            let informePath = null;
-            try {
-              const cierreExistente = await existeCierreModulo({
-                ejercicio,
-                mes,
-                municipioId: municipio.municipio_id,
-                convenioId: convenio_id,
-                pautaId: pauta_id,
-                modulo,
-                tipoCierre: "REGULAR",
-              });
-
-              if (cierreExistente) {
-                continue;
-              }
-
-              const numero = await generarNumeroUnico();
-              const datos = await obtenerDatosPorModulo(
-                modulo,
-                municipio.municipio_id,
-                ejercicio,
-                mes
-              );
-
-              informePath = await generarPDF(
-                modulo,
-                datos,
-                municipio.municipio_nombre,
-                ejercicio,
-                mes,
-                convenioNombre,
-                numero
-              );
-
-              await CierreModulo.create({
-                ejercicio,
-                mes,
-                municipio_id: municipio.municipio_id,
-                convenio_id,
-                pauta_id,
-                modulo,
-                tipo_cierre: "REGULAR",
-                informe_path: informePath,
-                observacion: `Cierre del módulo para el municipio ${municipio.municipio_nombre} exitoso`,
-                id_documento: numero
-              });
-
-              await CronLog.create({
-                nombre_tarea: "Resumen Municipio",
-                ejercicio,
-                mes,
-                municipio_id: municipio.municipio_id,
-                estado: "OK",
-                mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes}) para el municipio ${municipio.municipio_nombre} exitoso`,
-              });
-
-              cierresRealizados++;
-            } catch (error) {
-              errores++;
-              console.error(`❌ Error cerrando módulo ${modulo} para municipio ${municipio.municipio_id}:`, error.message);
-              if(informePath){
-                await fs.promises.unlink(informePath);
-              }
-              await CronLog.create({
-                nombre_tarea: "Resumen Municipio",
-                ejercicio,
-                mes,
-                municipio_id: municipio.municipio_id,
-                estado: "ERROR",
-                mensaje: `Error cerrando módulo (${modulo} / ${ejercicio}-${mes}) para el municipio ${municipio.municipio_nombre}: ${error.message}`,
-              });
-            }
-          }
-
-          //if(municipio.municipio_id == 37){
-            const municipioMails = await MunicipioMail.findAll({
-              where: { 
-                municipio_id: municipio.municipio_id
-              }
-            })
-
-            municipioMails.forEach((mm) => {
-              mailsParaEnviar.push({
-                to: mm.email,
-                nombre: mm.nombre,
-                ejercicio,
-                mes,
-                modulos,
-                esProrroga: false
-              })
-            })
-          //}
-        }
-      }
-
-      // Procesar prorrogas
-      for (const prorroga of prorrogasFiltradas) {
-        const { ejercicio, mes, convenio_id, pauta_id } = prorroga;
-        const pauta = await PautaConvenio.findByPk(pauta_id, {
-          include: [
-            {
-              model: TipoPauta,
-              as: "TipoPauta",
-              attributes: ["codigo", "nombre"],
-            },
-          ],
-        });
-        const tipoCodigo = pauta?.TipoPauta?.codigo ?? null;
-        const tipoNombre = pauta?.TipoPauta?.nombre ?? null;
-        const modulos = obtenerModulosPorTipoPauta(tipoCodigo);
-        if (!modulos.length) {
-          console.warn(
-            `⚠️ Cierre por prórroga omitido para pauta ${pauta_id}: tipo de pauta no mapeado (${tipoCodigo ?? "sin-codigo"} - ${tipoNombre ?? "sin-nombre"})`
-          );
-          continue;
-        }
-        const convenio = await Convenio.findByPk(convenio_id);
-        const convenioNombre = obtenerNombreConvenioSeguro(convenio, convenio_id);
-
-        for (const municipio of municipios) {
-          if (municipio.municipio_id !== prorroga.municipio_id) continue;
-          for (const modulo of modulos) {
-            let informePath = null;
-            try {
-              const cierreExistente = await existeCierreModulo({
-                ejercicio,
-                mes,
-                municipioId: municipio.municipio_id,
-                convenioId: convenio_id,
-                pautaId: pauta_id,
-                modulo,
-                tipoCierre: "PRORROGA",
-              });
-
-              if (cierreExistente) {
-                continue;
-              }
-
-              const numero = await generarNumeroUnico();
-              const datos = await obtenerDatosPorModulo(
-                modulo,
-                municipio.municipio_id,
-                ejercicio,
-                mes
-              );
-
-              informePath = await generarPDF(
-                modulo,
-                datos,
-                municipio.municipio_nombre,
-                ejercicio,
-                mes,
-                convenioNombre,
-                numero
-              );
-
-              await CierreModulo.create({
-                ejercicio,
-                mes,
-                municipio_id: municipio.municipio_id,
-                convenio_id,
-                pauta_id,
-                modulo,
-                tipo_cierre: "PRORROGA",
-                informe_path: informePath,
-                observacion: `Cierre del módulo ${modulo} para el municipio ${municipio.municipio_nombre} exitoso.`,
-                id_documento: numero
-              });
-
-              await CronLog.create({
-                nombre_tarea: "Resumen Municipio",
-                ejercicio,
-                mes,
-                municipio_id: municipio.municipio_id,
-                estado: "OK",
-                mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes} (Prorroga)) para el municipio ${municipio.municipio_nombre} exitoso`,
-              });
-
-              cierresRealizados++;
-            } catch (error) {
-              errores++;
-              console.error(`❌ Error cerrando módulo ${modulo} para municipio ${municipio.municipio_id} por prorroga:`, error.message);
-              if(informePath){
-                await fs.promises.unlink(informePath);
-              }
-              await CronLog.create({
-                nombre_tarea: "Resumen municipio",
-                ejercicio,
-                mes,
-                municipio_id: municipio.municipio_id,
-                estado: "ERROR",
-                mensaje: `Error cerrando módulo (${modulo} / ${ejercicio}-${mes} (Prorroga)) para el municipio ${municipio.municipio_nombre}: ${error.message}`,
-              });
-            }
-          }
-
-          //if(municipio.municipio_id == 37){
-            const municipioMails = await MunicipioMail.findAll({
-              where: { 
-                municipio_id: municipio.municipio_id
-              }
-            })
-
-            municipioMails.forEach((mm) => {
-              mailsParaEnviar.push({
-                to: mm.email,
-                nombre: mm.nombre,
-                ejercicio,
-                mes,
-                modulos,
-                esProrroga: true
-              })
-            })
-          //}
-        }
-      }
-
-      // Registrar log general
-      await CronLog.create({
-        nombre_tarea: "Resumen general",
-        estado: "OK",
-        mensaje: `Cierre automático completado. ${cierresRealizados} módulos cerrados, ${errores} errores.`
-      });
-
-      console.log(
-        `🟢 [CRON ${hoy}] Cierre automático completado (${cierresRealizados} cierres, ${errores} errores).`
-      );
-
-      // Enviar mails
-      mailsParaEnviar.forEach(async (m) => {
-        await enviarMensajeCierreModulos(m.to, m.nombre, m.ejercicio, m.mes, m.modulos, m.esProrroga)
-      })
-    } catch (error) {
-      console.error("💥 Error general en cierre automático:", error);
-      try {
-        await CronLog.create({
-          nombre_tarea: "Resumen general",
-          estado: "ERROR",
-          mensaje: `Error general: ${error.message}`,
-        });
-      } catch (logErr) {
-        console.error("⚠️ No se pudo registrar el error en CronLog:", logErr.message);
-      }
-    }
-  },
-  {
-    timezone: "America/Argentina/Buenos_Aires",
-  }
-);
-
-console.log(
-  "🕑 CRON programado: Cierre automático diario a las 2 AM (America/Argentina/Buenos_Aires)"
-);
-
-const construirJerarquiaPartidas = async (municipioId, ejercicio, mes) => {
-  const [partidas, gastosGuardados] = await Promise.all([
-    PartidaGasto.findAll({
-      order: [
-        ["partidas_gastos_padre", "ASC"],
-        ["partidas_gastos_codigo", "ASC"],
-      ],
-    }),
-    Gasto.findAll({
-      where: {
-        gastos_ejercicio: ejercicio,
-        gastos_mes: mes,
-        municipio_id: municipioId,
-      },
-    }),
-  ]);
-
-  const gastosMap = new Map();
-  gastosGuardados.forEach((gasto) => {
-    const importe = gasto.gastos_importe_devengado;
-    gastosMap.set(
-      gasto.partidas_gastos_codigo,
-      importe === null ? null : importe
-    );
+const obtenerGastosCron = async (municipioId, ejercicio, mes) => {
+  const gastos = await Gasto.findAll({
+    where: {
+      gastos_ejercicio: ejercicio,
+      gastos_mes: mes,
+      municipio_id: municipioId,
+    },
+    order: [["codigo_partida", "ASC"]],
   });
 
-  const partidasMap = new Map();
-  partidas.forEach((partida) => {
-    const codigo = partida.partidas_gastos_codigo;
-    partidasMap.set(codigo, {
-      ...partida.toJSON(),
-      partidas_gastos_padre_descripcion: null,
-      puede_cargar: Boolean(partida.partidas_gastos_carga),
-      importe_devengado: gastosMap.has(codigo) ? gastosMap.get(codigo) : null,
-      children: [],
-    });
-  });
-
-  const jerarquia = [];
-
-  partidasMap.forEach((partida) => {
-    const parentId = partida.partidas_gastos_padre;
-    const esRaiz =
-      parentId === null ||
-      parentId === undefined ||
-      parentId === 0 ||
-      parentId === partida.partidas_gastos_codigo ||
-      !partidasMap.has(parentId);
-
-    if (esRaiz) {
-      jerarquia.push(partida);
-      return;
-    }
-
-    const padre = partidasMap.get(parentId);
-    if (padre) {
-      partida.partidas_gastos_padre_descripcion = padre.partidas_gastos_descripcion;
-      padre.children.push(partida);
-    } else {
-      jerarquia.push(partida);
-    }
-  });
-
-  return { jerarquia, gastosGuardados };
-};
-
-const aplanarJerarquiaPartidas = (nodos, nivel = 0) => {
-  const resultado = [];
-
-  nodos.forEach((nodo) => {
-    resultado.push({
-      codigo: nodo.partidas_gastos_codigo,
-      descripcion: nodo.partidas_gastos_descripcion,
-      nivel,
-      puedeCargar: nodo.puede_cargar,
-      importe: nodo.importe_devengado,
-    });
-
-    if (Array.isArray(nodo.children) && nodo.children.length > 0) {
-      resultado.push(...aplanarJerarquiaPartidas(nodo.children, nivel + 1));
-    }
-  });
-
-  return resultado;
-};
-
-const construirJerarquiaPartidasRecursos = async (municipioId, ejercicio, mes) => {
-  const [partidas, recursosGuardados] = await Promise.all([
-    PartidaRecurso.findAll({
-      order: [
-        ["partidas_recursos_padre", "ASC"],
-        ["partidas_recursos_codigo", "ASC"],
-      ],
-    }),
-    Recurso.findAll({
-      where: {
-        recursos_ejercicio: ejercicio,
-        recursos_mes: mes,
-        municipio_id: municipioId,
-      },
-    }),
-  ]);
-
-  const recursosMap = new Map();
-  recursosGuardados.forEach((recurso) => {
-    const importe = recurso.recursos_importe_percibido;
-    const contribuyentes = recurso.recursos_cantidad_contribuyentes;
-    const pagaron = recurso.recursos_cantidad_pagaron;
-
-    recursosMap.set(recurso.partidas_recursos_codigo, {
-      importe: importe === null ? null : importe,
-      contribuyentes:
-        contribuyentes === null || contribuyentes === undefined
-          ? null
-          : Number(contribuyentes),
-      pagaron:
-        pagaron === null || pagaron === undefined ? null : Number(pagaron),
-    });
-  });
-
-  const partidasMap = new Map();
-  partidas.forEach((partida) => {
-    const codigo = partida.partidas_recursos_codigo;
-    const valoresGuardados = recursosMap.get(codigo);
-
-    partidasMap.set(codigo, {
-      ...partida.toJSON(),
-      partidas_recursos_padre_descripcion: null,
-      puede_cargar: Boolean(partida.partidas_recursos_carga),
-      es_sin_liquidacion: Boolean(partida.partidas_recursos_sl),
-      recursos_importe_percibido: valoresGuardados?.importe ?? null,
-      recursos_cantidad_contribuyentes: valoresGuardados?.contribuyentes ?? null,
-      recursos_cantidad_pagaron: valoresGuardados?.pagaron ?? null,
-      children: [],
-    });
-  });
-
-  const jerarquia = [];
-
-  partidasMap.forEach((partida) => {
-    const parentId = partida.partidas_recursos_padre;
-    const esRaiz =
-      parentId === null ||
-      parentId === undefined ||
-      parentId === 0 ||
-      parentId === partida.partidas_recursos_codigo ||
-      !partidasMap.has(parentId);
-
-    if (esRaiz) {
-      jerarquia.push(partida);
-      return;
-    }
-
-    const padre = partidasMap.get(parentId);
-    if (padre) {
-      partida.partidas_recursos_padre_descripcion = padre.partidas_recursos_descripcion;
-      padre.children.push(partida);
-    } else {
-      jerarquia.push(partida);
-    }
-  });
-
-  return { jerarquia, recursosGuardados };
-};
-
-const aplanarJerarquiaPartidasRecursos = (nodos, nivel = 0) => {
-  const resultado = [];
-
-  nodos.forEach((nodo) => {
-    resultado.push({
-      codigo: nodo.partidas_recursos_codigo,
-      descripcion: nodo.partidas_recursos_descripcion,
-      nivel,
-      puedeCargar: nodo.puede_cargar,
-      esSinLiquidacion: nodo.es_sin_liquidacion,
-      importePercibido: nodo.recursos_importe_percibido,
-      totalContribuyentes: nodo.recursos_cantidad_contribuyentes,
-      contribuyentesPagaron: nodo.recursos_cantidad_pagaron,
-    });
-
-    if (Array.isArray(nodo.children) && nodo.children.length > 0) {
-      resultado.push(...aplanarJerarquiaPartidasRecursos(nodo.children, nivel + 1));
-    }
-  });
-
-  return resultado;
+  return gastos.map((g) => g.toJSON());
 };
 
 const obtenerDatosGastos = async (municipioId, ejercicio, mes) => {
-  const datos = {
-    partidas: [],
-    totalImporte: 0
-  };
-  const { jerarquia, gastosGuardados } = await construirJerarquiaPartidas(
-    municipioId,
-    ejercicio,
-    mes
-  );
+  const gastos = await obtenerGastosCron(municipioId, ejercicio, mes);
 
-  if (gastosGuardados && gastosGuardados.length > 0) {
-    const partidasPlanas = aplanarJerarquiaPartidas(jerarquia);
+  const totales = gastos.reduce((acc, g) => {
+    acc.formulado += Number(g.formulado) || 0;
+    acc.modificado += Number(g.modificado) || 0;
+    acc.vigente += Number(g.vigente) || 0;
+    acc.devengado += Number(g.devengado) || 0;
+    return acc;
+  }, { formulado: 0, modificado: 0, vigente: 0, devengado: 0 });
 
-    const totalImporte = partidasPlanas.reduce((acumulado, partida) => {
-      if (!partida.puedeCargar) {
-        return acumulado;
-      }
-
-      if (partida.importe === null || partida.importe === undefined) {
-        return acumulado;
-      }
-
-      const importeNumerico = Number(partida.importe);
-      if (!Number.isFinite(importeNumerico)) {
-        return acumulado;
-      }
-
-      return acumulado + importeNumerico;
-    }, 0);
-
-    datos.partidas = partidasPlanas;
-    datos.totalImporte = totalImporte;
-  }
-
-  return datos;
+  return { gastos, totales };
 }
 
 const obtenerDatosRecursos = async (municipioId, ejercicio, mes) => {
-  const datos = {
-    partidas: [],
-    totalImporte: 0
-  };
-  const { jerarquia, recursosGuardados } = await construirJerarquiaPartidasRecursos(
-    municipioId,
-    ejercicio,
-    mes
-  );
+  const recursosRaw = await Recurso.findAll({
+    where: {
+      recursos_ejercicio: ejercicio,
+      recursos_mes: mes,
+      municipio_id: municipioId,
+    },
+    order: [["codigo_recurso", "ASC"]],
+  });
 
-  if (recursosGuardados && recursosGuardados.length > 0) {
-    const partidasPlanas = aplanarJerarquiaPartidasRecursos(jerarquia);
+  const recursos = recursosRaw.map((r) => r.toJSON());
 
-    const totalImporte = partidasPlanas.reduce((acumulado, partida) => {
-      if (!partida.puedeCargar) {
-        return acumulado;
-      }
+  const totales = recursos.reduce((acc, r) => {
+    acc.vigente += Number(r.vigente) || 0;
+    acc.percibido += Number(r.percibido) || 0;
+    return acc;
+  }, { vigente: 0, percibido: 0 });
 
-      if (partida.importePercibido === null || partida.importePercibido === undefined) {
-        return acumulado;
-      }
-
-      const importeNumerico = Number(partida.importePercibido);
-      if (!Number.isFinite(importeNumerico)) {
-        return acumulado;
-      }
-
-      return acumulado + importeNumerico;
-    }, 0);
-    datos.partidas = partidasPlanas;
-    datos.totalImporte = totalImporte;
-  }
-
-  return datos;
+  return { recursos, totales };
 }
 
 const obtenerDatosRecaudaciones = async (municipioId, ejercicio, mes) => {
@@ -852,18 +305,15 @@ const generarNumero = (digitos = 12) => {
 }
 
 const generarNumeroUnico = async () => {
-  let unico = generarNumero();
-  let valido = false;
-  while(!valido){
-    const repetido = await CierreModulo.findOne({
-      where: {
-        id_documento: unico
-      }
-    })
-
-    valido = repetido ? false : true;
+  const MAX_INTENTOS = 10;
+  for (let intento = 0; intento < MAX_INTENTOS; intento++) {
+    const unico = generarNumero();
+    const repetido = await CierreModulo.findOne({ where: { id_documento: unico } });
+    if (!repetido) {
+      return unico;
+    }
   }
-  return unico;
+  throw new Error("No se pudo generar un id_documento único tras 10 intentos");
 }
 
 const sanitizarCadena = (cadena, separador = " ") => {
@@ -919,29 +369,29 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
   );
 
   let buffer;
-  if (modulo === 'Gastos') {
+  if (modulo === 'GASTOS') {
     buffer = await buildInformeGastos({
       municipioNombre,
       ejercicio,
       mes,
-      partidas: datos.partidas,
-      totalImporte: datos.totalImporte,
+      gastos: datos.gastos,
+      totales: datos.totales,
       usuarioNombre: 'Sistema Automático',
       convenioNombre,
       cierreId: numero
     });
-  } else if (modulo === 'Recursos') {
+  } else if (modulo === 'RECURSOS') {
     buffer = await buildInformeRecursos({
       municipioNombre,
       ejercicio,
       mes,
-      partidas: datos.partidas,
-      totalImporte: datos.totalImporte,
+      recursos: datos.recursos,
+      totales: datos.totales,
       usuarioNombre: 'Sistema Automático',
       convenioNombre,
       cierreId: numero
     });
-  } else if (modulo === 'Recaudaciones') {
+  } else if (modulo === 'RECAUDACIONES') {
     buffer = await buildInformeRecaudaciones({
       municipioNombre,
       ejercicio,
@@ -953,7 +403,7 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
       convenioNombre,
       cierreId: numero
     });
-  } else if (modulo === 'Remuneraciones') {
+  } else if (modulo === 'REMUNERACIONES') {
     buffer = await buildInformeRemuneraciones({
       municipioNombre,
       ejercicio,
@@ -968,3 +418,332 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
   fs.writeFileSync(filePath, buffer);
   return path.join(rutaInformes, fileName);
 };
+
+// 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
+cron.schedule(
+  "0 2 * * *",
+  //"*/600 * * * * *",
+  async () => {
+    console.log(`🟡 [CRON ${new Date()}] Iniciando proceso de cierre automático...`);
+    const hoy = new Date();
+
+    let cierresRealizados = 0;
+    let errores = 0;
+
+    const hoyArg = new Date().toLocaleDateString("sv-SE", {
+      timeZone: "America/Argentina/Buenos_Aires"
+    })
+
+    // Crear copia para no mutar la fecha original. Ventana de búsqueda: 6 meses atrás
+    const fechaMenosSeisMeses = new Date(hoyArg);
+    fechaMenosSeisMeses.setMonth(fechaMenosSeisMeses.getMonth() - 6);
+    const fechaMenosSeisMesesStr = fechaMenosSeisMeses
+      .toISOString()
+      .split("T")[0];
+
+    try {
+      // Buscar ejercicios vencidos recientemente por su fecha de cierre real
+      const ejerciciosFiltrados = await EjercicioMes.findAll({
+        where: {
+          fecha_fin: {
+            [Op.lt]: hoyArg,
+            [Op.gte]: fechaMenosSeisMesesStr,
+          },
+        },
+      });
+
+      // Buscar municipios
+      const municipios = await Municipio.findAll({ attributes: ["municipio_id", "municipio_nombre"] });
+
+      // Buscar prorrogas vencidas dentro de la misma ventana de 6 meses
+      const prorrogas = await ProrrogaMunicipio.findAll({
+        where: {
+          fecha_fin_nueva: {
+            [Op.lt]: hoyArg,
+            [Op.gte]: fechaMenosSeisMesesStr,
+          }
+        }
+      });
+
+      // Mails
+      const mailsParaEnviar = [];
+
+      // Procesar ejercicios
+      for (const ej of ejerciciosFiltrados) {
+        const { ejercicio, mes, convenio_id, pauta_id } = ej;
+        const pauta = await PautaConvenio.findByPk(pauta_id, {
+          include: [
+            {
+              model: TipoPauta,
+              as: "TipoPauta",
+              attributes: ["codigo", "nombre"],
+            },
+          ],
+        });
+        const tipoCodigo = pauta?.TipoPauta?.codigo ?? null;
+        const tipoNombre = pauta?.TipoPauta?.nombre ?? null;
+        const modulos = obtenerModulosPorTipoPauta(tipoCodigo);
+        if (!modulos.length) {
+          console.warn(
+            `⚠️ Cierre automático omitido para pauta ${pauta_id}: tipo de pauta no mapeado (${tipoCodigo ?? "sin-codigo"} - ${tipoNombre ?? "sin-nombre"})`
+          );
+          continue;
+        }
+        const convenio = await Convenio.findByPk(convenio_id);
+        const convenioNombre = obtenerNombreConvenioSeguro(convenio, convenio_id);
+
+        for (const municipio of municipios) {
+          for (const modulo of modulos) {
+            let informePath = null;
+            try {
+              const cierreExistente = await existeCierreModulo({
+                ejercicio,
+                mes,
+                municipioId: municipio.municipio_id,
+                convenioId: convenio_id,
+                pautaId: pauta_id,
+                modulo,
+                tipoCierre: "REGULAR",
+              });
+
+              if (cierreExistente) {
+                continue;
+              }
+
+              const numero = await generarNumeroUnico();
+              const datos = await obtenerDatosPorModulo(
+                modulo,
+                municipio.municipio_id,
+                ejercicio,
+                mes
+              );
+
+              informePath = await generarPDF(
+                modulo,
+                datos,
+                municipio.municipio_nombre,
+                ejercicio,
+                mes,
+                convenioNombre,
+                numero
+              );
+
+              await CierreModulo.create({
+                ejercicio,
+                mes,
+                municipio_id: municipio.municipio_id,
+                convenio_id,
+                pauta_id,
+                modulo,
+                tipo_cierre: "REGULAR",
+                informe_path: informePath,
+                observacion: `Cierre del módulo para el municipio ${municipio.municipio_nombre} exitoso`,
+                id_documento: numero
+              });
+
+              await CronLog.create({
+                nombre_tarea: "Resumen Municipio",
+                ejercicio,
+                mes,
+                municipio_id: municipio.municipio_id,
+                estado: "OK",
+                mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes}) para el municipio ${municipio.municipio_nombre} exitoso`,
+              });
+
+              cierresRealizados++;
+            } catch (error) {
+              errores++;
+              console.error(`❌ Error cerrando módulo ${modulo} para municipio ${municipio.municipio_id}:`, error.message);
+              if(informePath){
+                await fs.promises.unlink(informePath);
+              }
+              await CronLog.create({
+                nombre_tarea: "Resumen Municipio",
+                ejercicio,
+                mes,
+                municipio_id: municipio.municipio_id,
+                estado: "ERROR",
+                mensaje: `Error cerrando módulo (${modulo} / ${ejercicio}-${mes}) para el municipio ${municipio.municipio_nombre}: ${error.message}`,
+              });
+            }
+          }
+
+          /*
+            const municipioMails = await MunicipioMail.findAll({
+              where: { 
+                municipio_id: municipio.municipio_id
+              }
+            })
+
+            municipioMails.forEach((mm) => {
+              mailsParaEnviar.push({
+                to: mm.email,
+                nombre: mm.nombre,
+                ejercicio,
+                mes,
+                modulos,
+                esProrroga: false
+              })
+            })
+          }*/
+        }
+      }
+
+      // Procesar prorrogas
+      for (const prorroga of prorrogas) {
+        const { ejercicio, mes, convenio_id, pauta_id } = prorroga;
+        const pauta = await PautaConvenio.findByPk(pauta_id, {
+          include: [
+            {
+              model: TipoPauta,
+              as: "TipoPauta",
+              attributes: ["codigo", "nombre"],
+            },
+          ],
+        });
+        const tipoCodigo = pauta?.TipoPauta?.codigo ?? null;
+        const tipoNombre = pauta?.TipoPauta?.nombre ?? null;
+        const modulos = obtenerModulosPorTipoPauta(tipoCodigo);
+        if (!modulos.length) {
+          console.warn(
+            `⚠️ Cierre por prórroga omitido para pauta ${pauta_id}: tipo de pauta no mapeado (${tipoCodigo ?? "sin-codigo"} - ${tipoNombre ?? "sin-nombre"})`
+          );
+          continue;
+        }
+        const convenio = await Convenio.findByPk(convenio_id);
+        const convenioNombre = obtenerNombreConvenioSeguro(convenio, convenio_id);
+
+        for (const municipio of municipios) {
+          if (municipio.municipio_id !== prorroga.municipio_id) continue;
+          for (const modulo of modulos) {
+            let informePath = null;
+            try {
+              const cierreExistente = await existeCierreModulo({
+                ejercicio,
+                mes,
+                municipioId: municipio.municipio_id,
+                convenioId: convenio_id,
+                pautaId: pauta_id,
+                modulo,
+                tipoCierre: "PRORROGA",
+              });
+
+              if (cierreExistente) {
+                continue;
+              }
+
+              const numero = await generarNumeroUnico();
+              const datos = await obtenerDatosPorModulo(
+                modulo,
+                municipio.municipio_id,
+                ejercicio,
+                mes
+              );
+
+              informePath = await generarPDF(
+                modulo,
+                datos,
+                municipio.municipio_nombre,
+                ejercicio,
+                mes,
+                convenioNombre,
+                numero
+              );
+
+              await CierreModulo.create({
+                ejercicio,
+                mes,
+                municipio_id: municipio.municipio_id,
+                convenio_id,
+                pauta_id,
+                modulo,
+                tipo_cierre: "PRORROGA",
+                informe_path: informePath,
+                observacion: `Cierre del módulo ${modulo} para el municipio ${municipio.municipio_nombre} exitoso.`,
+                id_documento: numero
+              });
+
+              await CronLog.create({
+                nombre_tarea: "Resumen Municipio",
+                ejercicio,
+                mes,
+                municipio_id: municipio.municipio_id,
+                estado: "OK",
+                mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes} (Prorroga)) para el municipio ${municipio.municipio_nombre} exitoso`,
+              });
+
+              cierresRealizados++;
+            } catch (error) {
+              errores++;
+              console.error(`❌ Error cerrando módulo ${modulo} para municipio ${municipio.municipio_id} por prorroga:`, error.message);
+              if(informePath){
+                await fs.promises.unlink(informePath);
+              }
+              await CronLog.create({
+                nombre_tarea: "Resumen Municipio",
+                ejercicio,
+                mes,
+                municipio_id: municipio.municipio_id,
+                estado: "ERROR",
+                mensaje: `Error cerrando módulo (${modulo} / ${ejercicio}-${mes} (Prorroga)) para el municipio ${municipio.municipio_nombre}: ${error.message}`,
+              });
+            }
+          }
+
+          /*
+            const municipioMails = await MunicipioMail.findAll({
+              where: { 
+                municipio_id: municipio.municipio_id
+              }
+            })
+
+            municipioMails.forEach((mm) => {
+              mailsParaEnviar.push({
+                to: mm.email,
+                nombre: mm.nombre,
+                ejercicio,
+                mes,
+                modulos,
+                esProrroga: true
+              })
+            })
+          }*/
+        }
+      }
+
+      // Registrar log general
+      await CronLog.create({
+        nombre_tarea: "Resumen general",
+        estado: errores > 0 ? "WARNING" : "OK",
+        mensaje: `Cierre automático completado. ${cierresRealizados} módulos cerrados, ${errores} errores.`
+      });
+
+      console.log(
+        `🟢 [CRON ${hoy}] Cierre automático completado (${cierresRealizados} cierres, ${errores} errores).`
+      );
+
+      /*// Enviar mails
+      mailsParaEnviar.forEach(async (m) => {
+        await enviarMensajeCierreModulos(m.to, m.nombre, m.ejercicio, m.mes, m.modulos, m.esProrroga)
+      })*/
+    } catch (error) {
+      console.error("💥 Error general en cierre automático:", error);
+      try {
+        await CronLog.create({
+          nombre_tarea: "Resumen general",
+          estado: "ERROR",
+          mensaje: `Error general: ${error.message}`,
+        });
+      } catch (logErr) {
+        console.error("⚠️ No se pudo registrar el error en CronLog:", logErr.message);
+      }
+    }
+  },
+  {
+    timezone: "America/Argentina/Buenos_Aires",
+  }
+);
+
+console.log(
+  "🕑 CRON programado: Cierre automático diario a las 2 AM (America/Argentina/Buenos_Aires)"
+);
