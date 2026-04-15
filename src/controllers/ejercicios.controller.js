@@ -12,6 +12,13 @@ import {
   TipoPauta
 } from "../models/index.js";
 import { Op } from "sequelize";
+import {
+  CIERRE_MODULOS,
+  TIPOS_CIERRE_MODULO,
+  getModuloCierreAliases,
+  normalizeModuloCierre,
+  normalizeTipoCierre,
+} from "../utils/cierreModulo.js";
 
 import path from "path";
 import fs from "fs";
@@ -34,8 +41,10 @@ const toISODateString = (value) => {
   return date.toISOString().split("T")[0];
 };
 
-const MODULOS_VALIDOS = ["GASTOS", "RECURSOS", "RECAUDACIONES", "PERSONAL", "REMUNERACIONES"];
-const TIPOS_CIERRE = ["AUTOMATICO", "MANUAL"];
+const MODULOS_VALIDOS = [
+  ...Object.values(CIERRE_MODULOS),
+];
+const TIPOS_CIERRE = [...Object.values(TIPOS_CIERRE_MODULO)];
 
 
 // Listar todos los ejercicios
@@ -628,12 +637,12 @@ export const obtenerFiltrosInformes = async (req, res) => {
   try {
     const where = { municipio_id: municipioId };
 
-    const cierresModulosMunicipio = await CierreModulo.findAll({
+    const cierresModulosMunicipioRaw = await CierreModulo.findAll({
       attributes: ['ejercicio', 'mes', 'modulo'],
       where,
       order: [['ejercicio', "DESC"], ['mes', 'ASC']],
       raw: true
-    })
+    });
 
     const ejerciciosMesesCerrados = await EjercicioMesCerrado.findAll({
       attributes: ['ejercicio', 'mes'],
@@ -642,7 +651,7 @@ export const obtenerFiltrosInformes = async (req, res) => {
       raw: true
     })
 
-    const MODULOS = ['GASTOS', 'RECURSOS'];
+    const MODULOS = [CIERRE_MODULOS.GASTOS, CIERRE_MODULOS.RECURSOS];
 
     const mappedEjerciciosMesesCerrados = ejerciciosMesesCerrados.flatMap(item =>
       MODULOS.map(modulo => ({
@@ -650,7 +659,23 @@ export const obtenerFiltrosInformes = async (req, res) => {
         modulo
       }))
     );
-    return res.json([...cierresModulosMunicipio, ...mappedEjerciciosMesesCerrados])
+
+    const cierresNormalizados = cierresModulosMunicipioRaw
+      .map((item) => ({
+        ...item,
+        modulo: normalizeModuloCierre(item.modulo),
+      }))
+      .filter((item) => item.modulo);
+
+    const unicos = new Map();
+    [...cierresNormalizados, ...mappedEjerciciosMesesCerrados].forEach((item) => {
+      const key = `${item.ejercicio}-${item.mes}-${item.modulo}`;
+      if (!unicos.has(key)) {
+        unicos.set(key, item);
+      }
+    });
+
+    return res.json(Array.from(unicos.values()))
   } catch (error) {
     console.error("❌ Error obteniendo filtros de informes:", error);
     return res.status(500).json({ error: "Error obteniendo filtros" });
@@ -661,7 +686,7 @@ export const descargarInforme = async (req, res) => {
   const municipioId = req.query?.municipio_id ?? req.params?.municipioId;
   const ejercicioRaw = req.query?.ejercicio;
   const mesRaw = req.query?.mes;
-  const modulo = req.query?.modulo?.toUpperCase();
+  const modulo = normalizeModuloCierre(req.query?.modulo);
 
   const ejercicio = Number.parseInt(ejercicioRaw, 10);
   const mes = Number.parseInt(mesRaw, 10);
@@ -685,20 +710,27 @@ export const descargarInforme = async (req, res) => {
     let filename = null
     // agregar luego: && mes >= 4
     if(ejercicio >= 2026){
+      const moduloAliases = getModuloCierreAliases(modulo);
       const cierres= await CierreModulo.findAll({
         where: {
           municipio_id: municipioId,
           ejercicio,
           mes,
-          modulo,
+          modulo: { [Op.in]: moduloAliases },
           informe_path: { [Op.ne]: null },
         },
         order: [["fecha_cierre", "DESC"]],
         raw: true
       });
 
-      if(cierres.length > 1) cierre = cierres.find(c => c.tipo_cierre === 'PRORROGA') || cierres[0]
-      else cierre = cierres[0]
+      if (cierres.length > 1) {
+        cierre =
+          cierres.find(
+            (item) =>
+              normalizeTipoCierre(item.tipo_cierre) ===
+              TIPOS_CIERRE_MODULO.PRORROGA
+          ) || cierres[0];
+      } else cierre = cierres[0]
 
       filename = cierre.informe_path
     }

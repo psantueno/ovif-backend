@@ -1,5 +1,6 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../../config/db.js";
+import { CIERRE_MODULOS, TIPOS_CIERRE_MODULO } from "../../utils/cierreModulo.js";
 
 const CierreModulo = sequelize.define("CierreModulo", {
   cierre_id: {
@@ -28,7 +29,7 @@ const CierreModulo = sequelize.define("CierreModulo", {
     allowNull: false,
   },
   modulo: {
-    type: DataTypes.ENUM("GASTOS", "RECURSOS", "RECAUDACIONES", "PERSONAL"),
+    type: DataTypes.ENUM(...Object.values(CIERRE_MODULOS)),
     allowNull: false,
   },
   fecha_cierre: {
@@ -45,9 +46,9 @@ const CierreModulo = sequelize.define("CierreModulo", {
     allowNull: true,
   },
   tipo_cierre: {
-    type: DataTypes.ENUM("AUTOMATICO", "MANUAL"),
+    type: DataTypes.ENUM(...Object.values(TIPOS_CIERRE_MODULO)),
     allowNull: false,
-    defaultValue: "AUTOMATICO",
+    defaultValue: TIPOS_CIERRE_MODULO.REGULAR,
   },
   fecha_creacion: {
     type: DataTypes.DATE,
@@ -66,4 +67,3 @@ const CierreModulo = sequelize.define("CierreModulo", {
 });
 
 export default CierreModulo;
-

@@ -19,7 +19,7 @@ const Gasto = sequelize.define("Gasto", {
     primaryKey: true
   },
   gastos_importe_devengado: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: false
   }},
   {

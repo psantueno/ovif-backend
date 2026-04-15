@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { getModuloCierreLabel } from "../utils/cierreModulo.js";
 
 const smtpPort = Number(process.env.SMTP_PORT || 25);
 
@@ -115,13 +116,20 @@ const obtenerNombreMes = (mesNumero) => {
 const armarMensajeCierreModulos = (ejercicio, mes, modulos, esProrroga) => {
     const fallback = "Le informamos que se cerró el plazo de entrega de información";
 
-    if(!Number(ejercicio) && !Number(mes)) return fallback;
+    if (!Number(ejercicio) && !Number(mes)) return fallback;
 
-    if(!Array.isArray(modulos) && modulos.length < 2) return fallback;
+    if (!Array.isArray(modulos) || modulos.length === 0) return fallback;
 
-    const seccionEjercicioMes = `${obtenerNombreMes(mes)} ${ejercicio}`
+    const seccionEjercicioMes = `${obtenerNombreMes(mes)} ${ejercicio}`;
+    const modulosNormalizados = modulos
+        .map((modulo) => getModuloCierreLabel(modulo))
+        .filter(Boolean);
+    const modulosTexto = new Intl.ListFormat("es-AR", {
+        style: "long",
+        type: "conjunction",
+    }).format(modulosNormalizados);
 
-    let mensajeCierre = `Le informamos que se cerró el plazo de entrega de información para los módulos ${modulos[0]} y ${modulos[1]}`
+    let mensajeCierre = `Le informamos que se cerró el plazo de entrega de información para ${modulosNormalizados.length > 1 ? "los módulos" : "el módulo"} ${modulosTexto}`;
 
     if (esProrroga) {
         mensajeCierre += ` correspondientes a la prorroga para el período ${seccionEjercicioMes}`;

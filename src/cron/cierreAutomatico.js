@@ -10,6 +10,7 @@ import {
   Recurso,
   Recaudacion,
   Remuneracion,
+  DeterminacionTributaria,
   EjercicioMes,
   ProrrogaMunicipio,
   CronLog,
@@ -25,12 +26,21 @@ import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
+import { buildInformeDeterminacionTributaria } from "../utils/pdf/municipioDeterminacionTributaria.js";
 import { enviarMensajeCierreModulos } from "../services/mailer.js";
 import crypto from "crypto";
+import {
+  CIERRE_MODULOS,
+  TIPOS_CIERRE_MODULO,
+} from "../utils/cierreModulo.js";
 
 const MODULOS_POR_TIPO_PAUTA = {
-  gastos_recursos: ["Gastos", "Recursos"],
-  recaudaciones_remuneraciones: ["Recaudaciones", "Remuneraciones"],
+  gastos_recursos: [CIERRE_MODULOS.GASTOS, CIERRE_MODULOS.RECURSOS],
+  recaudaciones_remuneraciones: [
+    CIERRE_MODULOS.RECAUDACIONES,
+    CIERRE_MODULOS.REMUNERACIONES,
+  ],
+  determinacion_tributaria: [CIERRE_MODULOS.DETERMINACION_TRIBUTARIA],
 };
 
 const obtenerModulosPorTipoPauta = (codigoTipoPauta) => {
@@ -106,20 +116,24 @@ const existeCierreModulo = async ({
   });
 
 const obtenerDatosPorModulo = async (modulo, municipioId, ejercicio, mes) => {
-  if (modulo === "Gastos") {
+  if (modulo === CIERRE_MODULOS.GASTOS) {
     return obtenerDatosGastos(municipioId, ejercicio, mes);
   }
 
-  if (modulo === "Recursos") {
+  if (modulo === CIERRE_MODULOS.RECURSOS) {
     return obtenerDatosRecursos(municipioId, ejercicio, mes);
   }
 
-  if (modulo === "Recaudaciones") {
+  if (modulo === CIERRE_MODULOS.RECAUDACIONES) {
     return obtenerDatosRecaudaciones(municipioId, ejercicio, mes);
   }
 
-  if (modulo === "Remuneraciones") {
+  if (modulo === CIERRE_MODULOS.REMUNERACIONES) {
     return obtenerDatosRemuneraciones(municipioId, ejercicio, mes);
+  }
+
+  if (modulo === CIERRE_MODULOS.DETERMINACION_TRIBUTARIA) {
+    return obtenerDatosDeterminacionTributaria(municipioId, ejercicio, mes);
   }
 
   throw new Error(`Módulo no soportado para cierre automático: ${modulo}`);
@@ -210,7 +224,7 @@ cron.schedule(
                 convenioId: convenio_id,
                 pautaId: pauta_id,
                 modulo,
-                tipoCierre: "REGULAR",
+                tipoCierre: TIPOS_CIERRE_MODULO.REGULAR,
               });
 
               if (cierreExistente) {
@@ -242,7 +256,7 @@ cron.schedule(
                 convenio_id,
                 pauta_id,
                 modulo,
-                tipo_cierre: "REGULAR",
+                tipo_cierre: TIPOS_CIERRE_MODULO.REGULAR,
                 informe_path: informePath,
                 observacion: `Cierre del módulo para el municipio ${municipio.municipio_nombre} exitoso`,
                 id_documento: numero
@@ -332,7 +346,7 @@ cron.schedule(
                 convenioId: convenio_id,
                 pautaId: pauta_id,
                 modulo,
-                tipoCierre: "PRORROGA",
+                tipoCierre: TIPOS_CIERRE_MODULO.PRORROGA,
               });
 
               if (cierreExistente) {
@@ -364,7 +378,7 @@ cron.schedule(
                 convenio_id,
                 pauta_id,
                 modulo,
-                tipo_cierre: "PRORROGA",
+                tipo_cierre: TIPOS_CIERRE_MODULO.PRORROGA,
                 informe_path: informePath,
                 observacion: `Cierre del módulo ${modulo} para el municipio ${municipio.municipio_nombre} exitoso.`,
                 id_documento: numero
@@ -845,6 +859,73 @@ const obtenerDatosRemuneraciones = async (municipioId, ejercicio, mes) => {
   return datos;
 }
 
+const mapearDetalleDeterminacionTributaria = (determinacion) => ({
+  cod_impuesto: Number(determinacion.cod_impuesto),
+  descripcion: determinacion.descripcion,
+  anio: Number(determinacion.anio),
+  cuota: Number(determinacion.cuota),
+  liquidadas: Number(determinacion.liquidadas),
+  importe_liquidadas: determinacion.importe_liquidadas,
+  impagas: Number(determinacion.impagas),
+  importe_impagas: determinacion.importe_impagas,
+  pagadas: Number(determinacion.pagadas),
+  importe_pagadas: determinacion.importe_pagadas,
+  altas_periodo: Number(determinacion.altas_periodo),
+  bajas_periodo: Number(determinacion.bajas_periodo),
+});
+
+const calcularResumenDeterminacionTributaria = (determinaciones = []) =>
+  determinaciones.reduce(
+    (acumulado, item) => ({
+      totalRegistros: acumulado.totalRegistros + 1,
+      totalLiquidadas: acumulado.totalLiquidadas + (Number(item.liquidadas) || 0),
+      totalImporteLiquidadas:
+        acumulado.totalImporteLiquidadas +
+        (toNumberOrZero(item.importe_liquidadas) || 0),
+      totalImpagas: acumulado.totalImpagas + (Number(item.impagas) || 0),
+      totalImporteImpagas:
+        acumulado.totalImporteImpagas +
+        (toNumberOrZero(item.importe_impagas) || 0),
+      totalPagadas: acumulado.totalPagadas + (Number(item.pagadas) || 0),
+      totalImportePagadas:
+        acumulado.totalImportePagadas +
+        (toNumberOrZero(item.importe_pagadas) || 0),
+      totalAltasPeriodo:
+        acumulado.totalAltasPeriodo + (Number(item.altas_periodo) || 0),
+      totalBajasPeriodo:
+        acumulado.totalBajasPeriodo + (Number(item.bajas_periodo) || 0),
+    }),
+    {
+      totalRegistros: 0,
+      totalLiquidadas: 0,
+      totalImporteLiquidadas: 0,
+      totalImpagas: 0,
+      totalImporteImpagas: 0,
+      totalPagadas: 0,
+      totalImportePagadas: 0,
+      totalAltasPeriodo: 0,
+      totalBajasPeriodo: 0,
+    }
+  );
+
+const obtenerDatosDeterminacionTributaria = async (municipioId, ejercicio, mes) => {
+  const determinaciones = await DeterminacionTributaria.findAll({
+    where: {
+      determinacion_ejercicio: ejercicio,
+      determinacion_mes: mes,
+      municipio_id: municipioId,
+    },
+    order: [["cod_impuesto", "ASC"]],
+  });
+
+  const detalle = determinaciones.map(mapearDetalleDeterminacionTributaria);
+
+  return {
+    determinaciones: detalle,
+    resumen: calcularResumenDeterminacionTributaria(detalle),
+  };
+}
+
 const generarNumero = (digitos = 12) => {
   const min = 10 ** (digitos - 1);
   const max = (10 ** digitos) - 1;
@@ -919,7 +1000,7 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
   );
 
   let buffer;
-  if (modulo === 'Gastos') {
+  if (modulo === CIERRE_MODULOS.GASTOS) {
     buffer = await buildInformeGastos({
       municipioNombre,
       ejercicio,
@@ -930,7 +1011,7 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
       convenioNombre,
       cierreId: numero
     });
-  } else if (modulo === 'Recursos') {
+  } else if (modulo === CIERRE_MODULOS.RECURSOS) {
     buffer = await buildInformeRecursos({
       municipioNombre,
       ejercicio,
@@ -941,7 +1022,7 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
       convenioNombre,
       cierreId: numero
     });
-  } else if (modulo === 'Recaudaciones') {
+  } else if (modulo === CIERRE_MODULOS.RECAUDACIONES) {
     buffer = await buildInformeRecaudaciones({
       municipioNombre,
       ejercicio,
@@ -953,13 +1034,24 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
       convenioNombre,
       cierreId: numero
     });
-  } else if (modulo === 'Remuneraciones') {
+  } else if (modulo === CIERRE_MODULOS.REMUNERACIONES) {
     buffer = await buildInformeRemuneraciones({
       municipioNombre,
       ejercicio,
       mes,
       remuneraciones: datos.remuneraciones,
       regimenes: datos.regimenes,
+      usuarioNombre: 'Sistema Automático',
+      convenioNombre,
+      cierreId: numero
+    });
+  } else if (modulo === CIERRE_MODULOS.DETERMINACION_TRIBUTARIA) {
+    buffer = await buildInformeDeterminacionTributaria({
+      municipioNombre,
+      ejercicio,
+      mes,
+      determinaciones: datos.determinaciones,
+      resumen: datos.resumen,
       usuarioNombre: 'Sistema Automático',
       convenioNombre,
       cierreId: numero

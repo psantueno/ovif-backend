@@ -1,14 +1,16 @@
 // Modelo
-import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario, Archivo, CierreModulo, EjercicioMesCerrado, Poblacion, UsuarioMunicipio, RecaudacionRectificada, RemuneracionRectificada, TipoPauta } from "../models/index.js";
+import { Municipio, EjercicioMes, ProrrogaMunicipio, AuditoriaProrrogaMunicipio, Gasto, PartidaGasto, PartidaRecurso, Recurso, Convenio, PautaConvenio, Recaudacion, RegimenLaboral, SituacionRevista, TipoGasto, Remuneracion, Usuario, Archivo, CierreModulo, EjercicioMesCerrado, Poblacion, UsuarioMunicipio, RecaudacionRectificada, RemuneracionRectificada, TipoPauta, DeterminacionTributaria } from "../models/index.js";
 import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
+import { buildInformeDeterminacionTributaria } from "../utils/pdf/municipioDeterminacionTributaria.js";
 import { Op, fn, col, where as sequelizeWhere } from "sequelize";
 import { GastosSchema } from "../validation/GastosSchema.validation.js";
 import { RecursosSchema } from "../validation/RecursosSchema.validation.js";
 import { RecaudacionSchema } from "../validation/RecaudacionSchema.validation.js";
 import { RemuneracionSchema } from "../validation/RemuneracionSchema.validation.js";
+import { DeterminacionTributariaSchema } from "../validation/DeterminacionTributariaSchema.validation.js";
 import { EjerciciosSchema } from "../validation/EjerciciosSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
 import { MunicipiosSchema } from "../validation/MunicipiosSchema.validation.js";
@@ -312,6 +314,55 @@ const calcularTotalImporteRecaudacion = (conceptos = []) =>
     }
     return acumulado + importeNumerico;
   }, 0);
+
+const mapearDetalleDeterminacionTributaria = (determinacion) => ({
+  cod_impuesto: Number(determinacion.cod_impuesto),
+  descripcion: determinacion.descripcion,
+  anio: Number(determinacion.anio),
+  cuota: Number(determinacion.cuota),
+  liquidadas: Number(determinacion.liquidadas),
+  importe_liquidadas: determinacion.importe_liquidadas,
+  impagas: Number(determinacion.impagas),
+  importe_impagas: determinacion.importe_impagas,
+  pagadas: Number(determinacion.pagadas),
+  importe_pagadas: determinacion.importe_pagadas,
+  altas_periodo: Number(determinacion.altas_periodo),
+  bajas_periodo: Number(determinacion.bajas_periodo),
+});
+
+const calcularResumenDeterminacionTributaria = (determinaciones = []) =>
+  determinaciones.reduce(
+    (acumulado, item) => ({
+      totalRegistros: acumulado.totalRegistros + 1,
+      totalLiquidadas: acumulado.totalLiquidadas + (Number(item.liquidadas) || 0),
+      totalImporteLiquidadas:
+        acumulado.totalImporteLiquidadas +
+        (obtenerImporteNumerico(item.importe_liquidadas) ?? 0),
+      totalImpagas: acumulado.totalImpagas + (Number(item.impagas) || 0),
+      totalImporteImpagas:
+        acumulado.totalImporteImpagas +
+        (obtenerImporteNumerico(item.importe_impagas) ?? 0),
+      totalPagadas: acumulado.totalPagadas + (Number(item.pagadas) || 0),
+      totalImportePagadas:
+        acumulado.totalImportePagadas +
+        (obtenerImporteNumerico(item.importe_pagadas) ?? 0),
+      totalAltasPeriodo:
+        acumulado.totalAltasPeriodo + (Number(item.altas_periodo) || 0),
+      totalBajasPeriodo:
+        acumulado.totalBajasPeriodo + (Number(item.bajas_periodo) || 0),
+    }),
+    {
+      totalRegistros: 0,
+      totalLiquidadas: 0,
+      totalImporteLiquidadas: 0,
+      totalImpagas: 0,
+      totalImporteImpagas: 0,
+      totalPagadas: 0,
+      totalImportePagadas: 0,
+      totalAltasPeriodo: 0,
+      totalBajasPeriodo: 0,
+    }
+  );
 
 // Obtener todos los municipios
 export const getMunicipios = async (req, res) => {
@@ -2086,6 +2137,305 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
   }
 };
 
+export const obtenerDeterminacionesTributariasMunicipio = async (req, res) => {
+  const { ejercicio, mes, municipioId } = req.params;
+
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+  const municipioNum = Number(municipioId);
+
+  if ([ejercicioNum, mesNum, municipioNum].some((value) => Number.isNaN(value))) {
+    return res.status(400).json({ error: "Ejercicio, mes y municipio deben ser numericos" });
+  }
+
+  try {
+    const municipio = await Municipio.findByPk(municipioNum, {
+      attributes: ["municipio_id"],
+    });
+
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const determinaciones = await DeterminacionTributaria.findAll({
+      where: {
+        determinacion_ejercicio: ejercicioNum,
+        determinacion_mes: mesNum,
+        municipio_id: municipioNum,
+      },
+      order: [["cod_impuesto", "ASC"]],
+    });
+
+    return res.json(determinaciones.map(mapearDetalleDeterminacionTributaria));
+  } catch (error) {
+    console.error("❌ Error obteniendo determinacion tributaria del municipio:", error);
+    return res.status(500).json({ error: "Error obteniendo determinacion tributaria" });
+  }
+};
+
+export const upsertDeterminacionesTributariasMunicipio = async (req, res) => {
+  const { ejercicio, mes, municipioId } = req.params;
+  const { determinaciones } = req.body ?? {};
+
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+  const municipioNum = Number(municipioId);
+
+  const valid = EjerciciosSchema.safeParse({
+    ejercicio: ejercicioNum,
+    mes: mesNum,
+    municipio_id: municipioNum,
+  });
+
+  if (!valid.success) {
+    return res.status(400).json({
+      message: "Error en los datos de entrada",
+      errors: zodErrorsToArray(valid.error.issues),
+    });
+  }
+
+  if (!Array.isArray(determinaciones)) {
+    return res.status(400).json({
+      error: "El campo determinaciones debe ser un arreglo",
+    });
+  }
+
+  const sequelize = DeterminacionTributaria.sequelize;
+  const transaction = await sequelize.transaction();
+
+  try {
+    const disponible = await verificarDeterminacionTributariaDisponible(
+      municipioNum,
+      ejercicioNum,
+      mesNum
+    );
+    if (!disponible) {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: "El periodo no esta disponible para modificar determinacion tributaria",
+      });
+    }
+
+    const municipio = await Municipio.findByPk(municipioNum, {
+      attributes: ["municipio_id"],
+    });
+    if (!municipio) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    let creados = 0;
+    let actualizados = 0;
+    let sinCambios = 0;
+    const errores = [];
+
+    for (const item of determinaciones) {
+      const validDeterminacion = DeterminacionTributariaSchema.safeParse({
+        cod_impuesto: item?.cod_impuesto,
+        descripcion: item?.descripcion,
+        anio: item?.anio,
+        cuota: item?.cuota,
+        liquidadas: item?.liquidadas,
+        importe_liquidadas: item?.importe_liquidadas,
+        impagas: item?.impagas,
+        importe_impagas: item?.importe_impagas,
+        pagadas: item?.pagadas,
+        importe_pagadas: item?.importe_pagadas,
+        altas_periodo: item?.altas_periodo,
+        bajas_periodo: item?.bajas_periodo,
+      });
+
+      if (!validDeterminacion.success) {
+        errores.push(
+          `Error procesando la fila con codigo ${item?.cod_impuesto ?? "sin codigo"}: ${zodErrorsToArray(validDeterminacion.error.issues).join(", ")}`
+        );
+        continue;
+      }
+
+      const payload = validDeterminacion.data;
+      const where = {
+        determinacion_ejercicio: ejercicioNum,
+        determinacion_mes: mesNum,
+        municipio_id: municipioNum,
+        cod_impuesto: payload.cod_impuesto,
+      };
+
+      const existente = await DeterminacionTributaria.findOne({
+        where,
+        transaction,
+      });
+
+      if (!existente) {
+        await DeterminacionTributaria.create(
+          {
+            ...where,
+            descripcion: payload.descripcion,
+            anio: payload.anio,
+            cuota: payload.cuota,
+            liquidadas: payload.liquidadas,
+            importe_liquidadas: payload.importe_liquidadas,
+            impagas: payload.impagas,
+            importe_impagas: payload.importe_impagas,
+            pagadas: payload.pagadas,
+            importe_pagadas: payload.importe_pagadas,
+            altas_periodo: payload.altas_periodo,
+            bajas_periodo: payload.bajas_periodo,
+          },
+          { transaction }
+        );
+        creados += 1;
+        continue;
+      }
+
+      let huboCambios = false;
+      const camposString = ["descripcion"];
+      const camposNumero = [
+        "anio",
+        "cuota",
+        "liquidadas",
+        "importe_liquidadas",
+        "impagas",
+        "importe_impagas",
+        "pagadas",
+        "importe_pagadas",
+        "altas_periodo",
+        "bajas_periodo",
+      ];
+
+      for (const campo of camposString) {
+        if (!compararValores(existente[campo], payload[campo])) {
+          existente[campo] = payload[campo];
+          huboCambios = true;
+        }
+      }
+
+      for (const campo of camposNumero) {
+        if (!compararValores(existente[campo], payload[campo], "number")) {
+          existente[campo] = payload[campo];
+          huboCambios = true;
+        }
+      }
+
+      if (!huboCambios) {
+        sinCambios += 1;
+        continue;
+      }
+
+      await existente.save({ transaction });
+      actualizados += 1;
+    }
+
+    await transaction.commit();
+
+    return res.json({
+      message: "Determinacion tributaria procesada correctamente",
+      resumen: {
+        creados,
+        actualizados,
+        sinCambios,
+        errores,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error("❌ Error realizando upsert de determinacion tributaria del municipio:", error);
+    return res.status(500).json({ error: "Error guardando la determinacion tributaria" });
+  }
+};
+
+export const generarInformeDeterminacionTributariaMunicipio = async (req, res) => {
+  const { municipioId, ejercicio, mes } = req.params;
+
+  const municipioNum = Number(municipioId);
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+
+  if ([municipioNum, ejercicioNum, mesNum].some((value) => Number.isNaN(value))) {
+    return res.status(400).json({
+      error: "Ejercicio, mes y municipio deben ser numericos",
+    });
+  }
+
+  try {
+    const resultadoPeriodo = await resolverPeriodoRegular({
+      municipioId: municipioNum,
+      ejercicio: ejercicioNum,
+      mes: mesNum,
+      tipoPautaCodigo: "determinacion_tributaria",
+      fechaReferencia: obtenerFechaActual(),
+    });
+    if (!resultadoPeriodo.disponible) {
+      return res.status(400).json({
+        error: "El periodo no esta disponible para generar informes",
+      });
+    }
+
+    const municipio = await Municipio.findByPk(municipioNum, {
+      attributes: ["municipio_id", "municipio_nombre"],
+    });
+
+    if (!municipio) {
+      return res.status(404).json({ error: "Municipio no encontrado" });
+    }
+
+    const determinaciones = await DeterminacionTributaria.findAll({
+      where: {
+        determinacion_ejercicio: ejercicioNum,
+        determinacion_mes: mesNum,
+        municipio_id: municipioNum,
+      },
+      order: [["cod_impuesto", "ASC"]],
+    });
+
+    if (!determinaciones || determinaciones.length === 0) {
+      return res.status(404).json({
+        error: "No hay datos guardados para generar el informe",
+      });
+    }
+
+    const detalle = determinaciones.map(mapearDetalleDeterminacionTributaria);
+    const resumen = calcularResumenDeterminacionTributaria(detalle);
+
+    const userRequest = req.user ?? null;
+    const user = await Usuario.findOne({
+      where: { usuario_id: userRequest.usuario_id },
+    });
+
+    const convenio = await Convenio.findOne({
+      where: { convenio_id: resultadoPeriodo.periodo?.convenio_id },
+    });
+
+    const buffer = await buildInformeDeterminacionTributaria({
+      municipioNombre: municipio.municipio_nombre,
+      ejercicio: ejercicioNum,
+      mes: mesNum,
+      determinaciones: detalle,
+      resumen,
+      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      convenioNombre: convenio?.nombre ?? "Convenio",
+    });
+
+    const nombreMunicipioSlug = (
+      municipio.municipio_nombre || `Municipio_${municipioNum}`
+    )
+      .normalize("NFD")
+      .replace(/[^0-9a-zA-Z]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .toLowerCase() || `municipio_${municipioNum}`;
+
+    const fileName = `InformeDeterminacionTributaria_${nombreMunicipioSlug}_${ejercicioNum}_${mesNum}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error("❌ Error generando informe de determinacion tributaria:", error);
+    return res.status(500).json({
+      error: "Error generando el informe de determinacion tributaria",
+    });
+  }
+};
+
 export const obtenerConceptosRecaudacionRectificadaMunicipio = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
 
@@ -2680,6 +3030,11 @@ const esMunicipioModificable = async (municipioId) => {
   const remuneraciones = await Remuneracion.findOne({ where: { municipio_id: municipioId } });
   if(remuneraciones) return false;
 
+  const determinacionesTributarias = await DeterminacionTributaria.findOne({
+    where: { municipio_id: municipioId },
+  });
+  if (determinacionesTributarias) return false;
+
   const usuarioMunicipio = await UsuarioMunicipio.findOne({ where: { municipio_id: municipioId } });
   if(usuarioMunicipio) return false;
 
@@ -2708,6 +3063,22 @@ const verificarRecaudacionRemuneracionDisponible = async (
     ejercicio,
     mes,
     tipoPautaCodigo: "recaudaciones_remuneraciones",
+    fechaReferencia: obtenerFechaActual(),
+  });
+
+  return resultado.disponible;
+}
+
+const verificarDeterminacionTributariaDisponible = async (
+  municipioId,
+  ejercicio,
+  mes
+) => {
+  const resultado = await resolverPeriodoRegular({
+    municipioId,
+    ejercicio,
+    mes,
+    tipoPautaCodigo: "determinacion_tributaria",
     fechaReferencia: obtenerFechaActual(),
   });
 
