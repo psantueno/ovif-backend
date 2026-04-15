@@ -8,6 +8,7 @@ import {
   Recurso,
   Recaudacion,
   Remuneracion,
+  DeterminacionTributaria,
   EjercicioMes,
   ProrrogaMunicipio,
   CronLog,
@@ -23,12 +24,19 @@ import { buildInformeGastos } from "../utils/pdf/municipioGastos.js";
 import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
+import { buildInformeDeterminacionTributaria } from "../utils/pdf/municipioDeterminacionTributaria.js";
 import { enviarMensajeCierreModulos } from "../services/mailer.js";
 import crypto from "crypto";
+import {
+  CIERRE_MODULOS,
+  TIPOS_CIERRE_MODULO,
+} from "../utils/cierreModulo.js";
 
 const MODULOS_POR_TIPO_PAUTA = {
+
   gastos_recursos: ["GASTOS", "RECURSOS"],
   recaudaciones_remuneraciones: ["RECAUDACIONES", "REMUNERACIONES"],
+  determinacion_tributaria: ["DETERMINACION_TRIBUTARIA"],
 };
 
 const obtenerModulosPorTipoPauta = (codigoTipoPauta) => {
@@ -104,6 +112,7 @@ const existeCierreModulo = async ({
   });
 
 const obtenerDatosPorModulo = async (modulo, municipioId, ejercicio, mes) => {
+
   if (modulo === "GASTOS") {
     return obtenerDatosGastos(municipioId, ejercicio, mes);
   }
@@ -117,7 +126,12 @@ const obtenerDatosPorModulo = async (modulo, municipioId, ejercicio, mes) => {
   }
 
   if (modulo === "REMUNERACIONES") {
+
     return obtenerDatosRemuneraciones(municipioId, ejercicio, mes);
+  }
+
+  if (modulo === "DETERMINACION_TRIBUTARIA") {
+    return obtenerDatosDeterminacionTributaria(municipioId, ejercicio, mes);
   }
 
   throw new Error(`Módulo no soportado para cierre automático: ${modulo}`);
@@ -503,7 +517,7 @@ cron.schedule(
                 convenioId: convenio_id,
                 pautaId: pauta_id,
                 modulo,
-                tipoCierre: "REGULAR",
+                tipoCierre: TIPOS_CIERRE_MODULO.REGULAR,
               });
 
               if (cierreExistente) {
@@ -535,7 +549,7 @@ cron.schedule(
                 convenio_id,
                 pauta_id,
                 modulo,
-                tipo_cierre: "REGULAR",
+                tipo_cierre: TIPOS_CIERRE_MODULO.REGULAR,
                 informe_path: informePath,
                 observacion: `Cierre del módulo para el municipio ${municipio.municipio_nombre} exitoso`,
                 id_documento: numero
@@ -625,7 +639,7 @@ cron.schedule(
                 convenioId: convenio_id,
                 pautaId: pauta_id,
                 modulo,
-                tipoCierre: "PRORROGA",
+                tipoCierre: TIPOS_CIERRE_MODULO.PRORROGA,
               });
 
               if (cierreExistente) {
@@ -657,7 +671,7 @@ cron.schedule(
                 convenio_id,
                 pauta_id,
                 modulo,
-                tipo_cierre: "PRORROGA",
+                tipo_cierre: TIPOS_CIERRE_MODULO.PRORROGA,
                 informe_path: informePath,
                 observacion: `Cierre del módulo ${modulo} para el municipio ${municipio.municipio_nombre} exitoso.`,
                 id_documento: numero

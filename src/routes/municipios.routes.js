@@ -11,14 +11,17 @@ import {
   obtenerPartidasGastosMunicipio,
   obtenerPartidasRecursosMunicipio,
   obtenerConceptosRecaudacionMunicipio,
+  obtenerDeterminacionesTributariasMunicipio,
   upsertGastosMunicipio,
   upsertRecursosMunicipio,
   upsertRecaudacionesMunicipio,
   upsertRemuneracionesMunicipio,
+  upsertDeterminacionesTributariasMunicipio,
   generarInformeGastosMunicipio,
   generarInformeRecursosMunicipio,
   generarInformeRecaudacionesMunicipio,
   generarInformeRemuneracionesMunicipio,
+  generarInformeDeterminacionTributariaMunicipio,
   obtenerConceptosRecaudacionRectificadaMunicipio,
   upsertRecaudacionesRectificadasMunicipio,
   generarInformeRecaudacionesRectificadasMunicipio,
@@ -37,6 +40,7 @@ import { requireAdmin } from "../middlewares/requireAdmin.js";
 const router = Router();
 const validarFechaLimiteGastosRecursos = validarFechaLimiteDeCargaPorTipo("gastos_recursos");
 const validarFechaLimiteRecaudacionesRemuneraciones = validarFechaLimiteDeCargaPorTipo("recaudaciones_remuneraciones");
+const validarFechaLimiteDeterminacionTributaria = validarFechaLimiteDeCargaPorTipo("determinacion_tributaria");
 
 // Lista todos los municipios
 router.get("/", authenticateToken, requireAdmin,  getMunicipios);
@@ -112,6 +116,20 @@ router.get(
   generarInformeRemuneracionesMunicipio
 );
 
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/determinacion-tributaria",
+  authenticateToken,
+  validarMunicipioAsignado,
+  obtenerDeterminacionesTributariasMunicipio
+);
+
+router.get(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/determinacion-tributaria/informe",
+  authenticateToken,
+  validarMunicipioAsignado,
+  generarInformeDeterminacionTributariaMunicipio
+);
+
 // Upserts
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/gastos",
@@ -143,6 +161,14 @@ router.put(
   validarMunicipioAsignado,
   validarFechaLimiteRecaudacionesRemuneraciones,
   upsertRemuneracionesMunicipio
+);
+
+router.put(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/determinacion-tributaria",
+  authenticateToken,
+  validarMunicipioAsignado,
+  validarFechaLimiteDeterminacionTributaria,
+  upsertDeterminacionesTributariasMunicipio
 );
 
 // Rectificaciones

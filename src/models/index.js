@@ -14,6 +14,7 @@ import Gasto from './moduloCargaDatos/Gasto.js';
 import Archivo from './moduloCargaDatos/Archivo.js';
 import SituacionRevista from './moduloCargaDatos/SituacionRevista.js';
 import Remuneracion from './moduloCargaDatos/Remuneracion.js';
+import DeterminacionTributaria from './moduloCargaDatos/DeterminacionTributaria.js';
 import ConceptoRecaudacion from './ConceptoRecaudacion.js';
 import Recaudacion from './moduloCargaDatos/Recaudacion.js';
 import RecaudacionRectificada from './rectificaciones/RecaudacionRectificada.js';
@@ -112,6 +113,7 @@ Poblacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
 Recaudacion.belongsTo(Municipio, { foreignKey: "municipio_id" });
 RecaudacionRectificada.belongsTo(Municipio, { foreignKey: "municipio_id" });
+DeterminacionTributaria.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
 // PartidaGasto ↔ PartidaEconomico
 PartidaGasto.hasMany(PartidaEconomico, {
@@ -187,6 +189,7 @@ export {
   RegimenLaboral,
   TipoGasto,
   Remuneracion,
+  DeterminacionTributaria,
   ConceptoRecaudacion,
   Recaudacion,
   RecaudacionRectificada,
