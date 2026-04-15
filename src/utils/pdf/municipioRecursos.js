@@ -61,17 +61,12 @@ const currencyFormatter = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 2,
 });
 
-const integerFormatter = new Intl.NumberFormat("es-AR", {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
-export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas, totalImporte, usuarioNombre, convenioNombre, cierreId }) => {
+export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, recursos, totales, usuarioNombre, convenioNombre, cierreId }) => {
   const headerContent = [
     HEADER_BASE64
       ? {
           image: `data:image/png;base64,${HEADER_BASE64}`,
-          width: 595,
+          width: 842,
         }
       : null,
     {
@@ -87,95 +82,70 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
 
   const content = [];
 
-  if (!Array.isArray(partidas) || partidas.length === 0) {
-    content.push(
-      {
-        text: "No se recibieron importes para poder generar el informe.",
-        style: "noDataMessage",
-        alignment: "center",
-        margin: [0, 50, 0, 0],
-      },
-    );
+  if (!Array.isArray(recursos) || recursos.length === 0) {
+    content.push({
+      text: "No se recibieron importes para poder generar el informe.",
+      style: "noDataMessage",
+      alignment: "center",
+      margin: [0, 50, 0, 0],
+    });
   } else {
-    const totalNumerico = Number(totalImporte);
-    const totalFormateado = Number.isFinite(totalNumerico)
-      ? currencyFormatter.format(totalNumerico)
-      : currencyFormatter.format(0);
+    const formatCurrency = (value) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? currencyFormatter.format(num) : "------";
+    };
 
     const tableBody = [
       [
-        { text: "CÓDIGO", style: "tableHeader", alignment: "center", valign: "middle", minHeight: 20 },
-        { text: "PARTIDA", style: "tableHeader", valign: "middle", minHeight: 20 },
-        { text: "IMPORTE PERCIBIDO", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "CÓDIGO", style: "tableHeader", alignment: "center" },
+        { text: "RECURSO", style: "tableHeader" },
+        { text: "FUENTE", style: "tableHeader" },
+        { text: "VIGENTE", style: "tableHeader", alignment: "right" },
+        { text: "PERCIBIDO", style: "tableHeader", alignment: "right" },
       ],
-      ...partidas.map((partida) => {
-        const esGrupo = !partida.puedeCargar;
-        const esSinLiquidacion = Boolean(partida.esSinLiquidacion);
-
-        const tieneImporte =
-          partida.importePercibido !== null && partida.importePercibido !== undefined;
-        const importeNumerico = tieneImporte ? Number(partida.importePercibido) : null;
-        const importeFormateado =
-          tieneImporte && Number.isFinite(importeNumerico)
-            ? currencyFormatter.format(importeNumerico)
-            : "------";
-
-        return [
-          { text: partida.codigo ?? "-", style: esGrupo ? "grupoCodigo" : "itemCodigo" },
-          {
-            text: partida.descripcion ?? "Sin descripción",
-            style: esGrupo ? "grupoDescripcion" : "itemDescripcion",
-            margin: [partida.nivel * 12, esGrupo ? 2 : 0, 0, 2],
-          },
-          esGrupo
-            ? { text: "", style: "grupoImporte" }
-            : { text: importeFormateado, alignment: "right", style: "itemImporte" },
-        ];
-      }),
+      ...recursos.map((recurso) => [
+        { text: recurso.codigo_recurso ?? "-", style: "itemCodigo", alignment: "center" },
+        { text: recurso.descripcion ?? "Sin descripción", style: "itemDescripcion" },
+        { text: recurso.descripcion_fuente ?? "-", style: "itemDescripcion" },
+        { text: formatCurrency(recurso.vigente), alignment: "right", style: "itemImporte" },
+        { text: formatCurrency(recurso.percibido), alignment: "right", style: "itemImporte" },
+      ]),
       [
-        { text: "TOTAL", colSpan: 2, style: "totalLabel" },
-        { text: "", style: "totalEmpty"},
-        { text: totalFormateado, alignment: "left", style: "totalValue" },
+        { text: "TOTAL", colSpan: 3, style: "totalLabel" },
+        {},
+        {},
+        { text: formatCurrency(totales.vigente), alignment: "right", style: "totalValue" },
+        { text: formatCurrency(totales.percibido), alignment: "right", style: "totalValue" },
       ],
     ];
 
     const totalRowIndex = tableBody.length - 1;
 
-    content.push(
-      {
-        table: {
-          widths: ["auto", "*", "auto"],
-          headerRows: 1,
-          body: tableBody,
+    content.push({
+      table: {
+        widths: ["auto", "*", "auto", "auto", "auto"],
+        headerRows: 1,
+        body: tableBody,
+      },
+      layout: {
+        fillColor: (rowIndex) => {
+          if (rowIndex === 0) return "#2B3E4C";
+          if (rowIndex === totalRowIndex) return "#e9eef2";
+          return null;
         },
-        layout: {
-          fillColor: (rowIndex) => {
-            if (rowIndex === 0) {
-              return "#2B3E4C";
-            }
-            if (rowIndex === totalRowIndex) {
-              return "#e9eef2";
-            }
-            const dataIndex = rowIndex - 1;
-            const partida = partidas[dataIndex];
-            if (partida && !partida.puedeCargar) {
-              return "#f5f7f9";
-            }
-            return null;
-          },
-          hLineColor: "#ccc",
-          vLineColor: "#ccc",
-        },
-      }
-    )
+        hLineColor: "#ccc",
+        vLineColor: "#ccc",
+      },
+    });
   }
 
-  const footerText = cierreId 
+  const footerText = cierreId
     ? `Identificación del documento: ${cierreId}.`
     : `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`;
 
   const docDefinition = {
     pageSize: "A4",
+    pageOrientation: "landscape",
     pageMargins: [40, HEADER_BASE64 ? 170 : 100, 40, 60],
     header: headerContent,
     footer: (currentPage, pageCount) => ({
@@ -195,10 +165,7 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
     }),
     content: [
       ...content,
-      {
-        text: "",
-        margin: [0, 15, 0, 0],
-      },
+      { text: "", margin: [0, 15, 0, 0] },
       {
         text: footerText,
         style: "disclaimer",
@@ -214,18 +181,14 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
         bold: true,
         color: "#fff",
         fillColor: "#2B3E4C",
-        fontSize: 10,
+        fontSize: 8,
         alignment: "center",
       },
-      itemCodigo: { fontSize: 10, color: "#333", alignment: "center" },
-      itemDescripcion: { fontSize: 10, color: "#333" },
-      itemImporte: { fontSize: 10, color: "#333" },
-      grupoCodigo: { fontSize: 10, bold: true, color: "#2B3E4C", alignment: "center" },
-      grupoDescripcion: { fontSize: 10, bold: true, color: "#2B3E4C" },
-      grupoImporte: { fontSize: 10, color: "#333" },
-      totalLabel: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "left" },
-      totalValue: { fontSize: 11, bold: true, color: "#2B3E4C", alignment: "right" },
-      totalEmpty: { fontSize: 11, color: "#2B3E4C", alignment: "center" },
+      itemCodigo: { fontSize: 8, color: "#333", alignment: "center" },
+      itemDescripcion: { fontSize: 8, color: "#333" },
+      itemImporte: { fontSize: 8, color: "#333" },
+      totalLabel: { fontSize: 9, bold: true, color: "#2B3E4C", alignment: "left" },
+      totalValue: { fontSize: 9, bold: true, color: "#2B3E4C" },
       noDataMessage: { fontSize: 12, color: "#666", italics: true },
       disclaimer: {
         fontSize: 8,
@@ -254,8 +217,8 @@ export const buildInformeRecursos = ({ municipioNombre, ejercicio, mes, partidas
 
       pdfDoc.end();
     } catch (error) {
+      console.error(error.message);
       reject(error);
     }
   });
 };
-

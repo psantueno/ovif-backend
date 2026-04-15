@@ -193,6 +193,6 @@ export async function enviarMensajeCierreModulos(to, nombre, ejercicio, mes, mod
         //console.log(`Mail a enviar: to:${to}, nombre:${nombre}, mensaje: ${mensaje}`)
     } catch (error) {
         console.error("❌ Error enviando correo:", error);
-        throw new Error("No se pudo enviar el correo de reseteo");
+        throw new Error("No se pudo enviar el correo de cierre de modulo");
     }
 }
