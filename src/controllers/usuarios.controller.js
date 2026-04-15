@@ -10,7 +10,7 @@ import bcrypt from "bcrypt";
 // Obtener un usuario por ID
 export const getUsuarioById = async (req, res) => {
   try {
-    const usuario = await Usuario.findByPk(req.params.id);
+    const usuario = await Usuario.findByPk(req.params.id, { attributes: { exclude: ["password"] } });
     if (!usuario) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
@@ -427,11 +427,13 @@ export const getUsuarios = async (req, res) => {
 
     const where = {};
     if (search) {
+      // Escapar caracteres wildcard de LIKE para evitar busquedas abusivas
+      const sanitizedSearch = search.replace(/[%_]/g, "\\$&");
       where[Op.or] = [
-        { usuario:  { [Op.like]: `%${search}%` } },
-        { nombre:   { [Op.like]: `%${search}%` } },
-        { apellido: { [Op.like]: `%${search}%` } },
-        { email:    { [Op.like]: `%${search}%` } },
+        { usuario:  { [Op.like]: `%${sanitizedSearch}%` } },
+        { nombre:   { [Op.like]: `%${sanitizedSearch}%` } },
+        { apellido: { [Op.like]: `%${sanitizedSearch}%` } },
+        { email:    { [Op.like]: `%${sanitizedSearch}%` } },
       ];
     }
     if (activo !== undefined && activo !== "") {
@@ -490,7 +492,8 @@ export const getUsuarios = async (req, res) => {
     // 3️⃣ Usuarios básicos de la página (sin includes)
     const usuariosBase = await Usuario.findAll({
       where: { usuario_id: ids },
-      order: [[literal(`FIELD(Usuario.usuario_id, ${ids.join(",")})`), "ASC"]],
+      attributes: { exclude: ["password"] },
+      order: [[literal(`FIELD(Usuario.usuario_id, ${ids.map(id => parseInt(id, 10)).filter(n => !Number.isNaN(n)).join(",")})`), "ASC"]],
       raw: true,
       nest: true,
     });

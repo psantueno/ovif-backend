@@ -320,7 +320,7 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
       fechaActual
     );
 
-    console.log(
+    /*console.log(
       "🧭 DEBUG rectificaciones: periodos base backend",
       JSON.stringify(
         {
@@ -340,7 +340,7 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
         null,
         2
       )
-    );
+    );*/
 
     if (ejercicioMesPeriodo.length === 0) {
       return res.json({
@@ -355,7 +355,7 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
       cerrado: false,
     }));
 
-    console.log(
+    /*console.log(
       "🧮 DEBUG rectificaciones: calculo por periodo",
       JSON.stringify(
         {
@@ -387,11 +387,11 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
         null,
         2
       )
-    );
+    );*/
 
     const periodosDisponibles = disponibles.filter((item) => item.disponible);
 
-    console.log(
+    /*console.log(
       "📦 DEBUG rectificaciones: payload final helper",
       JSON.stringify(
         {
@@ -403,7 +403,7 @@ export const listarEjerciciosRectificacionesDisponiblesPorMunicipio = async (req
         null,
         2
       )
-    );
+    );*/
 
     return res.json({
       municipio: municipio.get(),

@@ -17,6 +17,7 @@ import {
 // Middleware de autenticación
 import { authenticateToken } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
+import { requireSelfOrAdmin } from "../middlewares/requireSelfOrAdmin.js";
 
 const router = Router();
 
@@ -27,7 +28,7 @@ router.get("/me/municipios", authenticateToken, obtenerMisMunicipios);
 // Buscar por ID
 router.get("/:id", authenticateToken, requireAdmin, getUsuarioById);
 // Municipios asignados a un usuario específico
-router.get("/:id/municipios", authenticateToken, getUsuarioMunicipios);
+router.get("/:id/municipios", authenticateToken, requireSelfOrAdmin, getUsuarioMunicipios);
 // Roles asignados a un usuario específico
 router.get("/:id/roles", authenticateToken, requireAdmin, getUsuarioRoles);
 // Actualizar municipios asignados a un usuario

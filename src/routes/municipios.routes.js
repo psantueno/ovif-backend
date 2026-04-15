@@ -49,14 +49,15 @@ router.get("/", authenticateToken, requireAdmin,  getMunicipios);
 router.get("/select", authenticateToken, requireAdmin, getMunicipiosSelect);
 
 // Ejercicios abiertos para el municipio
-router.get("/:id/ejercicios/disponibles", authenticateToken, listarEjerciciosDisponiblesPorMunicipio);
+router.get("/:municipioId/ejercicios/disponibles", authenticateToken, validarMunicipioAsignado, listarEjerciciosDisponiblesPorMunicipio);
 
-// Ejercicios reftificables abiertos para el municipio
-router.get("/:id/ejercicios/rectificaciones/disponibles", authenticateToken, listarEjerciciosRectificacionesDisponiblesPorMunicipio);
+// Ejercicios rectificables abiertos para el municipio
+router.get("/:municipioId/ejercicios/rectificaciones/disponibles", authenticateToken, validarMunicipioAsignado, listarEjerciciosRectificacionesDisponiblesPorMunicipio);
 
 router.get(
   "/:municipioId/ejercicios/cerrados",
   authenticateToken,
+  validarMunicipioAsignado,
   listarEjerciciosCerradosPorMunicipio
 );
 
@@ -216,6 +217,7 @@ router.get(
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/prorroga",
   authenticateToken,
+  requireAdmin,
   crearProrrogaMunicipio
 );
 
