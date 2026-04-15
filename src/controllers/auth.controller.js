@@ -31,22 +31,13 @@ export const login = async (req, res) => {
       ],
     });
 
-    if (!user) return res.status(401).json({ error: "Usuario no encontrado" });
-    if (!user.password || user.password.trim() === "") {
-      return res.status(401).json({ error: "Usuario sin contraseña configurada" });
-    }
-
-    // 🚫 verificar usuario activo
-    if (!user.activo) {
-      return res.status(403).json({
-        error: "El usuario se encuentra deshabilitado. Contacte al administrador.",
-        code: "USER_DISABLED",
-      });
+    if (!user || !user.password || user.password.trim() === "" || !user.activo) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
     }
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
-      return res.status(401).json({ error: "Contraseña incorrecta" });
+      return res.status(401).json({ error: "Credenciales inválidas" });
     }
 
     const roles = Array.isArray(user.Roles)
@@ -158,8 +149,9 @@ export const forgotPassword = async (req, res) => {
     }
     const email = user.email;
     if (!email) {
-      return res.status(400).json({
-        error: "El usuario no tiene un correo electrónico registrado",
+      // Respuesta neutra para no revelar que la cuenta existe sin email
+      return res.json({
+        message: "Si existe una cuenta con ese usuario, se enviará un mail con instrucciones.",
       });
     }
     const [name, domain] = email.split("@");
@@ -218,12 +210,8 @@ export const resetPassword = async (req, res) => {
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
     const pr = await PasswordReset.findOne({ where: { token_hash: tokenHash } });
 
-    if (!pr)
-      return res.status(400).json({ error: "Token inválido", code: "INVALID_TOKEN" });
-    if (pr.used_at)
-      return res.status(400).json({ error: "Enlace ya utilizado", code: "TOKEN_USED" });
-    if (new Date(pr.expires_at) < new Date())
-      return res.status(400).json({ error: "El enlace expiró", code: "TOKEN_EXPIRED" });
+    if (!pr || pr.used_at || new Date(pr.expires_at) < new Date())
+      return res.status(400).json({ error: "Token inválido o expirado", code: "INVALID_TOKEN" });
 
     const user = await Usuario.findByPk(pr.usuario_id);
     if (!user)

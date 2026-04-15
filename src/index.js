@@ -38,17 +38,19 @@ const app = express();
 
 // === Configuración básica ===
 const PORT = process.env.PORT || 3000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const CORS_ORIGIN = process.env.CORS_ORIGIN || false;
 
 // === Middlewares ===
 app.use((req, res, next) => {
-  const skip = req.path.startsWith("/api/ejercicios/informes/download") || req.originalUrl.includes("/informes/download");
-  if (skip) return next();
+  const isDownload = req.path.startsWith("/api/ejercicios/informes/download") || req.originalUrl.includes("/informes/download");
+  if (isDownload) {
+    return helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false })(req, res, next);
+  }
   return helmet()(req, res, next);
 });
 app.use(cors({ origin: CORS_ORIGIN }));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ limit: "10mb", extended: true }));
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ limit: "5mb", extended: true }));
 app.use(morgan("dev"));
 app.use(
   rateLimit({

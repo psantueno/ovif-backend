@@ -774,7 +774,12 @@ export const descargarInforme = async (req, res) => {
 
     // Armar ruta absoluta
     const filePath = path.resolve(rutaBase, filename);
-    console.log("filepath", filePath)
+
+    // Validar que la ruta resuelta quede dentro del directorio permitido
+    const normalizedBase = path.resolve(rutaBase);
+    if (!filePath.startsWith(normalizedBase + path.sep) && filePath !== normalizedBase) {
+      return res.status(400).json({ error: "Ruta de archivo inválida" });
+    }
 
     // Verificar que exista
     if (!fs.existsSync(filePath)) {
