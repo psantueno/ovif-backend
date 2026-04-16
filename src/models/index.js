@@ -40,6 +40,7 @@ import ProrrogaMunicipio from './ProrrogaMunicipio.js';
 import AuditoriaProrrogaMunicipio from './AuditoriaProrrogaMunicipio.js';
 import Parametros from './Parametros.js';
 import MunicipioMail from './moduloEjercicios/MunicipioMail.js';
+import AuthSession from './AuthSession.js';
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
@@ -195,5 +196,6 @@ export {
   RecaudacionRectificada,
   RemuneracionRectificada,
   Parametros,
-  MunicipioMail
+  MunicipioMail,
+  AuthSession
 };

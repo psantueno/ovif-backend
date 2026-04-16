@@ -1,23 +1,23 @@
 import jwt from "jsonwebtoken";
-import TokenBlacklist from "../models/TokenBlacklist.js";
+import { ACCESS_COOKIE_NAME } from "../config/cookies.js";
+
+const JWT_ISSUER = "ovif-backend";
+const JWT_AUDIENCE = "ovif-frontend";
 
 export async function authenticateToken(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+  // Leer access token desde cookie
+  const token = req.cookies[ACCESS_COOKIE_NAME];
 
   if (!token) return res.status(401).json({ error: "Token requerido" });
 
   try {
-
-    const blacklisted = await TokenBlacklist.findOne({ where: { token } });
-  
-    if (blacklisted) {
-      return res.status(401).json({ error: "Token inválido (logout previo)" });
-    }
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
     req.user = decoded;
     next();
   } catch (err) {
-    return res.status(403).json({ error: "Token inválido o expirado" });
+    return res.status(401).json({ error: "Token inválido o expirado" });
   }
 }

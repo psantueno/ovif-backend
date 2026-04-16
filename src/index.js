@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser";
 
 // === DB & Models ===
 import sequelize from "./config/db.js";  
@@ -39,8 +40,15 @@ const app = express();
 // === Configuración básica ===
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || false;
+const IS_PROD = process.env.NODE_ENV === "production";
+
+// Confiar en 1 nivel de proxy (nginx) — necesario para req.ip, cookies Secure, rate limiting
+if (IS_PROD) {
+  app.set("trust proxy", 1);
+}
 
 // === Middlewares ===
+app.use(cookieParser());
 app.use((req, res, next) => {
   const isDownload = req.path.startsWith("/api/ejercicios/informes/download") || req.originalUrl.includes("/informes/download");
   if (isDownload) {
@@ -77,13 +85,24 @@ app.use("/api/partidas-recursos", partidasRecursosRoutes);
 app.use("/api/tipos-pauta", tiposPautaRoutes);
 app.use("/api/municipios-mails", municipiosMailsRoutes);
 
-// === Healthcheck ===
-app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    service: "ovif-backend",
-    ts: new Date().toISOString(),
-  });
+// === Healthcheck (con verificación de BD) ===
+app.get("/api/health", async (req, res) => {
+  try {
+    await sequelize.query("SELECT 1");
+    res.json({
+      ok: true,
+      service: "ovif-backend",
+      db: "connected",
+      ts: new Date().toISOString(),
+    });
+  } catch {
+    res.status(503).json({
+      ok: false,
+      service: "ovif-backend",
+      db: "disconnected",
+      ts: new Date().toISOString(),
+    });
+  }
 });
 
 // === Arrancar servidor después de conectar a DB ===
