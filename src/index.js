@@ -80,7 +80,7 @@ app.use("/api/pautas-convenio", pautasConvenioRoutes);
 app.use("/api/convenios", conveniosRoutes);
 app.use("/api/logs", logsRoutes);
 app.use("/api/parametros", parametrosRoutes);
-app.use("/api/conceptos-recaudaciones", conceptosRecaudacionRoutes);
+//app.use("/api/conceptos-recaudaciones", conceptosRecaudacionRoutes);
 app.use("/api/partidas-recursos", partidasRecursosRoutes);
 app.use("/api/tipos-pauta", tiposPautaRoutes);
 app.use("/api/municipios-mails", municipiosMailsRoutes);

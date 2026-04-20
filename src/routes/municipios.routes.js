@@ -36,6 +36,7 @@ import { validarMunicipioAsignado } from "../middlewares/validarMunicipioAsignad
 import { validarFechaLimiteDeCargaPorTipo } from "../middlewares/validarFechaLimiteDeCarga.js";
 import { validarRectificacionDisponible } from "../middlewares/validarRectificacionDisponible.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
+import { requireSelfOrAdmin } from "../middlewares/requireSelfOrAdmin.js";
 
 const router = Router();
 const validarFechaLimiteGastosRecursos = validarFechaLimiteDeCargaPorTipo("gastos_recursos");
@@ -57,7 +58,7 @@ router.get("/:municipioId/ejercicios/rectificaciones/disponibles", authenticateT
 router.get(
   "/:municipioId/ejercicios/cerrados",
   authenticateToken,
-  validarMunicipioAsignado,
+  requireSelfOrAdmin,
   listarEjerciciosCerradosPorMunicipio
 );
 

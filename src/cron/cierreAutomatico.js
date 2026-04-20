@@ -312,6 +312,79 @@ const obtenerDatosRemuneraciones = async (municipioId, ejercicio, mes) => {
   return datos;
 }
 
+const obtenerDatosDeterminacionTributaria = async (municipioId, ejercicio, mes) => {
+  const determinaciones = await DeterminacionTributaria.findAll({
+    where: {
+      determinacion_ejercicio: ejercicio,
+      determinacion_mes: mes,
+      municipio_id: municipioId,
+    },
+  });
+
+  const detalle = determinaciones.map(mapearDetalleDeterminacionTributaria);
+  const resumen = calcularResumenDeterminacionTributaria(detalle);
+
+  return { determinaciones: detalle, resumen };
+}
+
+const mapearDetalleDeterminacionTributaria = (determinacion) => ({
+  cod_impuesto: Number(determinacion.cod_impuesto),
+  descripcion: determinacion.descripcion,
+  anio: Number(determinacion.anio),
+  cuota: Number(determinacion.cuota),
+  liquidadas: Number(determinacion.liquidadas),
+  importe_liquidadas: determinacion.importe_liquidadas,
+  impagas: Number(determinacion.impagas),
+  importe_impagas: determinacion.importe_impagas,
+  pagadas: Number(determinacion.pagadas),
+  importe_pagadas: determinacion.importe_pagadas,
+  altas_periodo: Number(determinacion.altas_periodo),
+  bajas_periodo: Number(determinacion.bajas_periodo),
+});
+
+const calcularResumenDeterminacionTributaria = (determinaciones = []) =>
+  determinaciones.reduce(
+    (acumulado, item) => ({
+      totalRegistros: acumulado.totalRegistros + 1,
+      totalLiquidadas: acumulado.totalLiquidadas + (Number(item.liquidadas) || 0),
+      totalImporteLiquidadas:
+        acumulado.totalImporteLiquidadas +
+        (obtenerImporteNumerico(item.importe_liquidadas) ?? 0),
+      totalImpagas: acumulado.totalImpagas + (Number(item.impagas) || 0),
+      totalImporteImpagas:
+        acumulado.totalImporteImpagas +
+        (obtenerImporteNumerico(item.importe_impagas) ?? 0),
+      totalPagadas: acumulado.totalPagadas + (Number(item.pagadas) || 0),
+      totalImportePagadas:
+        acumulado.totalImportePagadas +
+        (obtenerImporteNumerico(item.importe_pagadas) ?? 0),
+      totalAltasPeriodo:
+        acumulado.totalAltasPeriodo + (Number(item.altas_periodo) || 0),
+      totalBajasPeriodo:
+        acumulado.totalBajasPeriodo + (Number(item.bajas_periodo) || 0),
+    }),
+    {
+      totalRegistros: 0,
+      totalLiquidadas: 0,
+      totalImporteLiquidadas: 0,
+      totalImpagas: 0,
+      totalImporteImpagas: 0,
+      totalPagadas: 0,
+      totalImportePagadas: 0,
+      totalAltasPeriodo: 0,
+      totalBajasPeriodo: 0,
+    }
+  );
+
+const obtenerImporteNumerico = (importe) => {
+  if (importe === null || importe === undefined) {
+    return null;
+  }
+
+  const importeNumerico = Number(importe);
+  return Number.isFinite(importeNumerico) ? importeNumerico : null;
+};
+
 const generarNumero = (digitos = 12) => {
   const min = 10 ** (digitos - 1);
   const max = (10 ** digitos) - 1;
@@ -428,15 +501,58 @@ const generarPDF = async (modulo, datos, municipioNombre, ejercicio, mes, conven
       convenioNombre,
       cierreId: numero
     });
+  } else if (modulo === 'DETERMINACION_TRIBUTARIA') {
+    buffer = await buildInformeDeterminacionTributaria({
+      municipioNombre,
+      ejercicio,
+      mes,
+      determinaciones: datos.determinaciones,
+      resumen: datos.resumen,
+      usuarioNombre: 'Sistema Automático',
+      convenioNombre,
+      cierreId: numero
+    });
   }
   fs.writeFileSync(filePath, buffer);
   return path.join(rutaInformes, fileName);
 };
 
+const agregarMailsParaCierre = async (mailsParaEnviar, municipioId, ejercicio, mes, modulos, esProrroga) => {
+  // Evitar duplicados: si ya existe un mail para el mismo municipio, ejercicio, mes, modulos y tipo de cierre, no agregar otro
+  if(mailsParaEnviar.some(m => 
+    m.municipio_id === municipioId && 
+    m.ejercicio === ejercicio && 
+    m.mes === mes && 
+    m.modulos.every(mod => modulos.includes(mod)) && 
+    m.esProrroga === esProrroga
+  )){
+    return;
+  }
+  
+  const municipioMails = await MunicipioMail.findAll({
+    where: { 
+      municipio_id: municipioId
+    }
+  })
+
+  municipioMails.forEach((mm) => {
+    mailsParaEnviar.push({
+      municipio_id: municipioId,
+      to: mm.email,
+      nombre: mm.nombre,
+      ejercicio,
+      mes,
+      modulos,
+      esProrroga
+    })
+  }
+  )
+}
+
 // 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
 cron.schedule(
   "0 2 * * *",
-  //"*/600 * * * * *",
+  //"/60 * * * * *",
   async () => {
     console.log(`🟡 [CRON ${new Date()}] Iniciando proceso de cierre automático...`);
     const hoy = new Date();
@@ -564,6 +680,8 @@ cron.schedule(
                 mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes}) para el municipio ${municipio.municipio_nombre} exitoso`,
               });
 
+              agregarMailsParaCierre(mailsParaEnviar, municipio.municipio_id, ejercicio, mes, modulos, false);
+
               cierresRealizados++;
             } catch (error) {
               errores++;
@@ -581,25 +699,6 @@ cron.schedule(
               });
             }
           }
-
-          /*
-            const municipioMails = await MunicipioMail.findAll({
-              where: { 
-                municipio_id: municipio.municipio_id
-              }
-            })
-
-            municipioMails.forEach((mm) => {
-              mailsParaEnviar.push({
-                to: mm.email,
-                nombre: mm.nombre,
-                ejercicio,
-                mes,
-                modulos,
-                esProrroga: false
-              })
-            })
-          }*/
         }
       }
 
@@ -686,6 +785,8 @@ cron.schedule(
                 mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes} (Prorroga)) para el municipio ${municipio.municipio_nombre} exitoso`,
               });
 
+              agregarMailsParaCierre(mailsParaEnviar, municipio.municipio_id, ejercicio, mes, modulos, true);
+
               cierresRealizados++;
             } catch (error) {
               errores++;
@@ -703,32 +804,13 @@ cron.schedule(
               });
             }
           }
-
-          /*
-            const municipioMails = await MunicipioMail.findAll({
-              where: { 
-                municipio_id: municipio.municipio_id
-              }
-            })
-
-            municipioMails.forEach((mm) => {
-              mailsParaEnviar.push({
-                to: mm.email,
-                nombre: mm.nombre,
-                ejercicio,
-                mes,
-                modulos,
-                esProrroga: true
-              })
-            })
-          }*/
         }
       }
 
       // Registrar log general
       await CronLog.create({
         nombre_tarea: "Resumen general",
-        estado: errores > 0 ? "WARNING" : "OK",
+        estado: errores > 0 ? "ERROR" : "OK",
         mensaje: `Cierre automático completado. ${cierresRealizados} módulos cerrados, ${errores} errores.`
       });
 
@@ -736,10 +818,25 @@ cron.schedule(
         `🟢 [CRON ${hoy}] Cierre automático completado (${cierresRealizados} cierres, ${errores} errores).`
       );
 
-      /*// Enviar mails
+      // Mostrar detalle de mails agrupados por ejercicio, mes, modulo y esProrroga
+      const resumenMails = {};
+      mailsParaEnviar.forEach(({ ejercicio, mes, modulos, esProrroga }) => {
+        const modulosStr = modulos.join(", ");
+          const key = `${ejercicio}-${mes}-${modulosStr}-${esProrroga ? "PRORROGA" : "REGULAR"}`;
+          resumenMails[key] = (resumenMails[key] || 0) + 1;
+      });
+      console.log("Detalle de mails para enviar:");
+      Object.entries(resumenMails).forEach(([key, cantidad]) => {
+        const [ejercicio, mes, modulo, tipo] = key.split("-");
+        console.log(`  Ejercicio: ${ejercicio}, Mes: ${mes}, Módulo: ${modulo}, Tipo: ${tipo}, Cantidad: ${cantidad}`);
+      });
+      console.log("Total de mails para enviar:", mailsParaEnviar.length);
+
+      
       mailsParaEnviar.forEach(async (m) => {
         await enviarMensajeCierreModulos(m.to, m.nombre, m.ejercicio, m.mes, m.modulos, m.esProrroga)
-      })*/
+      })
+      
     } catch (error) {
       console.error("💥 Error general en cierre automático:", error);
       try {
