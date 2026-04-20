@@ -2214,46 +2214,6 @@ export const generarInformeDeterminacionTributariaMunicipio = async (req, res) =
   }
 };
 
-export const obtenerConceptosRecaudacionRectificadaMunicipio = async (req, res) => {
-  const { ejercicio, mes, municipioId } = req.params;
-
-  const ejercicioNum = Number(ejercicio);
-  const mesNum = Number(mes);
-  const municipioNum = Number(municipioId);
-
-  if ([ejercicioNum, mesNum, municipioNum].some((value) => Number.isNaN(value))) {
-    return res.status(400).json({ error: "Ejercicio, mes y municipio deben ser numéricos" });
-  }
-
-  try {
-    const disponible = await verificarRectificacionDisponible(municipioNum, ejercicioNum, mesNum);
-    if (!disponible) {
-      return res.status(400).json({ error: "La rectificación no está disponible para este ejercicio y mes" });
-    }
-
-    const municipio = await Municipio.findByPk(municipioNum, { attributes: ["municipio_id"] });
-    if (!municipio) {
-      return res.status(404).json({ error: "Municipio no encontrado" });
-    }
-
-    const conceptosCargados = await RecaudacionRectificada.findAll({
-      where: {
-        recaudaciones_ejercicio: ejercicioNum,
-        recaudaciones_mes: mesNum,
-        municipio_id: municipioNum,
-      },
-      order: [["codigo_tributo", "ASC"], ["ente_recaudador", "ASC"]],
-    });
-
-    const conceptosCargadosMap = conceptosCargados.map(mapearDetalleRecaudacion);
-
-    return res.json(conceptosCargadosMap);
-  } catch (error) {
-    console.error("❌ Error obteniendo recaudaciones rectificadas del municipio:", error);
-    return res.status(500).json({ error: "Error obteniendo recaudaciones rectificadas" });
-  }
-}
-
 export const upsertRecaudacionesRectificadasMunicipio = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
   const { conceptos } = req.body ?? {};
@@ -2484,8 +2444,9 @@ export const generarInformeRemuneracionesRectificadasMunicipio = async (req, res
 
   try {
     const disponible = await verificarRectificacionDisponible(municipioNum, ejercicioNum, mesNum);
+
     if (!disponible) {
-      return res.status(400).json({ error: "La rectificación no está disponible para este ejercicio y mes" });
+      return res.status(400).json({ error: "El período no está disponible para generar infromes" });
     }
 
     const municipio = await Municipio.findByPk(municipioNum, {
@@ -2540,7 +2501,7 @@ export const generarInformeRemuneracionesRectificadasMunicipio = async (req, res
       remuneraciones: remuneracionesPlanas,
       regimenes: regimenesPlanos,
       usuarioNombre: `${user.nombre} ${user.apellido}`,
-      convenioNombre: convenio.nombre,
+      convenioNombre: convenio.nombre ,
       esRectificacion: true
     });
 
@@ -2580,8 +2541,10 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
 
   try {
     const disponible = await verificarRectificacionDisponible(municipioNum, ejercicioNum, mesNum);
+
     if (!disponible) {
-      return res.status(400).json({ error: "La rectificación no está disponible para este ejercicio y mes" });
+      await transaction.rollback();
+      return res.status(400).json({ error: "El período no está disponible para modificar remuneraciones" });
     }
 
     const municipio = await Municipio.findByPk(municipioNum, { attributes: ["municipio_id"] });
@@ -2597,55 +2560,60 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
 
     for (const item of remuneraciones) {
       const validRecurso = RemuneracionSchema.safeParse({
-        cuil: item?.cuil,
-        remuneracion_neta: item?.remuneracion_neta,
-        bonificacion: item?.bonificacion,
-        cant_hs_extra_50: item?.cant_hs_extra_50,
-        importe_hs_extra_50: item?.importe_hs_extra_50,
-        cant_hs_extra_100: item?.cant_hs_extra_100,
-        importe_hs_extra_100: item?.importe_hs_extra_100,
-        art: item?.art,
-        seguro_vida: item?.seguro_vida,
-        otros_conceptos: item?.otros_conceptos,
-        legajo: item?.legajo
+        cuil: item.cuil,
+        legajo: item.legajo,
+        apellido_nombre: item.apellido_nombre,
+        regimen_laboral: item.regimen_laboral,
+        categoria: item.categoria,
+        sector: item.sector,
+        fecha_ingreso: item.fecha_ingreso,
+        fecha_inicio_servicio: item.fecha_inicio_servicio,
+        fecha_fin_servicio: item.fecha_fin_servicio ?? null,
+        basico_cargo_salarial: item.basico_cargo_salarial ?? 0,
+        total_remunerativo: item.total_remunerativo ?? 0,
+        sac: item.sac ?? 0,
+        cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+        importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+        cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+        importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+        total_no_remunerativo: item.total_no_remunerativo ?? 0,
+        total_bonos: item.total_bonos ?? 0,
+        total_ropa: item.total_ropa ?? 0,
+        asignaciones_familiares: item.asignaciones_familiares ?? 0,
+        total_descuentos: item.total_descuentos ?? 0,
+        total_issn: item.total_issn ?? 0,
+        art: item.art ?? 0,
+        seguro_vida_obligatorio: item.seguro_vida_obligatorio ?? 0,
+        neto_a_cobrar: item.neto_a_cobrar ?? 0
       });
 
       if (!validRecurso.success) {
         errores.push(`Error procesando la remuneracion con CUIL ${item?.cuil}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
         continue;
       }
-      const tieneRemuneracionNeta = Object.prototype.hasOwnProperty.call(item, "remuneracion_neta");
+
       const tieneApellidoNombre = Object.prototype.hasOwnProperty.call(item, "apellido_nombre");
-      const tieneTipoLiquidacion = Object.prototype.hasOwnProperty.call(item, "tipo_liquidacion");
-      const tieneBonificacion = Object.prototype.hasOwnProperty.call(item, "bonificacion");
+      const tieneCategoria = Object.prototype.hasOwnProperty.call(item, "categoria");
+      const tieneSector = Object.prototype.hasOwnProperty.call(item, "sector");
+      const tieneFechaIngreso = Object.prototype.hasOwnProperty.call(item, "fecha_ingreso");
+      const tieneFechaInicioServicio = Object.prototype.hasOwnProperty.call(item, "fecha_inicio_servicio");
+      const tieneFechaFinServicio = Object.prototype.hasOwnProperty.call(item, "fecha_fin_servicio");
+      const tieneTotalRemunerativo = Object.prototype.hasOwnProperty.call(item, "total_remunerativo");
+      const tieneSac = Object.prototype.hasOwnProperty.call(item, "sac");
       const tieneCantHsExtra50 = Object.prototype.hasOwnProperty.call(item, "cant_hs_extra_50");
       const tieneImporteHsExtra50 = Object.prototype.hasOwnProperty.call(item, "importe_hs_extra_50");
       const tieneCantHsExtra100 = Object.prototype.hasOwnProperty.call(item, "cant_hs_extra_100");
-      const tieneImporteHsExtra100 = Object.prototype.hasOwnProperty.call(item, "importe_hs_extra_100");
+      const tieneImporteHsExtra100 = Object.prototype.hasOwnProperty.call(item, "importe_hs_extra_100");    
+      const tieneTotalNoRemunerativo = Object.prototype.hasOwnProperty.call(item, "total_no_remunerativo");    
+      const tieneTotalBonos = Object.prototype.hasOwnProperty.call(item, "total_bonos");    
+      const tieneTotalRopa = Object.prototype.hasOwnProperty.call(item, "total_ropa");    
+      const tieneAsignacionesFamiliares = Object.prototype.hasOwnProperty.call(item, "asignaciones_familiares");
+      const tieneTotalDescuentos = Object.prototype.hasOwnProperty.call(item, "total_descuentos");  
+      const tieneTotalIssn = Object.prototype.hasOwnProperty.call(item, "total_issn");      
       const tieneArt = Object.prototype.hasOwnProperty.call(item, "art");
-      const tieneSeguroVida = Object.prototype.hasOwnProperty.call(item, "seguro_vida");
-      const tieneOtrosConceptos = Object.prototype.hasOwnProperty.call(item, "otros_conceptos");
-
-      const regimenNombre = item.regimen ?? '';
-      const regimen = await RegimenLaboral.findOne({ where: { nombre: regimenNombre } });
-      if (!regimen) {
-        errores.push(`El regimen con nombre ${regimenNombre} no existe`);
-        continue;
-      }
-
-      const situacionRevistaNombre = item.situacion_revista ?? ''
-      const situacionRevista = await SituacionRevista.findOne({ where: { nombre: situacionRevistaNombre } })
-      if(!situacionRevista){
-        errores.push(`La situación de revista con nombre ${situacionRevistaNombre} no existe`);
-        continue;
-      }
-
-      const tipoLiquidacionNombre = item.tipo_liquidacion ?? '';
-      const tipoLiquidacion = await TipoGasto.findOne({ where: { descripcion: tipoLiquidacionNombre } });
-      if(!tipoLiquidacion){
-        errores.push(`El tipo de liquidación con nombre ${tipoLiquidacion} no existe`);
-        continue;
-      }
+      const tieneSeguroVidaObligatorio = Object.prototype.hasOwnProperty.call(item, "seguro_vida_obligatorio");
+      const tieneRemuneracionNeta = Object.prototype.hasOwnProperty.call(item, "neto_a_cobrar");
+      const tieneRegimenLaboral = Object.prototype.hasOwnProperty.call(item, "regimen_laboral");
 
       const where = {
         remuneraciones_ejercicio: ejercicioNum,
@@ -2661,19 +2629,29 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
         const data = { 
           ...where, 
           apellido_nombre: item.apellido_nombre,
-          regimen_id: regimen.regimen_id,
-          situacion_revista_id: situacionRevista.situacion_revista_id,
-          tipo_liquidacion: tipoLiquidacion.tipo_gasto_id,
-          fecha_alta: obtenerFecha(item.fecha_alta),
-          remuneracion_neta: item.remuneracion_neta,
-          bonificacion: item.bonificacion ?? 0,
+          regimen_laboral: item.regimen_laboral,
+          categoria: item.categoria,
+          sector: item.sector,
+          regimen_laboral: item.regimen_laboral,
+          fecha_ingreso: item.fecha_ingreso,
+          fecha_inicio_servicio: item.fecha_inicio_servicio,
+          fecha_fin_servicio: item.fecha_fin_servicio ?? null,
+          basico_cargo_salarial: item.basico_cargo_salarial ?? 0,
+          total_remunerativo: item.total_remunerativo ?? 0,
+          sac: item.sac ?? 0,
           cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-          importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
+          importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
           cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-          importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
+          importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+          total_no_remunerativo: item.total_no_remunerativo ?? 0,
+          total_bonos: item.total_bonos ?? 0,
+          total_ropa: item.total_ropa ?? 0,
+          asignaciones_familiares: item.asignaciones_familiares ?? 0,
+          total_descuentos: item.total_descuentos ?? 0,
+          total_issn: item.total_issn ?? 0,
           art: item.art ?? 0,
-          seguro_vida: item.seguro_vida ?? 0,
-          otros_conceptos: item.otros_conceptos ?? 0
+          seguro_vida_obligatorio: item.seguro_vida_obligatorio ?? 0,
+          total_remuneracion_neta: item.neto_a_cobrar ?? 0,
         };
 
         await RemuneracionRectificada.create(
@@ -2686,26 +2664,42 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
         continue;
       }
 
-      if(
-        existente.regimen_id != regimen.regimen_id || 
-        existente.situacion_revista_id != situacionRevista.situacion_revista_id
-      ){
-        errores.push(`El usuario con CUIL ${item.cuil} ya se encuentra cargado en el sistema con otro régimen y otra situación de revista asignados`);
-        continue;
-      }
-
       let huboCambios = false;
 
       if (tieneApellidoNombre && !compararValores(existente.apellido_nombre, item.apellido_nombre)) {
         existente.apellido_nombre = item.apellido_nombre;
         huboCambios = true;
       }
-      if (tieneTipoLiquidacion&& !compararValores(existente.tipo_liquidacion, tipoLiquidacion.tipo_gasto_id, 'number')) {
-        existente.tipo_liquidacion = tipoLiquidacion.tipo_gasto_id;
+      if (tieneCategoria && !compararValores(existente.categoria, item.categoria)) {
+        existente.categoria = item.categoria;
         huboCambios = true;
       }
-      if (tieneBonificacion && !compararValores(existente.bonificacion, item.bonificacion, 'number')) {
-        existente.bonificacion = item.bonificacion;
+      if (tieneSector && !compararValores(existente.sector, item.sector)) {
+        existente.sector = item.sector;
+        huboCambios = true;
+      }
+      if(tieneRegimenLaboral && !compararValores(existente.sector, item.sector)){
+        existente.regimen_laboral = item.regimen_laboral;
+        huboCambios = true;
+      }
+      if (tieneFechaIngreso && !compararValores(existente.fecha_ingreso, item.fecha_ingreso)) {
+        existente.fecha_ingreso = item.fecha_ingreso;
+        huboCambios = true;
+      }
+      if (tieneFechaInicioServicio && !compararValores(existente.fecha_inicio_servicio, item.fecha_inicio_servicio)) {
+        existente.fecha_inicio_servicio = item.fecha_inicio_servicio;
+        huboCambios = true;
+      }
+      if (tieneFechaFinServicio && !compararValores(existente.fecha_fin_servicio, item.fecha_fin_servicio)) {
+        existente.fecha_fin_servicio = item.fecha_fin_servicio;
+        huboCambios = true;
+      }
+      if (tieneTotalRemunerativo && !compararValores(existente.total_remunerativo, item.total_remunerativo, 'number')) {
+        existente.total_remunerativo = item.total_remunerativo;
+        huboCambios = true;
+      }
+      if (tieneSac && !compararValores(existente.sac, item.sac, 'number')) {
+        existente.sac = item.sac;
         huboCambios = true;
       }
       if (tieneCantHsExtra50 && !compararValores(existente.cant_hs_extra_50, item.cant_hs_extra_50, 'number')) {
@@ -2724,20 +2718,40 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
         existente.importe_hs_extra_100 = item.importe_hs_extra_100;
         huboCambios = true;
       }
+      if (tieneTotalNoRemunerativo && !compararValores(existente.total_no_remunerativo, item.total_no_remunerativo, 'number')) {
+        existente.total_no_remunerativo = item.total_no_remunerativo;
+        huboCambios = true;
+      }
+      if (tieneTotalBonos && !compararValores(existente.total_bonos, item.total_bonos, 'number')) {
+        existente.total_bonos = item.total_bonos;
+        huboCambios = true;
+      }
+      if (tieneTotalRopa && !compararValores(existente.ropa, item.ropa, 'number')) {
+        existente.ropa = item.ropa;
+        huboCambios = true;
+      }
+      if (tieneAsignacionesFamiliares && !compararValores(existente.asignaciones_familiares, item.asignaciones_familiares, 'number')) {
+        existente.asignaciones_familiares = item.asignaciones_familiares;
+        huboCambios = true;
+      }
+      if (tieneTotalDescuentos && !compararValores(existente.total_descuentos, item.total_descuentos, 'number')) {
+        existente.total_descuentos = item.total_descuentos;
+        huboCambios = true;
+      }
+      if (tieneTotalIssn && !compararValores(existente.total_issn, item.total_issn, 'number')) {
+        existente.total_issn = item.sac;
+        huboCambios = true;
+      }
       if (tieneArt && !compararValores(existente.art, item.art, 'number')) {
         existente.art = item.art;
         huboCambios = true;
       }
-      if (tieneSeguroVida && !compararValores(existente.seguro_vida, item.seguro_vida, 'number')) {
-        existente.seguro_vida = item.seguro_vida;
+      if (tieneSeguroVidaObligatorio && !compararValores(existente.seguro_vida_obligatorio, item.seguro_vida_obligatorio, 'number')) {
+        existente.seguro_vida_obligatorio = item.seguro_vida_obligatorio;
         huboCambios = true;
       }
-      if (tieneOtrosConceptos && !compararValores(existente.otros_conceptos, item.otros_conceptos, 'number')) {
-        existente.otros_conceptos = item.otros_conceptos;
-        huboCambios = true;
-      }
-      if (tieneRemuneracionNeta && !compararValores(existente.remuneracion_neta, item.remuneracion_neta, 'number')) {
-        existente.remuneracion_neta = item.remuneracion_neta;
+      if (tieneRemuneracionNeta && !compararValores(existente.total_remuneracion_neta, item.total_remuneracion_neta, 'number')) {
+        existente.total_remuneracion_neta = item.total_remuneracion_neta;
         huboCambios = true;
       }
 
