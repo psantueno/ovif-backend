@@ -22,7 +22,6 @@ import {
   generarInformeRecaudacionesMunicipio,
   generarInformeRemuneracionesMunicipio,
   generarInformeDeterminacionTributariaMunicipio,
-  obtenerConceptosRecaudacionRectificadaMunicipio,
   upsertRecaudacionesRectificadasMunicipio,
   generarInformeRecaudacionesRectificadasMunicipio,
   upsertRemuneracionesRectificadasMunicipio,
@@ -174,15 +173,6 @@ router.put(
 );
 
 // Rectificaciones
-
-router.get(
-  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas/conceptos",
-  authenticateToken,
-  validarMunicipioAsignado,
-  validarRectificacionDisponible,
-  obtenerConceptosRecaudacionRectificadaMunicipio
-);
-
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas",
   authenticateToken,
