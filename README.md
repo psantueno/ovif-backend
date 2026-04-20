@@ -1,12 +1,3 @@
 # ovif-backend
 
-## Configuración de correo
-
-El servicio de restablecimiento de contraseña utiliza Nodemailer y el servidor `mail.haciendanqn.gob.ar`. Configurá estas variables en tu `.env`:
-
-- `SMTP_HOST=mail.haciendanqn.gob.ar`
-- `SMTP_PORT=465`
-- `SMTP_USER=<cuenta>@haciendanqn.gob.ar`
-- `SMTP_PASS=<contraseña de la cuenta>`
-- `EMAIL_FROM="OVIF <ovif@haciendanqn.gob.ar>"`
-- `SMTP_SECURE=true` (SSL/TLS como indicó Infraestructura)
+Backend de OVIF (Oficina Virtual de Información Fiscal Municipal). Expone una API REST desarrollada con Express y Sequelize para autenticación, gestión de usuarios, municipios, ejercicios fiscales y carga de información municipal como gastos, recursos, remuneraciones y archivos. También incluye middlewares de seguridad, manejo de cookies, rate limiting, generación de informes y tareas programadas para automatizaciones del sistema.
