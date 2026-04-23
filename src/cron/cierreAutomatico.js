@@ -25,7 +25,10 @@ import { buildInformeRecursos } from "../utils/pdf/municipioRecursos.js";
 import { buildInformeRecaudaciones } from "../utils/pdf/municipioRecaudaciones.js";
 import { buildInformeRemuneraciones } from "../utils/pdf/municipioRemuneraciones.js";
 import { buildInformeDeterminacionTributaria } from "../utils/pdf/municipioDeterminacionTributaria.js";
-import { enviarMensajeCierreModulos } from "../services/mailer.js";
+import {
+  encolarEnvioCierreModulos,
+  procesarMailsPendientes,
+} from "../services/emailService.js";
 import crypto from "crypto";
 import {
   CIERRE_MODULOS,
@@ -680,7 +683,7 @@ cron.schedule(
                 mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes}) para el municipio ${municipio.municipio_nombre} exitoso`,
               });
 
-              agregarMailsParaCierre(mailsParaEnviar, municipio.municipio_id, ejercicio, mes, modulos, false);
+              await agregarMailsParaCierre(mailsParaEnviar, municipio.municipio_id, ejercicio, mes, modulos, false);
 
               cierresRealizados++;
             } catch (error) {
@@ -785,7 +788,7 @@ cron.schedule(
                 mensaje: `Cierre del módulo (${modulo} / ${ejercicio}-${mes} (Prorroga)) para el municipio ${municipio.municipio_nombre} exitoso`,
               });
 
-              agregarMailsParaCierre(mailsParaEnviar, municipio.municipio_id, ejercicio, mes, modulos, true);
+              await agregarMailsParaCierre(mailsParaEnviar, municipio.municipio_id, ejercicio, mes, modulos, true);
 
               cierresRealizados++;
             } catch (error) {
@@ -832,11 +835,56 @@ cron.schedule(
       });
       console.log("Total de mails para enviar:", mailsParaEnviar.length);
 
-      
-      mailsParaEnviar.forEach(async (m) => {
-        await enviarMensajeCierreModulos(m.to, m.nombre, m.ejercicio, m.mes, m.modulos, m.esProrroga)
-      })
-      
+      // Encolar mails en outbox y procesarlos en esta misma corrida
+      let mailsEncolados = 0;
+      let mailsDuplicados = 0;
+      let erroresEncolando = 0;
+      const idsParaProcesar = [];
+      for (const m of mailsParaEnviar) {
+        try {
+          const { correo, created } = await encolarEnvioCierreModulos({
+            destinatario: m.to,
+            nombre: m.nombre,
+            ejercicio: m.ejercicio,
+            mes: m.mes,
+            modulos: m.modulos,
+            esProrroga: m.esProrroga,
+          });
+          if (created) mailsEncolados++;
+          else mailsDuplicados++;
+
+          const correoRetriable =
+            correo &&
+            ["PENDIENTE", "ERROR"].includes(correo.estado) &&
+            Number(correo.intentos) < Number(correo.max_intentos);
+
+          if (correoRetriable) {
+            idsParaProcesar.push(Number(correo.id));
+          }
+        } catch (err) {
+          erroresEncolando++;
+          console.error(`⚠️ Error encolando mail para ${m.to}:`, err.message);
+        }
+      }
+      console.log(
+        `📬 [CRON] ${mailsEncolados} mails encolados, ${mailsDuplicados} ya existentes, ${erroresEncolando} errores al encolar, ${mailsParaEnviar.length} evaluados`
+      );
+
+      const resumenEnvio = await procesarMailsPendientes({
+        ids: idsParaProcesar,
+        maxAttemptsPerRun: 3,
+      });
+
+      console.log(
+        `📨 [CRON] Correos procesados: ${resumenEnvio.total}, enviados: ${resumenEnvio.sent}, fallidos: ${resumenEnvio.failed}, omitidos: ${resumenEnvio.skipped}`
+      );
+
+      await CronLog.create({
+        nombre_tarea: "Resumen Correos",
+        estado: resumenEnvio.failed > 0 || erroresEncolando > 0 ? "ERROR" : "OK",
+        mensaje: `Encolado: evaluados=${mailsParaEnviar.length}, nuevos=${mailsEncolados}, duplicados=${mailsDuplicados}, errores=${erroresEncolando}. Envío: procesados=${resumenEnvio.total}, enviados=${resumenEnvio.sent}, fallidos=${resumenEnvio.failed}, omitidos=${resumenEnvio.skipped}.`,
+      });
+
     } catch (error) {
       console.error("💥 Error general en cierre automático:", error);
       try {

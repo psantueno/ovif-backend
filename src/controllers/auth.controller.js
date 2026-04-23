@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import * as crypto from "crypto";
-import { sendResetMail } from "../utils/mail.js";
+import { sendResetMail } from "../services/emailService.js";
 import { PasswordReset, Usuario, Rol, AuthSession } from "../models/index.js";
 import {
   ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME,
