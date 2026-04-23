@@ -40,6 +40,7 @@ import ProrrogaMunicipio from './ProrrogaMunicipio.js';
 import AuditoriaProrrogaMunicipio from './AuditoriaProrrogaMunicipio.js';
 import Parametros from './Parametros.js';
 import MunicipioMail from './moduloEjercicios/MunicipioMail.js';
+import EnvioCorreo from './moduloEjercicios/EnvioCorreo.js';
 import AuthSession from './AuthSession.js';
 
 // Relación muchos a muchos con Rol
@@ -197,5 +198,6 @@ export {
   RemuneracionRectificada,
   Parametros,
   MunicipioMail,
+  EnvioCorreo,
   AuthSession
 };
