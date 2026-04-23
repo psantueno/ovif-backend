@@ -10,6 +10,9 @@ import cookieParser from "cookie-parser";
 import sequelize from "./config/db.js";  
 import "./models/index.js";              
 
+// === Importación de Middlewares ===
+import { maintenanceMode } from "./middlewares/maintenanceMode.js";
+
 // === Importación de Rutas ===
 import usuariosRoutes from "./routes/usuarios.routes.js";
 import rolesRoutes from "./routes/roles.routes.js";
@@ -66,6 +69,12 @@ app.use(
     max: 500,                 // máx. 500 requests
   })
 );
+
+// === Mantenimiento ===
+app.get("/api/status", (req, res) => {
+  res.json({ maintenance: process.env.MAINTENANCE === "true" });
+});
+app.use(maintenanceMode);
 
 // === Rutas ===
 app.use("/api/usuarios", usuariosRoutes);
