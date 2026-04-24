@@ -635,18 +635,22 @@ export const obtenerFiltrosInformes = async (req, res) => {
   }
 
   try {
-    const where = { municipio_id: municipioId };
-
+    const whereCierresModulos = { municipio_id: municipioId, informe_path: { [Op.ne]: null } };
     const cierresModulosMunicipioRaw = await CierreModulo.findAll({
       attributes: ['ejercicio', 'mes', 'modulo'],
-      where,
+      where: whereCierresModulos,
       order: [['ejercicio', "DESC"], ['mes', 'ASC']],
       raw: true
     });
 
+    const whereEjerciciosMesesCerrados = {
+      municipio_id: municipioId,
+      informe_gastos: { [Op.ne]: null },
+      informe_recursos: { [Op.ne]: null },
+    };
     const ejerciciosMesesCerrados = await EjercicioMesCerrado.findAll({
       attributes: ['ejercicio', 'mes'],
-      where,
+      where: whereEjerciciosMesesCerrados,
       order: [['ejercicio', "DESC"], ['mes', 'ASC']],
       raw: true
     })
