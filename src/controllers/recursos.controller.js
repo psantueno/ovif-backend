@@ -50,9 +50,10 @@ export const obtenerRecursos = async (req, res) => {
     if (municipio_id !== undefined) where.municipio_id = Number(municipio_id);
 
     const recursos = await Recurso.findAll({ where });
-    res.json(recursos);
+    return res.json(recursos);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("❌ Error consultando recursos:", error);
+    return res.status(500).json({ error: "Error consultando recursos" });
   }
 };
 

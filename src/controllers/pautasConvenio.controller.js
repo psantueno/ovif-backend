@@ -141,7 +141,7 @@ export const getPautasSelect = async (_req, res) => {
       order: [["descripcion", "ASC"]],
     });
 
-    res.json(
+    return res.json(
       pautas.map((pauta) => ({
         pauta_id: pauta.pauta_id,
         descripcion: pauta.descripcion,
@@ -156,7 +156,7 @@ export const getPautasSelect = async (_req, res) => {
     );
   } catch (error) {
     console.error("❌ Error consultando pautas:", error);
-    res.status(500).json({ error: "Error consultando pautas" });
+    return res.status(500).json({ error: "Error consultando pautas" });
   }
 };
 
@@ -189,14 +189,19 @@ export const listarPautas = async (req, res) => {
 
     const pautasPlanas = await Promise.all(
       rows.map(async (p) => {
-        const modificable = await esPautaModificable(p.pauta_id);
+        let modificable = false;
+        try {
+          modificable = await esPautaModificable(p.pauta_id);
+        } catch (error) {
+          console.error(`❌ Error verificando si la pauta es modificable para pauta_id ${p.pauta_id}`, error);
+        }
         return normalizarPauta(p, modificable);
       })
     );
 
     const totalPaginas = limiteFinal > 0 ? Math.ceil(count / limiteFinal) : 0;
 
-    res.json({
+    return res.json({
       total: count,
       pagina: paginaFinal,
       limite: limiteFinal,
@@ -205,7 +210,7 @@ export const listarPautas = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error consultando pautas:", error);
-    res.status(500).json({ error: "Error consultando pautas" });
+    return res.status(500).json({ error: "Error consultando pautas" });
   }
 };
 
@@ -267,7 +272,7 @@ export const crearPauta = async (req, res) => {
       include: includePautaRelations,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Pauta creada correctamente",
       pauta: normalizarPauta(pautaConRelaciones, true),
     });
@@ -277,7 +282,7 @@ export const crearPauta = async (req, res) => {
     }
 
     console.error("❌ Error creando pauta:", error);
-    res.status(500).json({ error: "Error creando pauta" });
+    return res.status(500).json({ error: "Error creando pauta" });
   }
 };
 
@@ -352,7 +357,7 @@ export const actualizarPauta = async (req, res) => {
       include: includePautaRelations,
     });
 
-    res.json({
+    return res.json({
       message: "Pauta actualizado correctamente",
       pauta: normalizarPauta(pautaConRelaciones, modificable),
     });
@@ -362,7 +367,7 @@ export const actualizarPauta = async (req, res) => {
     }
 
     console.error("❌ Error actualizando pauta:", error);
-    res.status(500).json({ error: "Error actualizando pauta" });
+    return res.status(500).json({ error: "Error actualizando pauta" });
   }
 };
 
@@ -384,10 +389,10 @@ export const eliminarPauta = async (req, res) => {
 
     await pauta.destroy();
 
-    res.json({ message: "Pauta eliminada correctamente" });
+    return res.json({ message: "Pauta eliminada correctamente" });
   } catch (error) {
     console.error("❌ Error eliminando pauta:", error);
-    res.status(500).json({ error: "Error eliminando pauta" });
+    return res.status(500).json({ error: "Error eliminando pauta" });
   }
 };
 

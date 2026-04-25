@@ -78,10 +78,10 @@ export const getConveniosSelect = async (req, res) => {
       order: [["nombre", "ASC"]],
     });
 
-    res.json(convenios);
+    return res.json(convenios);
   } catch (error) {
     console.error("❌ Error consultando convenios:", error);
-    res.status(500).json({ error: "Error consultando convenios" });
+    return res.status(500).json({ error: "Error consultando convenios" });
   }
 }
 
@@ -113,7 +113,12 @@ export const listarConvenios = async (req, res) => {
 
     const conveniosPlanos = await Promise.all(
       rows.map(async (c) => {
-        const modificable = await esConvenioModificable(c.convenio_id);
+        let modificable = false;
+        try {
+          modificable = await esConvenioModificable(c.convenio_id);
+        } catch {
+          console.error(`❌ Error verificando si el convenio es modificable para convenio_id ${c.convenio_id}`);
+        }
 
         return {
           convenio_id: c.convenio_id,
@@ -130,7 +135,7 @@ export const listarConvenios = async (req, res) => {
 
     const totalPaginas = limiteFinal > 0 ? Math.ceil(count / limiteFinal) : 0;
 
-    res.json({
+    return res.json({
       total: count,
       pagina: paginaFinal,
       limite: limiteFinal,
@@ -139,7 +144,7 @@ export const listarConvenios = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error consultando convenios:", error);
-    res.status(500).json({ error: "Error consultando convenios" });
+    return res.status(500).json({ error: "Error consultando convenios" });
   }
 }
 
@@ -178,13 +183,13 @@ export const crearConvenio = async (req, res) => {
       fecha_fin: fecha_fin
     })
 
-    res.json({
+    return res.json({
       message: "Convenio creado correctamente",
       convenio,
     });
   } catch (error) {
     console.error("❌ Error creando convenio:", error);
-    res.status(500).json({ error: "Error creando convenio" });
+    return res.status(500).json({ error: "Error creando convenio" });
   }
 }
 
@@ -238,13 +243,13 @@ export const actualizarConvenio = async (req, res) => {
     await convenio.save();
     convenio.modificable = modificable;
 
-    res.json({
+    return res.json({
       message: "Convenio actualizado correctamente",
       convenio,
     });
   } catch (error) {
     console.error("❌ Error actualizando convenio:", error);
-    res.status(500).json({ error: "Error actualizando convenio" });
+    return res.status(500).json({ error: "Error actualizando convenio" });
   }
 };
 
@@ -266,10 +271,10 @@ export const eliminarConvenio = async (req, res) => {
 
     await convenio.destroy();
 
-    res.json({ message: "Convenio eliminado correctamente" });
+    return res.json({ message: "Convenio eliminado correctamente" });
   } catch (error) {
     console.error("❌ Error eliminando convenio:", error);
-    res.status(500).json({ error: "Error eliminando convenio" });
+    return res.status(500).json({ error: "Error eliminando convenio" });
   }
 }
 

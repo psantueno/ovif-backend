@@ -7,11 +7,11 @@ const router = Router();
 
 router.use(authenticateToken, requireAdmin);
 
-router.get("/select", authenticateToken, requireAdmin, getMunicipiosMailsSelect)
+router.get("/select", getMunicipiosMailsSelect);
 router.get("/list", listarMunicipiosMails);
 router.get("/sin-mail", listarMunicipiosSinMail);
-router.post("/", authenticateToken, requireAdmin, crearMunicipioMail);
-router.put("/:municipio_id/:email", authenticateToken, requireAdmin, actualizarMunicipioMail);
-router.delete("/:municipio_id/:email", authenticateToken, requireAdmin, eliminarMunicipioMail);
+router.post("/", crearMunicipioMail);
+router.put("/:municipio_id/:email", actualizarMunicipioMail);
+router.delete("/:municipio_id/:email", eliminarMunicipioMail);
 
 export default router;

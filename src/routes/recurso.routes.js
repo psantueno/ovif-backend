@@ -19,6 +19,6 @@ router.post("/", authenticateToken, validarMunicipioAsignado, validarFechaLimite
 router.get("/", authenticateToken, validarMunicipioAsignado, validarFechaLimiteGastosRecursos, obtenerRecursos);
 router.get("/:ejercicio/:mes/:partida/:municipio", authenticateToken, validarMunicipioAsignado, validarFechaLimiteGastosRecursos, obtenerRecurso);
 router.put("/:ejercicio/:mes/:partida/:municipio", authenticateToken, validarMunicipioAsignado, validarFechaLimiteGastosRecursos, actualizarRecurso);
-// router.delete("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarRecurso);
+// router.delete("/:ejercicio/:mes/:partida/:municipio", validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarRecurso); // Sin uso actualmente
 
 export default router;

@@ -266,6 +266,15 @@ export const updateEjercicio = async (req, res) => {
   const { fecha_inicio, fecha_fin, convenio_id, pauta_id } = req.body;
   const usuarioId = req.user?.usuario_id;
 
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+  if (!Number.isInteger(ejercicioNum) || ejercicioNum < 2000 || ejercicioNum > 2100) {
+    return res.status(400).json({ error: "El campo 'ejercicio' debe ser un año válido (2000-2100)." });
+  }
+  if (!Number.isInteger(mesNum) || mesNum < 1 || mesNum > 12) {
+    return res.status(400).json({ error: "El campo 'mes' debe ser un número entre 1 y 12." });
+  }
+
   if (!usuarioId) {
     return res.status(401).json({ error: "Usuario autenticado requerido para modificar el ejercicio." });
   }

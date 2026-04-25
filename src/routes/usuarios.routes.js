@@ -39,8 +39,8 @@ router.post("/", authenticateToken, requireAdmin,createUsuario);
 router.put("/:id", authenticateToken, requireAdmin, updateUsuario);
 // Editar roles del usuario
 router.put("/:id/roles", authenticateToken, requireAdmin, updateUsuarioRoles);
-// Soft delete
-// router.delete("/:id", authenticateToken, softDeleteUsuario);   
+// Soft delete - Sin uso actualmente
+// router.delete("/:id", authenticateToken, softDeleteUsuario);
 // Delete permanente
 router.delete("/:id", authenticateToken, requireAdmin, deleteUsuario);
 // Cambiar estado activo/inactivo
