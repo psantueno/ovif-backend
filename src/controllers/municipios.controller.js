@@ -234,7 +234,12 @@ export const getMunicipios = async (req, res) => {
 
     const municipiosPlanos = await Promise.all(
       rows.map(async (m) => {
-        const modificable = await esMunicipioModificable(m.municipio_id);
+        let modificable = false;
+        try {
+          modificable = await esMunicipioModificable(m.municipio_id);
+        } catch (error) {
+          console.error(`❌ Error verificando si el municipio es modificable para municipio_id ${m.municipio_id}`, error);
+        }
 
         return {
           municipio_id: m.municipio_id,
@@ -251,7 +256,7 @@ export const getMunicipios = async (req, res) => {
 
     const totalPaginas = limiteFinal > 0 ? Math.ceil(count / limiteFinal) : 0;
 
-    res.json({
+    return res.json({
       total: count,
       pagina: paginaFinal,
       limite: limiteFinal,
@@ -260,7 +265,7 @@ export const getMunicipios = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error consultando municipios:", error);
-    res.status(500).json({ error: "Error consultando municipios" });
+    return res.status(500).json({ error: "Error consultando municipios" });
   }
 };
 

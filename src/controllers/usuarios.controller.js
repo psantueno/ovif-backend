@@ -1,7 +1,9 @@
 import { Op, literal  } from "sequelize";
+import sequelize from "../config/db.js";
 // Modelos
 import { Usuario, Rol, Municipio, AuditoriaProrrogaMunicipio, UsuarioMunicipio, UsuarioRol } from "../models/index.js";
-
+import { CreateUsuarioSchema } from "../validation/UsuarioSchema.validation.js";
+import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
 
 // Librerías
 import bcrypt from "bcrypt";
@@ -14,10 +16,10 @@ export const getUsuarioById = async (req, res) => {
     if (!usuario) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
-    res.json(usuario);
+    return res.json(usuario);
   } catch (err) {
     console.error("❌ Error consultando usuario:", err);
-    res.status(500).json({ error: "Error consultando usuario" });
+    return res.status(500).json({ error: "Error consultando usuario" });
   }
 };
 
@@ -26,11 +28,12 @@ export const getUsuarioById = async (req, res) => {
 
 // CREATE - Crear nuevo usuario
 export const createUsuario = async (req, res) => {
-  const { usuario, email, password, nombre, apellido, roles } = req.body;
-
-  if (!usuario || !password || !email) {
-    return res.status(400).json({ error: "Usuario, email y contraseña son obligatorios" });
+  const valid = CreateUsuarioSchema.safeParse(req.body);
+  if (!valid.success) {
+    return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(", ") });
   }
+
+  const { usuario, email, password, nombre, apellido, roles } = valid.data;
 
   try {
     // Verificar que no exista ya
@@ -47,8 +50,8 @@ export const createUsuario = async (req, res) => {
       usuario,
       email,
       password: hashed,
-      nombre: nombre || "",
-      apellido: apellido || "",
+      nombre: nombre?.trim() ?? "",
+      apellido: apellido?.trim() ?? "",
       activo: 1,
     });
 
@@ -137,18 +140,16 @@ export const updateUsuarioRoles = async (req, res) => {
       });
     }
 
-    // 🧹 Eliminar roles previos
-    await user.setRoles([]);
-
-    // 🧾 Crear nuevas asignaciones con auditoría
     const nuevasAsignaciones = roles.map((rol_id) => ({
       usuario_id: id,
       rol_id,
       asignado_por: usuarioLogueadoId,
     }));
 
-    // Inserta directamente en la tabla intermedia
-    await UsuarioRol.bulkCreate(nuevasAsignaciones);
+    await sequelize.transaction(async (t) => {
+      await UsuarioRol.destroy({ where: { usuario_id: id }, transaction: t });
+      await UsuarioRol.bulkCreate(nuevasAsignaciones, { transaction: t });
+    });
 
     // 🔁 Recargar usuario con roles actualizados
     const userWithRoles = await Usuario.findByPk(id, {
@@ -267,18 +268,16 @@ export const updateUsuarioMunicipios = async (req, res) => {
       });
     }
 
-    // 🧹 Borramos asignaciones anteriores
-    await user.setMunicipios([]);
-
-    // 🧾 Creamos nuevas asignaciones incluyendo quién las hizo
     const nuevasAsignaciones = uniqueMunicipios.map((municipio_id) => ({
       usuario_id: id,
       municipio_id,
       asignado_por: usuarioLogueadoId,
     }));
 
-    // Inserta directamente en la tabla intermedia
-    await UsuarioMunicipio.bulkCreate(nuevasAsignaciones);
+    await sequelize.transaction(async (t) => {
+      await UsuarioMunicipio.destroy({ where: { usuario_id: id }, transaction: t });
+      await UsuarioMunicipio.bulkCreate(nuevasAsignaciones, { transaction: t });
+    });
 
     // 🔁 Recargamos datos actualizados
     await user.reload({

@@ -7,10 +7,10 @@ const router = Router();
 
 router.use(authenticateToken, requireAdmin);
 
-router.get("/select", authenticateToken, requireAdmin, getConceptosSelect)
+router.get("/select", getConceptosSelect);
 router.get("/list", listarConceptos);
-router.post("/", authenticateToken, requireAdmin, crearConcepto);
-router.put("/:codigo", authenticateToken, requireAdmin, actualizarConcepto);
-router.delete("/:cod_concepto", authenticateToken, requireAdmin, eliminarConcepto);
+router.post("/", crearConcepto);
+router.put("/:codigo", actualizarConcepto);
+router.delete("/:cod_concepto", eliminarConcepto);
 
 export default router;

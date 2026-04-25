@@ -27,7 +27,7 @@ router.post("/:ejercicio/mes/:mes/municipios/:municipioId", authenticateToken, v
 router.put("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteGastosRecursos, actualizarGasto);
 
 // Eliminar
-// router.delete("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarGasto);
+// router.delete("/:ejercicio/mes/:mes/municipios/:municipioId/partida/:partida", authenticateToken, validarMunicipioAsignado, validarFechaLimiteDeCarga, eliminarGasto); // Sin uso actualmente
 
 // Reporte por partida
 router.get(

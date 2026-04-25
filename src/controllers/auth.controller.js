@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import * as crypto from "crypto";
+import sequelize from "../config/db.js";
 import { sendResetMail } from "../services/emailService.js";
 import { PasswordReset, Usuario, Rol, AuthSession } from "../models/index.js";
 import {
@@ -290,30 +291,36 @@ export const changePassword = async (req, res) => {
       return res.status(401).json({ error: "Contraseña actual incorrecta" });
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
+    const passwordHash = await bcrypt.hash(newPassword, 10);
 
-    // Revocar todas las sesiones del usuario (forzar re-login en otros dispositivos)
-    await AuthSession.update(
-      { revoked_at: new Date() },
-      { where: { usuario_id: user.usuario_id, revoked_at: null } }
-    );
+    let accessToken;
+    let rawRefresh;
 
-    // Crear nueva sesión para el dispositivo actual
-    const rawRefresh = generateRefreshToken();
-    const familyId = crypto.randomUUID();
+    await sequelize.transaction(async (t) => {
+      user.password = passwordHash;
+      await user.save({ transaction: t });
 
-    const session = await AuthSession.create({
-      family_id: familyId,
-      usuario_id: user.usuario_id,
-      refresh_token_hash: hashToken(rawRefresh),
-      expires_at: new Date(Date.now() + REFRESH_TOKEN_TTL * 1000),
-      created_ip: req.ip,
-      last_ip: req.ip,
-      user_agent: (req.headers["user-agent"] || "").slice(0, 512),
+      await AuthSession.update(
+        { revoked_at: new Date() },
+        { where: { usuario_id: user.usuario_id, revoked_at: null }, transaction: t }
+      );
+
+      rawRefresh = generateRefreshToken();
+      const familyId = crypto.randomUUID();
+
+      const session = await AuthSession.create({
+        family_id: familyId,
+        usuario_id: user.usuario_id,
+        refresh_token_hash: hashToken(rawRefresh),
+        expires_at: new Date(Date.now() + REFRESH_TOKEN_TTL * 1000),
+        created_ip: req.ip,
+        last_ip: req.ip,
+        user_agent: (req.headers["user-agent"] || "").slice(0, 512),
+      }, { transaction: t });
+
+      accessToken = signAccessToken(user, session.session_id);
     });
 
-    const accessToken = signAccessToken(user, session.session_id);
     setAuthCookies(res, accessToken, rawRefresh);
 
     return res.json({ message: "Contraseña actualizada correctamente" });

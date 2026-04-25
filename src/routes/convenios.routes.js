@@ -17,10 +17,10 @@ router.use(authenticateToken, requireAdmin);
 
 router.get("/", listarConveniosActivos);
 router.get("/list", listarConvenios);
-router.get("/select", authenticateToken, requireAdmin, getConveniosSelect)
+router.get("/select", getConveniosSelect);
 router.get("/:convenioId/pautas", listarPautasPorConvenio);
-router.post("/", authenticateToken, requireAdmin, crearConvenio)
-router.put("/:convenioId", authenticateToken, requireAdmin, actualizarConvenio);
-router.delete("/:convenioId", authenticateToken, requireAdmin, eliminarConvenio);
+router.post("/", crearConvenio);
+router.put("/:convenioId", actualizarConvenio);
+router.delete("/:convenioId", eliminarConvenio);
 
 export default router;

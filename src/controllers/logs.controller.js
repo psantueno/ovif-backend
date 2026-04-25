@@ -33,7 +33,7 @@ export const listarLogs = async (req, res) => {
             limit: limit,
             offset: offset
         });
-        res.json({
+        return res.json({
             data: rows,
             total: count,
             page: page,
@@ -41,6 +41,6 @@ export const listarLogs = async (req, res) => {
         });
     } catch (error) {
         console.error("Error al listar logs:", error);
-        res.status(500).json({ error: "Error al listar logs" });
+        return res.status(500).json({ error: "Error al listar logs" });
     }
 }

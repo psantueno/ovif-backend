@@ -11,10 +11,10 @@ export const getConceptosSelect = async (req, res) => {
         order: [["descripcion", "ASC"]],
         });
 
-        res.json(conceptos);
+        return res.json(conceptos);
     } catch (error) {
         console.error("❌ Error consultando conceptos de recaudación:", error);
-        res.status(500).json({ error: "Error consultando conceptos de recaudación" });
+        return res.status(500).json({ error: "Error consultando conceptos de recaudación" });
     }
 }
 
@@ -45,7 +45,12 @@ export const listarConceptos = async (req, res) => {
 
         const conceptosPlanas = await Promise.all(
             rows.map(async (c) => {
-                const modificable = await esConceptoModificable(c.cod_concepto);
+                let modificable = false;
+                try {
+                    modificable = await esConceptoModificable(c.cod_concepto);
+                } catch {
+                    // si falla la verificación, asumir no modificable
+                }
 
                 return {
                 cod_concepto: c.cod_concepto,
@@ -58,7 +63,7 @@ export const listarConceptos = async (req, res) => {
 
         const totalPaginas = limiteFinal > 0 ? Math.ceil(count / limiteFinal) : 0;
 
-        res.json({
+        return res.json({
             total: count,
             pagina: paginaFinal,
             limite: limiteFinal,
@@ -67,7 +72,7 @@ export const listarConceptos = async (req, res) => {
         });
     } catch (error) {
         console.error("❌ Error consultando conceptos de recaudación:", error);
-        res.status(500).json({ error: "Error consultando conceptos de recaudación" });
+        return res.status(500).json({ error: "Error consultando conceptos de recaudación" });
     }
 }
 
@@ -118,13 +123,13 @@ export const crearConcepto = async (req, res) => {
             cod_recurso: cod_recurso ?? null
         })
 
-        res.json({
+        return res.json({
             message: "Concepto creado correctamente",
             concepto,
         });
     } catch (error) {
         console.error("❌ Error creando concepto:", error);
-        res.status(500).json({ error: "Error creando concepto" });
+        return res.status(500).json({ error: "Error creando concepto" });
     }
 }
 
@@ -191,13 +196,13 @@ export const actualizarConcepto = async (req, res) => {
         await concepto.save();
         concepto.modificable = modificable;
 
-        res.json({
+        return res.json({
             message: "Concepto actualizado correctamente",
             concepto,
         });
     } catch (error) {
         console.error("❌ Error actualizando concepto:", error);
-        res.status(500).json({ error: "Error actualizando concepto" });
+        return res.status(500).json({ error: "Error actualizando concepto" });
     }
 };
 
@@ -219,10 +224,10 @@ export const eliminarConcepto = async (req, res) => {
 
         await concepto.destroy();
 
-        res.json({ message: "Concepto eliminado correctamente" });
+        return res.json({ message: "Concepto eliminado correctamente" });
     } catch (error) {
         console.error("❌ Error eliminando concepto:", error);
-        res.status(500).json({ error: "Error eliminando concepto" });
+        return res.status(500).json({ error: "Error eliminando concepto" });
     }
 }
 

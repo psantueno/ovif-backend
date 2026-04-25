@@ -7,11 +7,11 @@ const router = Router();
 
 router.use(authenticateToken, requireAdmin);
 
-router.get("/select", authenticateToken, requireAdmin, getPautasSelect)
+router.get("/select", getPautasSelect);
 router.get("/list", listarPautas);
-router.post("/", authenticateToken, requireAdmin, crearPauta);
+router.post("/", crearPauta);
 router.get("/:pautaId", getPautaConvenioParametros);
-router.put("/:pautaId", authenticateToken, requireAdmin, actualizarPauta);
-router.delete("/:pautaId", authenticateToken, requireAdmin, eliminarPauta);
+router.put("/:pautaId", actualizarPauta);
+router.delete("/:pautaId", eliminarPauta);
 
 export default router;
