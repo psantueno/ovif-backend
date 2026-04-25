@@ -11,8 +11,10 @@ export const listarLogs = async (req, res) => {
         const mesFilter = req.query.mes ? Number.parseInt(req.query.mes, 10) : null;
         const municipioIdFilter = req.query.municipio_id ? Number.parseInt(req.query.municipio_id, 10) : null;
         const estadoFilter = req.query.estado || null;
-        const fechaDesdeFilter = req.query.desde ? new Date(req.query.desde) : null;
-        const fechaHastaFilter = req.query.hasta ? new Date(req.query.hasta) : null;
+        // Parsear fechas agregando zona horaria Argentina para que
+        // "desde: 2026-04-25" represente el inicio del día 25 en AR (no UTC)
+        const fechaDesdeFilter = req.query.desde ? new Date(`${req.query.desde}T00:00:00-03:00`) : null;
+        const fechaHastaFilter = req.query.hasta ? new Date(`${req.query.hasta}T23:59:59-03:00`) : null;
 
         const whereClause = {};
         if (ejercicioFilter) whereClause.ejercicio = ejercicioFilter;
