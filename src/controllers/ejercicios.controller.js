@@ -36,9 +36,14 @@ const isValidISODate = (value) => {
 
 const toISODateString = (value) => {
   if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().split("T")[0];
+  return date.toLocaleDateString("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
 };
 
 const MODULOS_VALIDOS = [
@@ -538,13 +543,14 @@ export const getCierreMunicipio = async (req, res) => {
       where: { ejercicio, mes, municipio_id: municipioId },
     });
 
-    const fechaLimite = prorroga?.fecha_fin_nueva || oficial.fecha_fin;
+    // Normalizar a YYYY-MM-DD para comparar como día calendario AR,
+    // ya que fecha_fin_nueva es DATEONLY y oficial.fecha_fin es DATETIME.
+    const fechaLimite = toISODateString(prorroga?.fecha_fin_nueva || oficial.fecha_fin);
 
-    // 3. Comparar estado
-    const fechaCierre = new Date(cierre.fecha);
-    const limite = new Date(fechaLimite);
+    // 3. Comparar estado (cierre.fecha es un string YYYY-MM-DD)
+    const fechaCierreStr = toISODateString(cierre.fecha);
 
-    const estado = fechaCierre <= limite ? "CUMPLIO" : "FUERA DE PLAZO";
+    const estado = fechaCierreStr <= fechaLimite ? "CUMPLIO" : "FUERA DE PLAZO";
 
     // 4. Responder
     return res.json({
@@ -604,7 +610,8 @@ export const listarEstadoMunicipios = async (req, res) => {
       const prorroga = prorrogaMap.get(`${m.municipio_id}`);
       const cierre = cierresMap.get(`${m.municipio_id}`);
 
-      const fechaLimite = prorroga?.fecha_fin_nueva || oficial.fecha_fin;
+      // Normalizar a YYYY-MM-DD para comparar como día calendario AR
+      const fechaLimite = toISODateString(prorroga?.fecha_fin_nueva || oficial.fecha_fin);
       let estado;
       let fechaCierre = null;
 
@@ -612,9 +619,8 @@ export const listarEstadoMunicipios = async (req, res) => {
         estado = "SIN CERRAR";
       } else {
         fechaCierre = cierre.fecha;
-        const fechaCierreDate = new Date(fechaCierre);
-        const fechaLimiteDate = new Date(fechaLimite);
-        estado = fechaCierreDate <= fechaLimiteDate ? "CUMPLIO" : "FUERA DE PLAZO";
+        const fechaCierreStr = toISODateString(fechaCierre);
+        estado = fechaCierreStr <= fechaLimite ? "CUMPLIO" : "FUERA DE PLAZO";
       }
 
       return {
@@ -745,7 +751,7 @@ export const descargarInforme = async (req, res) => {
           ) || cierres[0];
       } else cierre = cierres[0]
 
-      filename = cierre.informe_path
+      filename = cierre?.informe_path
     }
     // agregar luego junto con la primer condicion || (ejercicio === 2026 && mes < 4)
     if((ejercicio <= 2025) && (modulo === 'GASTOS' || modulo === 'RECURSOS')){
@@ -760,7 +766,7 @@ export const descargarInforme = async (req, res) => {
         raw: true
       })
 
-      filename = modulo === 'GASTOS' ? cierre.informe_gastos : modulo === 'RECURSOS' ? cierre.informe_recursos : null
+      filename = cierre ? (modulo === 'GASTOS' ? cierre.informe_gastos : modulo === 'RECURSOS' ? cierre.informe_recursos : null) : null
     }
 
     if (!cierre || !filename) {

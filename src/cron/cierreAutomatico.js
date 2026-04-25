@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import fs from "fs";
 import path from "path";
-import { Op } from "sequelize";
+import { Op, fn, col, where } from "sequelize";
 import {
   RegimenLaboral,
   Gasto,
@@ -575,13 +575,19 @@ cron.schedule(
       .split("T")[0];
 
     try {
-      // Buscar ejercicios vencidos recientemente por su fecha de cierre real
+      // Buscar ejercicios vencidos recientemente por su fecha de cierre real.
+      // IMPORTANTE: fecha_fin es DATETIME y hoyArg es la fecha calendario en
+      // hora Argentina. Comparamos a nivel de DÍA (DATE()) para evitar que
+      // un valor almacenado con horario (ej: 2026-04-24 21:00:00 UTC, que en
+      // AR es 25/04 00:00) sea considerado "menor" al string '2026-04-25' y
+      // cierre el módulo el mismo día 25/04, cuando el 25/04 todavía es un
+      // día válido de carga (el cierre debe ocurrir el 26/04 a las 2 AM).
       const ejerciciosFiltrados = await EjercicioMes.findAll({
         where: {
-          fecha_fin: {
-            [Op.lt]: hoyArg,
-            [Op.gte]: fechaMenosSeisMesesStr,
-          },
+          [Op.and]: [
+            where(fn("DATE", col("fecha_fin")), { [Op.lt]: hoyArg }),
+            where(fn("DATE", col("fecha_fin")), { [Op.gte]: fechaMenosSeisMesesStr }),
+          ],
         },
       });
 

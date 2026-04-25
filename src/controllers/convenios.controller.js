@@ -2,13 +2,14 @@ import { Op } from "sequelize";
 import { CierreModulo, Convenio, EjercicioMes, PautaConvenio, ProrrogaMunicipio, TipoPauta } from "../models/index.js";
 import { ConveniosSchema } from "../validation/ConveniosSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
+import { obtenerFechaActual } from "../utils/obtenerFechaActual.js";
 
 export const listarConveniosActivos = async (req, res) => {
   try {
     const convenios = await Convenio.findAll({
       where: {
         fecha_fin: {
-          [Op.gte]: new Date().toISOString().slice(0, 10),
+          [Op.gte]: obtenerFechaActual(),
         },
       },
       order: [["nombre", "ASC"]],

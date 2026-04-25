@@ -15,7 +15,12 @@ const toISODate = (value) => {
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().split("T")[0];
+  // Convertir a fecha calendario en zona Argentina para que valores DATETIME
+  // almacenados en UTC (ej: 2026-04-24T21:00:00Z = 25/04 00:00 AR) se
+  // interpreten correctamente como el día que representan en AR.
+  return date.toLocaleDateString("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
 };
 
 const buildCalendarioKey = (ejercicio, mes, convenioId, pautaId) =>

@@ -28,9 +28,14 @@ import {
 
 const toISODate = (value) => {
   if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().split("T")[0];
+  return date.toLocaleDateString("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
 };
 
 const toNumberOrZero = (value) => {
@@ -435,14 +440,14 @@ export const listarEjerciciosCerradosPorMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    // 2️⃣ Obtener la fecha actual automáticamente
-    const hoy = toISODate(new Date());
+    // 2️⃣ Obtener la fecha actual en zona AR (YYYY-MM-DD)
+    const hoy = obtenerFechaActual();
 
-    // 3️⃣ Buscar TODOS los ejercicios/mes donde fecha_fin < hoy (VENCIDOS)
+    // 3️⃣ Buscar TODOS los ejercicios/mes donde DATE(fecha_fin) < hoy (VENCIDOS)
+    // Se usa DATE() para comparar a nivel de día calendario y evitar
+    // discrepancias por componente horario en el DATETIME almacenado.
     const oficiales = await EjercicioMes.findAll({
-      where: {
-        fecha_fin: { [Op.lt]: new Date(hoy) }, // fecha_fin menor a hoy
-      },
+      where: sequelizeWhere(fn("DATE", col("fecha_fin")), { [Op.lt]: hoy }),
       order: [
         ["ejercicio", "DESC"],
         ["mes", "DESC"],
@@ -816,7 +821,7 @@ export const crearProrrogaMunicipio = async (req, res) => {
     return res.status(400).json({ error: "fecha_fin inválida" });
   }
 
-  const hoy = toISODate(new Date());
+  const hoy = obtenerFechaActual();
   if (fechaFinNormalizada < hoy) {
     return res
       .status(400)

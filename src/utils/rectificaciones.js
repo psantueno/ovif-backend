@@ -19,7 +19,9 @@ const toISODate = (value) => {
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().split("T")[0];
+  return date.toLocaleDateString("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
 };
 
 const toLocalDateFromISO = (value) => {
