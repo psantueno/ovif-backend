@@ -14,10 +14,12 @@ const EjercicioMes = sequelize.define("EjercicioMes", {
   },
   convenio_id: {
     type: DataTypes.INTEGER,
+    primaryKey: true,
     allowNull: false,
   },
   pauta_id: {
     type: DataTypes.INTEGER,
+    primaryKey: true,
     allowNull: false,
   },
   fecha_inicio: {

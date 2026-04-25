@@ -265,10 +265,12 @@ export const crearEjercicio = async (req, res) => {
 
 
 // Actualizar ejercicio existente
-// PUT /api/ejercicios/:ejercicio/mes/:mes
+// PUT /api/ejercicios/:ejercicio/mes/:mes?convenio_id=...&pauta_id=...
 export const updateEjercicio = async (req, res) => {
   const { ejercicio, mes } = req.params;
-  const { fecha_inicio, fecha_fin, convenio_id, pauta_id } = req.body;
+  const convenioIdParam = req.query.convenio_id;
+  const pautaIdParam = req.query.pauta_id;
+  const { fecha_inicio, fecha_fin } = req.body;
   const usuarioId = req.user?.usuario_id;
 
   const ejercicioNum = Number(ejercicio);
@@ -280,30 +282,29 @@ export const updateEjercicio = async (req, res) => {
     return res.status(400).json({ error: "El campo 'mes' debe ser un número entre 1 y 12." });
   }
 
+  const convenioId = Number(convenioIdParam);
+  const pautaId = Number(pautaIdParam);
+  if (!Number.isInteger(convenioId) || convenioId <= 0) {
+    return res.status(400).json({ error: "El parámetro 'convenio_id' es obligatorio y debe ser un número válido." });
+  }
+  if (!Number.isInteger(pautaId) || pautaId <= 0) {
+    return res.status(400).json({ error: "El parámetro 'pauta_id' es obligatorio y debe ser un número válido." });
+  }
+
   if (!usuarioId) {
     return res.status(401).json({ error: "Usuario autenticado requerido para modificar el ejercicio." });
   }
 
   try {
-    const em = await EjercicioMes.findOne({ where: { ejercicio, mes } });
+    const em = await EjercicioMes.findOne({
+      where: { ejercicio: ejercicioNum, mes: mesNum, convenio_id: convenioId, pauta_id: pautaId },
+    });
     if (!em) return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
     if (fecha_inicio !== undefined) {
       em.fecha_inicio = fecha_inicio;
     }
     if (fecha_fin !== undefined) {
       em.fecha_fin = fecha_fin;
-    }
-    if (convenio_id !== undefined) {
-      if (!/^\d+$/.test(String(convenio_id).trim())) {
-        return res.status(400).json({ error: "El campo 'convenio_id' debe ser numérico." });
-      }
-      em.convenio_id = Number.parseInt(String(convenio_id).trim(), 10);
-    }
-    if (pauta_id !== undefined) {
-      if (!/^\d+$/.test(String(pauta_id).trim())) {
-        return res.status(400).json({ error: "El campo 'pauta_id' debe ser numérico." });
-      }
-      em.pauta_id = Number.parseInt(String(pauta_id).trim(), 10);
     }
     em.modificado_por = usuarioId;
     await em.save();
@@ -338,11 +339,31 @@ export const updateEjercicio = async (req, res) => {
   }
 };
 
-// Borrar ejercicio: DELETE /api/ejercicios/:ejercicio/mes/:mes
+// Borrar ejercicio: DELETE /api/ejercicios/:ejercicio/mes/:mes?convenio_id=...&pauta_id=...
 export const deleteEjercicio = async (req, res) => {
   const { ejercicio, mes } = req.params;
+  const convenioIdParam = req.query.convenio_id;
+  const pautaIdParam = req.query.pauta_id;
+
+  const ejercicioNum = Number(ejercicio);
+  const mesNum = Number(mes);
+  const convenioId = Number(convenioIdParam);
+  const pautaId = Number(pautaIdParam);
+
+  if (!Number.isInteger(ejercicioNum) || !Number.isInteger(mesNum)) {
+    return res.status(400).json({ error: "Ejercicio y mes deben ser números válidos." });
+  }
+  if (!Number.isInteger(convenioId) || convenioId <= 0) {
+    return res.status(400).json({ error: "El parámetro 'convenio_id' es obligatorio y debe ser un número válido." });
+  }
+  if (!Number.isInteger(pautaId) || pautaId <= 0) {
+    return res.status(400).json({ error: "El parámetro 'pauta_id' es obligatorio y debe ser un número válido." });
+  }
+
   try {
-    const deleted = await EjercicioMes.destroy({ where: { ejercicio, mes } });
+    const deleted = await EjercicioMes.destroy({
+      where: { ejercicio: ejercicioNum, mes: mesNum, convenio_id: convenioId, pauta_id: pautaId },
+    });
     if (!deleted) return res.status(404).json({ error: "Ejercicio/Mes no encontrado" });
     res.json({ message: "Ejercicio/Mes eliminado" });
   } catch (error) {
