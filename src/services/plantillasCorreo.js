@@ -33,12 +33,45 @@ const BANNER_HTML = `
 </div>`;
 
 const FOOTER_HTML = `
-<hr style="border:none; border-top:1px solid #ddd; margin-top:2rem;">
-<small style="color:#555;">
-  OVIF - Oficina Virtual de Información Fiscal Municipal<br/>
-  Coordinación de Relaciones Fiscales con Municipios<br/>
-  Gobierno de la Provincia del Neuquén
-</small>`;
+<div style="
+  margin-top:1rem;
+  padding-top:1.5rem;
+  border-top:1px solid #d9e1e7;
+  font-family: Arial, sans-serif;
+  color:#2b3e4c;
+  margin-top: 2rem;
+">
+  <p style="
+    margin:0 0 8px 0;
+    font-size:15px;
+    font-weight:700;
+    letter-spacing:0.3px;
+    color:#1f2d3a;
+  ">
+    OVIF - Oficina Virtual de Información Fiscal Municipal
+  </p>
+
+  <p style="
+    margin:0 0 6px 0;
+    font-size:13px;
+    font-weight:500;
+    color:#5b6b79;
+  ">
+    Coordinación de Relaciones Fiscales con Municipios
+  </p>
+
+  <p style="
+    margin:0;
+    font-size:12px;
+    font-weight:400;
+    color:#7a8793;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+  ">
+    Gobierno de la Provincia del Neuquén
+  </p>
+</div>
+`;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -56,7 +89,9 @@ const obtenerNombreMes = (mesNumero) => {
 function renderCierreModulos(payload) {
   const { nombre, ejercicio, mes, modulos, esProrroga } = payload;
 
-  let mensaje = "Le informamos que se cerró el plazo de entrega de información";
+  let mensaje = "Le informamos que finalizó el plazo de entrega de información";
+  let periodoBadge = "";
+  let modulosBadges = "";
 
   if (Number(ejercicio) && Number(mes) && Array.isArray(modulos) && modulos.length > 0) {
     const seccionEjercicioMes = `${obtenerNombreMes(mes)} ${ejercicio}`;
@@ -68,13 +103,44 @@ function renderCierreModulos(payload) {
       type: "conjunction",
     }).format(modulosNormalizados);
 
-    mensaje = `Le informamos que se cerró el plazo de entrega de información para ${modulosNormalizados.length > 1 ? "los módulos" : "el módulo"} ${modulosTexto}`;
+    mensaje = `Le informamos que finalizó el plazo de entrega de información para ${modulosNormalizados.length > 1 ? "los módulos" : "el módulo"}:`;
 
-    if (esProrroga) {
-      mensaje += ` correspondientes a la prorroga para el período ${seccionEjercicioMes}`;
-    } else {
-      mensaje += ` correspondientes al período ${seccionEjercicioMes}`;
-    }
+    periodoBadge = `
+      <div>
+        <span style="
+          display:inline-block;
+          background:#e8f0fe;
+          color:#1a73e8;
+          padding:8px 14px;
+          border-radius:999px;
+          font-size:14px;
+          font-weight:bold;
+          margin-left:10px;
+        ">
+          ${
+            esProrroga
+              ? `Prórroga - ${seccionEjercicioMes}`
+              : `Período - ${seccionEjercicioMes}`
+          }
+        </span>
+      </div>
+    `;
+
+    modulosBadges = `
+      <div>
+          <span style="
+            display:inline-block;
+            background:#eef2f7;
+            color:#2b3e4c;
+            padding:8px 14px;
+            border-radius:999px;
+            font-size:14px;
+            font-weight:600;
+          ">
+            ${modulosNormalizados.join(" y ")}
+          </span>
+      </div>
+    `;
   }
 
   return `
@@ -82,8 +148,32 @@ function renderCierreModulos(payload) {
     <div style="font-family: Arial, sans-serif; color: #2b3e4c; padding: 2rem;">
       <p>Hola ${nombre || ""},</p>
       <p>${mensaje}</p>
-      <p style="margin: 2rem 0;"></p>
-      <p>Ya puedes solicitar el informe de cierre correspondiente en la sección "Grilla de ejercicios históricos" de nuestra plataforma</p>
+      <div style="margin: 1rem 0; display:flex;">
+        ${modulosBadges}
+        ${periodoBadge}
+      </div>
+      <p style="margin: 1rem 0;">Ya puedes solicitar el informe de cierre correspondiente en la sección "Grilla de ejercicios históricos" de la
+        <a 
+          href="https://ovif.economianqn.gob.ar/historico-ejercicios-cerrados"
+          style="
+            color:#1a73e8;
+            text-decoration:none;
+            font-weight:bold;
+          "
+          target="_blank"
+        >
+          OVIF
+        </a>
+      </p>
+      <p style="
+        margin-top:2rem;
+        margin-bottom:0;
+        font-size:13px;
+        color:#6b7280;
+      ">
+        Este mensaje fue generado automáticamente por el sistema OVIF.
+        Por favor, no responder este correo.
+      </p>
       ${FOOTER_HTML}
     </div>`;
 }
