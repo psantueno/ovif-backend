@@ -19,6 +19,7 @@ import {
   normalizeModuloCierre,
   normalizeTipoCierre,
 } from "../utils/cierreModulo.js";
+import { obtenerNombreInformeCierreModulo, obtenerPathInformeCierreModulo, filtrarCierresConInforme, filtrarEjerciciosMesesCerradosConInforme } from "../utils/descargaInformes.js";
 
 import path from "path";
 import fs from "fs";
@@ -673,11 +674,13 @@ export const obtenerFiltrosInformes = async (req, res) => {
   try {
     const whereCierresModulos = { municipio_id: municipioId, informe_path: { [Op.ne]: null } };
     const cierresModulosMunicipioRaw = await CierreModulo.findAll({
-      attributes: ['ejercicio', 'mes', 'modulo'],
+      attributes: ['ejercicio', 'mes', 'modulo', 'informe_path'],
       where: whereCierresModulos,
       order: [['ejercicio', "DESC"], ['mes', 'ASC']],
       raw: true
     });
+
+    const cierresModulosFiltrados = await filtrarCierresConInforme(cierresModulosMunicipioRaw);
 
     const whereEjerciciosMesesCerrados = {
       municipio_id: municipioId,
@@ -685,22 +688,15 @@ export const obtenerFiltrosInformes = async (req, res) => {
       informe_recursos: { [Op.ne]: null },
     };
     const ejerciciosMesesCerrados = await EjercicioMesCerrado.findAll({
-      attributes: ['ejercicio', 'mes'],
+      attributes: ['ejercicio', 'mes', 'informe_gastos', 'informe_recursos'],
       where: whereEjerciciosMesesCerrados,
       order: [['ejercicio', "DESC"], ['mes', 'ASC']],
       raw: true
     })
 
-    const MODULOS = [CIERRE_MODULOS.GASTOS, CIERRE_MODULOS.RECURSOS];
+    const ejerciciosMesesCerradosFiltrados = await filtrarEjerciciosMesesCerradosConInforme(ejerciciosMesesCerrados);
 
-    const mappedEjerciciosMesesCerrados = ejerciciosMesesCerrados.flatMap(item =>
-      MODULOS.map(modulo => ({
-        ...item,
-        modulo
-      }))
-    );
-
-    const cierresNormalizados = cierresModulosMunicipioRaw
+    const cierresNormalizados = cierresModulosFiltrados
       .map((item) => ({
         ...item,
         modulo: normalizeModuloCierre(item.modulo),
@@ -708,7 +704,7 @@ export const obtenerFiltrosInformes = async (req, res) => {
       .filter((item) => item.modulo);
 
     const unicos = new Map();
-    [...cierresNormalizados, ...mappedEjerciciosMesesCerrados].forEach((item) => {
+    [...cierresNormalizados, ...ejerciciosMesesCerradosFiltrados].forEach((item) => {
       const key = `${item.ejercicio}-${item.mes}-${item.modulo}`;
       if (!unicos.has(key)) {
         unicos.set(key, item);
@@ -746,85 +742,13 @@ export const descargarInforme = async (req, res) => {
   }
 
   try{
-    let cierre = null
-    let filename = null
-    // agregar luego: && mes >= 4
-    if(ejercicio >= 2026){
-      const moduloAliases = getModuloCierreAliases(modulo);
-      const cierres= await CierreModulo.findAll({
-        where: {
-          municipio_id: municipioId,
-          ejercicio,
-          mes,
-          modulo: { [Op.in]: moduloAliases },
-          informe_path: { [Op.ne]: null },
-        },
-        order: [["fecha_cierre", "DESC"]],
-        raw: true
-      });
-
-      if (cierres.length > 1) {
-        cierre =
-          cierres.find(
-            (item) =>
-              normalizeTipoCierre(item.tipo_cierre) ===
-              TIPOS_CIERRE_MODULO.PRORROGA
-          ) || cierres[0];
-      } else cierre = cierres[0]
-
-      filename = cierre?.informe_path
-    }
-    // agregar luego junto con la primer condicion || (ejercicio === 2026 && mes < 4)
-    if((ejercicio <= 2025) && (modulo === 'GASTOS' || modulo === 'RECURSOS')){
-      cierre = await EjercicioMesCerrado.findOne({
-        where: {
-          municipio_id: municipioId,
-          ejercicio,
-          mes,
-          informe_recursos: { [Op.ne]: null },
-          informe_gastos: { [Op.ne]: null },
-        },
-        raw: true
-      })
-
-      filename = cierre ? (modulo === 'GASTOS' ? cierre.informe_gastos : modulo === 'RECURSOS' ? cierre.informe_recursos : null) : null
-    }
+    const { cierre, filename } = await obtenerNombreInformeCierreModulo(ejercicio, mes, municipioId, modulo);
 
     if (!cierre || !filename) {
       return res.status(404).json({ error: "No hay informe disponible con esos filtros" });
     }
 
-    // ⚠️ Seguridad básica
-    if (!filename.endsWith(".pdf")) {
-      return res.status(400).json({ error: "Archivo inválido" });
-    }
-  
-    // Buscar directorio base en BD
-    const directorioBase = await Parametros.findOne({ where: {
-      nombre: "Directorio Base",
-      estado: true
-    } });
-
-    if (!directorioBase || !directorioBase.valor) {
-      throw new Error("Directorio base no configurado");
-    }
-
-    // Obtener la ruta
-    const rutaBase = directorioBase.valor
-
-    // Armar ruta absoluta
-    const filePath = path.resolve(rutaBase, filename);
-
-    // Validar que la ruta resuelta quede dentro del directorio permitido
-    const normalizedBase = path.resolve(rutaBase);
-    if (!filePath.startsWith(normalizedBase + path.sep) && filePath !== normalizedBase) {
-      return res.status(400).json({ error: "Ruta de archivo inválida" });
-    }
-
-    // Verificar que exista
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: "Archivo no encontrado" });
-    }
+    const filePath = await obtenerPathInformeCierreModulo(filename);
 
     res.setHeader(
       'Access-Control-Expose-Headers',
