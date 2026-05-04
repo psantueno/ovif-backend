@@ -54,6 +54,22 @@ function clearAuthCookies(res) {
   res.cookie(REFRESH_COOKIE_NAME, "", CLEAR_REFRESH_COOKIE_OPTS);
 }
 
+function getVerifiedLogoutPayload(rawAccessToken) {
+  if (!rawAccessToken) {
+    return null;
+  }
+
+  try {
+    return jwt.verify(rawAccessToken, JWT_SECRET, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+      ignoreExpiration: true,
+    });
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Rehidrata el usuario completo desde la BD.
  * Devuelve null si el usuario no existe o fue desactivado.
@@ -241,33 +257,37 @@ export const profile = async (req, res) => {
 //  LOGOUT
 // =========================================================
 export const logout = async (req, res) => {
+  const revokedAt = new Date();
+  const accessPayload = req.user ?? getVerifiedLogoutPayload(req.cookies[ACCESS_COOKIE_NAME]);
+  const sessionId = accessPayload?.sid;
+
   try {
-    // Revocar la sesión actual si tenemos sid del access token
-    if (req.user?.sid) {
-      const session = await AuthSession.findByPk(req.user.sid);
+    if (sessionId) {
+      const session = await AuthSession.findByPk(sessionId);
       if (session && !session.revoked_at) {
-        session.revoked_at = new Date();
+        session.revoked_at = revokedAt;
         await session.save();
       }
     }
+  } catch (error) {
+    console.error("❌ Error revocando sesión por access token en logout:", error);
+  }
 
-    // Fallback: si hay refresh cookie, revocar también
+  try {
     const rawRefresh = req.cookies[REFRESH_COOKIE_NAME];
     if (rawRefresh) {
       const tokenHash = hashToken(rawRefresh);
       await AuthSession.update(
-        { revoked_at: new Date() },
+        { revoked_at: revokedAt },
         { where: { refresh_token_hash: tokenHash, revoked_at: null } }
       );
     }
-
-    clearAuthCookies(res);
-    return res.status(204).end();
   } catch (error) {
-    console.error("❌ Error en logout:", error);
-    clearAuthCookies(res);
-    return res.status(204).end();
+    console.error("❌ Error revocando sesión por refresh token en logout:", error);
   }
+
+  clearAuthCookies(res);
+  return res.status(204).end();
 };
 
 // =========================================================
