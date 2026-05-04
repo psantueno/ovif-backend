@@ -18,6 +18,7 @@ import { Op, UniqueConstraintError, col } from "sequelize";
 import EnvioCorreo from "../models/moduloEjercicios/EnvioCorreo.js";
 import { renderizarCorreoHtml } from "./plantillasCorreo.js";
 
+
 // ─── Configuración SMTP ──────────────────────────────────────────────────────
 
 const smtpPort = Number(process.env.SMTP_PORT || 25);
@@ -60,6 +61,16 @@ const truncarError = (error) => error?.message?.substring(0, 1000) ?? "Error des
  * @param {boolean} params.esProrroga
  * @returns {Promise<{ correo: EnvioCorreo, created: boolean }>}
  */
+
+const obtenerNombreMes = (mesNumero) => {
+  const meses = {
+    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+    5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+    9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
+  };
+  return meses[mesNumero] || "Sin especificar";
+};
+
 export async function encolarEnvioCierreModulos({ destinatario, nombre, ejercicio, mes, modulos, esProrroga }) {
   const modulosNormalizados = [...modulos].sort();
   const modulosOrdenados = modulosNormalizados.join(",");
@@ -73,7 +84,7 @@ export async function encolarEnvioCierreModulos({ destinatario, nombre, ejercici
     tipo: "CIERRE_MODULOS",
     destinatario,
     nombre_destinatario: nombre,
-    asunto: "Cierre de módulos",
+    asunto: `[OVIF - APP] Cierre de módulos ${modulosNormalizados.join(", ")} - ${ejercicio} - ${obtenerNombreMes(mes)}`,
     payload: {
       nombre,
       ejercicio,
@@ -124,12 +135,13 @@ async function enviarCorreo(correo, { nextRetryAt = null } = {}) {
   }
 
   try {
-    const html = renderizarCorreoHtml(correo.tipo, correo.payload);
+    const mailData = renderizarCorreoHtml(correo.tipo, correo.payload);
     const response = await transporter.sendMail({
       from: sender,
       to: correo.destinatario,
       subject: correo.asunto,
-      html,
+      html: mailData.html,
+      attachments: mailData.attachments || [],
     });
 
     const enviadoAt = new Date();
@@ -286,12 +298,13 @@ export async function procesarMailsPendientes({
 // Usado desde auth.controller.js en el flujo de "olvidé mi contraseña".
 export async function sendResetMail(to, nombre, resetLink) {
   try {
-    const html = renderizarCorreoHtml("RESET_PASSWORD", { nombre, resetLink });
+    const mailData = renderizarCorreoHtml("RESET_PASSWORD", { nombre, resetLink });
     const response = await transporter.sendMail({
       from: sender,
       to,
-      subject: "Restablecer contraseña",
-      html,
+      subject: "[OVIF - APP] Restablecer contraseña",
+      html: mailData.html,
+      attachments: mailData.attachments || []
     });
 
     console.log("✅ Correo enviado:", response?.messageId || response);
