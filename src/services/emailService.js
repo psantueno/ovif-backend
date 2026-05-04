@@ -135,12 +135,13 @@ async function enviarCorreo(correo, { nextRetryAt = null } = {}) {
   }
 
   try {
-    const html = renderizarCorreoHtml(correo.tipo, correo.payload);
+    const mailData = renderizarCorreoHtml(correo.tipo, correo.payload);
     const response = await transporter.sendMail({
       from: sender,
       to: correo.destinatario,
       subject: correo.asunto,
-      html,
+      html: mailData.html,
+      attachments: mailData.attachments || [],
     });
 
     const enviadoAt = new Date();
@@ -297,12 +298,13 @@ export async function procesarMailsPendientes({
 // Usado desde auth.controller.js en el flujo de "olvidé mi contraseña".
 export async function sendResetMail(to, nombre, resetLink) {
   try {
-    const html = renderizarCorreoHtml("RESET_PASSWORD", { nombre, resetLink });
+    const mailData = renderizarCorreoHtml("RESET_PASSWORD", { nombre, resetLink });
     const response = await transporter.sendMail({
       from: sender,
       to,
       subject: "[OVIF - APP] Restablecer contraseña",
-      html,
+      html: mailData.html,
+      attachments: mailData.attachments || []
     });
 
     console.log("✅ Correo enviado:", response?.messageId || response);

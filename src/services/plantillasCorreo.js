@@ -7,71 +7,149 @@
  *   2. Registrarla en `renderers` con su clave (ej: "NUEVO_TIPO").
  *   3. Llamar renderizarCorreoHtml("NUEVO_TIPO", payload) desde emailService.js.
  */
+import path from "path";
 import { getModuloCierreLabel } from "../utils/cierreModulo.js";
 
 // ─── Bloques reutilizables ───────────────────────────────────────────────────
 
-const BANNER_HTML = `
-<div style="
-  background-color: #2b3e4c;
-  padding: 20px 10px;
-  text-align: center;
-  color: #f4e0b6;
-  font-family: 'Arial', sans-serif;
-  max-width: 100%;
-  border-radius: 6px;
-">
-  <h1 style="
-    font-size: 22px;
-    margin: 0;
-    color: #f4e0b6;
-    letter-spacing: 1px;
-  ">
-    <span style="color: #9ecf89; font-weight: bold;">OVIF</span>
-    <span style="font-weight: bold;"> OFICINA VIRTUAL DE INFORMACIÓN FISCAL MUNICIPAL</span><br/>
-  </h1>
-</div>`;
-
-const FOOTER_HTML = `
-<div style="
-  margin-top:1rem;
-  padding-top:1.5rem;
-  border-top:1px solid #d9e1e7;
-  font-family: Arial, sans-serif;
-  color:#2b3e4c;
-  margin-top: 2rem;
-">
-  <p style="
-    margin:0 0 8px 0;
-    font-size:15px;
-    font-weight:700;
-    letter-spacing:0.3px;
-    color:#1f2d3a;
-  ">
-    OVIF - Oficina Virtual de Información Fiscal Municipal
-  </p>
-
-  <p style="
-    margin:0 0 6px 0;
-    font-size:13px;
-    font-weight:500;
-    color:#5b6b79;
-  ">
-    Coordinación de Relaciones Fiscales con Municipios
-  </p>
-
-  <p style="
-    margin:0;
-    font-size:12px;
-    font-weight:400;
-    color:#7a8793;
-    text-transform:uppercase;
-    letter-spacing:0.6px;
-  ">
-    Gobierno de la Provincia del Neuquén
-  </p>
-</div>
+const BANNER = `
+<tr>
+    <td
+        align="center"
+        style="
+            background-color:#2b3e4c;
+            padding:20px 10px;
+            color:#f4e0b6;
+            font-family:Manrope, Arial, sans-serif;
+            border-top-left-radius:20px;
+            border-top-right-radius:20px;
+        "
+    >
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+            <tr>
+                <td>
+                    <img 
+                        src="cid:ovif-logo" 
+                        alt="Logo OVIF"
+                        style="height:70px; width:auto; display:block;"
+                    >
+                </td>
+            </tr>
+        </table>
+    </td>
+</tr>
 `;
+
+const FOOTER = `
+<tr>
+    <td
+        style="
+            background-color:#2b3e4c;
+            padding:16px;
+            border-top:1px solid #d9e1e7;
+            border-bottom-left-radius:20px;
+            border-bottom-right-radius:20px;
+            text-align:center;
+    "
+    >
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+            <tr>
+                <td style="padding-right:10px;vertical-align: bottom;">
+                    <img 
+                        src="cid:gobierno-logo"
+                        style="width:90px; display:block;"
+                        alt="Logo Gobierno de la Provincia de Neuquen"
+                    >
+                </td>
+                <td style="padding-left:10px;vertical-align: bottom;">
+                    <img 
+                        src="cid:neuquen-logo"
+                        style="width:100px; display:block;"
+                        alt="Logo de la Provincia de Neuquen"
+                    >
+                </td>
+            </tr>
+        </table>
+    </td>
+</tr>
+`;
+
+const cuerpoCierreModulos = (destinatario, ejercicio, mes, modulos, esProrroga) => {
+    return `
+        <tr>
+            <td
+                style="
+                    font-family:Arial, sans-serif;
+                    color:#2b3e4c;
+                    padding:32px;
+                "
+            >
+                <p style="margin-top:0;">Hola ${destinatario},</p>
+                <p>
+                    Le informamos que finalizó el plazo de entrega de información para el periodo 
+                    <b>${mes} ${ejercicio}</b>, correspondiente ${modulos.length === 1 ? 'al módulo' : 'a los módulos'} 
+                    <b>${modulos.join(" y ")}</b>.
+                </p>
+                <table 
+                    role="presentation" 
+                    width="100%" 
+                    cellpadding="0" 
+                    cellspacing="0" 
+                    border="0"
+                    style="
+                        max-width:565px;
+                        background:#2b3e4c;
+                        color:#ffffff;
+                        border-radius:8px;
+                        overflow:hidden;
+                        margin:20px auto;
+                    "
+                >
+                    <tr>
+                        <td style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                            <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Ejercicio</div>
+                            <div style="font-size:20px; font-weight:700;">${ejercicio}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                            <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Mes</div>
+                            <div style="font-size:20px; font-weight:700;">${mes}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                            <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Módulo/s</div>
+                            <div style="font-size:20px; font-weight:700;">
+                                ${modulos.join(" y ")}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:14px 20px;">
+                            <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Período</div>
+                            <div style="font-size:20px; font-weight:700;">${esProrroga ? 'Prórroga' : 'Regular'}</div>
+                        </td>
+                    </tr>
+                </table>
+                <p style="margin:16px 0;">
+                    Ya puedes solicitar el informe de cierre correspondiente en la sección "Grilla de ejercicios históricos" de la
+                    <a 
+                        href="https://ovif.economianqn.gob.ar/historico-ejercicios-cerrados"
+                        style="color:#1a73e8; text-decoration:none; font-weight:bold;"
+                        target="_blank"
+                    >
+                        OVIF
+                    </a>
+                </p>
+                <p style="margin-top:24px; font-size:13px; color:#6b7280;">
+                    Este mensaje fue generado automáticamente por OVIF - APP.
+                    Por favor, no responder este correo.
+                </p>
+            </td>
+        </tr>
+    `;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -92,90 +170,69 @@ function renderCierreModulos(payload) {
   let mensaje = "Le informamos que finalizó el plazo de entrega de información";
   let periodoBadge = "";
   let modulosBadges = "";
+  let modulosNormalizados = [];
 
   if (Number(ejercicio) && Number(mes) && Array.isArray(modulos) && modulos.length > 0) {
-    const seccionEjercicioMes = `${obtenerNombreMes(mes)} ${ejercicio}`;
-    const modulosNormalizados = modulos
+    modulosNormalizados = modulos
       .map((m) => getModuloCierreLabel(m))
       .filter(Boolean);
     const modulosTexto = new Intl.ListFormat("es-AR", {
       style: "long",
       type: "conjunction",
     }).format(modulosNormalizados);
-
-    mensaje = `Le informamos que finalizó el plazo de entrega de información para ${modulosNormalizados.length > 1 ? "los módulos" : "el módulo"}:`;
-
-    periodoBadge = `
-      <div>
-        <span style="
-          display:inline-block;
-          background:#e8f0fe;
-          color:#1a73e8;
-          padding:8px 14px;
-          border-radius:999px;
-          font-size:14px;
-          font-weight:bold;
-          margin-left:10px;
-        ">
-          ${
-            esProrroga
-              ? `Prórroga - ${seccionEjercicioMes}`
-              : `Período - ${seccionEjercicioMes}`
-          }
-        </span>
-      </div>
-    `;
-
-    modulosBadges = `
-      <div>
-          <span style="
-            display:inline-block;
-            background:#eef2f7;
-            color:#2b3e4c;
-            padding:8px 14px;
-            border-radius:999px;
-            font-size:14px;
-            font-weight:600;
-          ">
-            ${modulosNormalizados.join(" y ")}
-          </span>
-      </div>
-    `;
   }
 
-  return `
-    ${BANNER_HTML}
-    <div style="font-family: Arial, sans-serif; color: #2b3e4c; padding: 2rem;">
-      <p>Hola ${nombre || ""},</p>
-      <p>${mensaje}</p>
-      <div style="margin: 1rem 0; display:flex;">
-        ${modulosBadges}
-        ${periodoBadge}
-      </div>
-      <p style="margin: 1rem 0;">Ya puedes solicitar el informe de cierre correspondiente en la sección "Grilla de ejercicios históricos" de la
-        <a 
-          href="https://ovif.economianqn.gob.ar/historico-ejercicios-cerrados"
-          style="
-            color:#1a73e8;
-            text-decoration:none;
-            font-weight:bold;
-          "
-          target="_blank"
-        >
-          OVIF
-        </a>
-      </p>
-      <p style="
-        margin-top:2rem;
-        margin-bottom:0;
-        font-size:13px;
-        color:#6b7280;
-      ">
-        Este mensaje fue generado automáticamente por el sistema OVIF.
-        Por favor, no responder este correo.
-      </p>
-      ${FOOTER_HTML}
-    </div>`;
+  return { html: `
+    <table 
+			role="presentation" 
+			width="100%" 
+			cellpadding="0" 
+			cellspacing="0" 
+			border="0"
+			style="background-color:#ffffff; padding:20px 0;"
+    >
+      <tr>
+				<td align="center">
+					<table 
+						role="presentation" 
+						width="632" 
+						cellpadding="0" 
+						cellspacing="0" 
+						border="0"
+						style="
+						max-width:632px;
+						width:632px;
+						background-color:#F4E0B6;
+						border-radius:20px;
+						overflow:hidden;
+						border-collapse:separate;
+						"
+					>
+							${BANNER}
+							${cuerpoCierreModulos(nombre, ejercicio, obtenerNombreMes(mes), modulosNormalizados , esProrroga)}
+							${FOOTER}
+						</table>
+					</td>
+			</tr>
+	</table>`,
+	attachments: [
+			{
+					filename: 'ovif-logo.svg',
+					path: './src/assets/emails/ovif-logo.svg',
+					cid: 'ovif-logo' // same cid value as in the html img src
+			},
+			{
+					filename: 'gobierno-logo.svg',
+					path: './src/assets/emails/gobierno-logo.svg',
+					cid: 'gobierno-logo' // same cid value as in the html img src
+			},
+			{
+					filename: 'neuquen-logo.svg',
+					path: './src/assets/emails/neuquen-logo.svg',
+					cid: 'neuquen-logo' // same cid value as in the html img src
+			}
+	],
+};
 }
 
 // ─── Plantilla: Restablecimiento de contraseña ──────────────────────────────
@@ -183,26 +240,140 @@ function renderCierreModulos(payload) {
 function renderResetPassword(payload) {
   const { nombre, resetLink } = payload;
 
-  return `
-    ${BANNER_HTML}
-    <div style="font-family: Arial, sans-serif; color: #2b3e4c; padding: 2rem;">
-      <p>Hola ${nombre || ""},</p>
-      <p>Hacé clic en el siguiente botón para restablecer tu contraseña. Este enlace es válido por 1 hora:</p>
-      <p style="margin: 2rem 0;">
-        <a href="${resetLink}" target="_blank"
-          style="display:inline-block;
-          background:#2b3e4c;
-          color:white;
-          padding:12px 28px;
-          border-radius:6px;
-          text-decoration:none;
-          font-weight:bold;">
-          Restablecer contraseña
-        </a>
-      </p>
-      <p>Si no solicitaste este cambio, simplemente ignorá este mensaje.</p>
-      ${FOOTER_HTML}
-    </div>`;
+  return { html: `
+    <table
+			role="presentation"
+			width="850px"
+			cellpadding="0"
+			cellspacing="0"
+			border="0"
+			style="
+					margin:0;
+					padding:40px 0;
+					font-family: 'Manrope';
+			"
+		>
+      <tr>
+        <td align="center">
+					<table
+						role="presentation"
+						width="850"
+						cellpadding="0"
+						cellspacing="0"
+						border="0"
+						style="
+							width:850px;
+							max-width:850px;
+							background-color:#F4E0B6;
+							border-radius:18px;
+							overflow:hidden;
+							border-collapse:separate;
+						"
+					>
+            <tr>
+							<td
+								style="
+									background-color:#2b3e4c;
+									padding:26px 34px 28px 34px;
+								"
+							>
+								<table
+									role="presentation"
+									width="100%"
+									cellpadding="0"
+									cellspacing="0"
+									border="0"
+								>
+                  <tr>
+                    <td>
+											<p
+												style="
+													margin:0;
+													font-size:22px;
+													line-height:28px;
+													color:#ffffff;
+													font-weight:bold;
+												"
+											>
+                        Reestablecimiento de contraseña
+                      </p>
+                        <img src="cid:ovif-logo" alt="Logo OVIF" style="width: auto; height: 50px;margin-top: 10px;">
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="
+                  background-color:#F4E0B6;
+                  padding:34px;
+                "
+              >
+								<p
+									style="
+										margin:0 0 22px 0;
+										font-size:18px;
+										line-height:28px;
+										color:#2b3e4c;
+									"
+								>
+									Hola, ${nombre}
+								</p>
+								<p
+									style="
+										margin:0 0 16px 0;
+										font-size:18px;
+										line-height:28px;
+										color:#2b3e4c;
+									"
+								>
+									Hacé clic en el siguiente botón para restablecer tu contraseña. Este enlace es válido por 1 hora:
+								</p>
+								<p
+									style="
+										margin:0 0 26px 0;
+										font-size:18px;
+										line-height:28px;
+										color:#2b3e4c;
+									"
+								>
+									<a href="${resetLink}" target="_blank"
+										style="display:inline-block;
+										background:#2b3e4c;
+										color:white;
+										padding:12px 28px;
+										border-radius:6px;
+										text-decoration:none;
+										font-weight:bold;">
+										Restablecer contraseña
+									</a>
+								</p>
+								<p 
+									style="
+										margin-top:2rem;
+										margin-bottom:0;
+										font-size:13px;
+										color:#6b7280;
+									"
+								>
+									Este mensaje fue generado automáticamente por OVIF - APP.
+									Por favor, no responder este correo.
+								</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>`,
+    attachments: [
+        {
+            filename: 'ovif-logo.svg',
+            path: './src/assets/emails/ovif-logo.svg',
+            cid: 'ovif-logo'
+        }
+    ]
+};
 }
 
 // ─── Registro de plantillas ──────────────────────────────────────────────────
