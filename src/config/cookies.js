@@ -1,7 +1,14 @@
+import "dotenv/config";
+
 const IS_PROD = process.env.NODE_ENV === "production";
 
-const ACCESS_TOKEN_TTL = 10 * 60;          // 10 minutos en segundos
-const REFRESH_TOKEN_TTL = 8 * 60 * 60;     // 8 horas en segundos
+function envSeconds(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+const ACCESS_TOKEN_TTL = envSeconds("ACCESS_TOKEN_TTL_SECONDS", 10 * 60);
+const REFRESH_TOKEN_TTL = envSeconds("REFRESH_TOKEN_TTL_SECONDS", 8 * 60 * 60);
 
 const COOKIE_BASE = {
   httpOnly: true,

@@ -46,8 +46,8 @@ router.get("/profile", authenticateToken, profile);
 // Actualizar contraseña (usuario autenticado)
 router.post("/change-password", changeLimiter, authenticateToken, changePassword);
 
-// Logout (revoca sesión)
-router.post("/logout", authenticateToken, logout);
+// Logout idempotente: limpia cookies aunque la sesión ya esté expirada
+router.post("/logout", logout);
 
 // Solicitar restablecimiento de contraseña
 router.post("/forgot-password", resetLimiter, forgotPassword);
