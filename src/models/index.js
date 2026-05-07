@@ -45,6 +45,8 @@ import AuthSession from './AuthSession.js';
 import ApiRequestLog from './observabilidad/ApiRequestLog.js';
 import RateLimitEvent from './observabilidad/RateLimitEvent.js';
 import ApiRequestMetricHourly from './observabilidad/ApiRequestMetricHourly.js';
+import SolicitudProrrogaMunicipio from './SolicitudProrrogaMunicipio.js';
+import AuditoriaSolicitudProrroga from './AuditoriaSolicitudProrroga.js';
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
@@ -98,6 +100,23 @@ AuditoriaProrrogaMunicipio.belongsTo(Convenio, { foreignKey: "convenio_id" });
 AuditoriaProrrogaMunicipio.belongsTo(PautaConvenio, { foreignKey: "pauta_id" });
 AuditoriaProrrogaMunicipio.belongsTo(Usuario, { foreignKey: "gestionado_por" });
 ProrrogaMunicipio.hasMany(AuditoriaProrrogaMunicipio, { foreignKey: "prorroga_id" });
+
+// SolicitudProrrogaMunicipio
+Municipio.hasMany(SolicitudProrrogaMunicipio, { foreignKey: "municipio_id" });
+Convenio.hasMany(SolicitudProrrogaMunicipio, { foreignKey: "convenio_id" });
+PautaConvenio.hasMany(SolicitudProrrogaMunicipio, { foreignKey: "pauta_id" });
+ProrrogaMunicipio.hasMany(SolicitudProrrogaMunicipio, { foreignKey: "prorroga_id" });
+SolicitudProrrogaMunicipio.belongsTo(Municipio, { foreignKey: "municipio_id" });
+SolicitudProrrogaMunicipio.belongsTo(Convenio, { foreignKey: "convenio_id" });
+SolicitudProrrogaMunicipio.belongsTo(PautaConvenio, { foreignKey: "pauta_id" });
+SolicitudProrrogaMunicipio.belongsTo(ProrrogaMunicipio, { foreignKey: "prorroga_id" });
+SolicitudProrrogaMunicipio.belongsTo(Usuario, { as: "Solicitante", foreignKey: "solicitado_por" });
+SolicitudProrrogaMunicipio.belongsTo(Usuario, { as: "Resolutor", foreignKey: "resuelto_por" });
+
+// AuditoriaSolicitudProrroga
+SolicitudProrrogaMunicipio.hasMany(AuditoriaSolicitudProrroga, { foreignKey: "solicitud_id" });
+AuditoriaSolicitudProrroga.belongsTo(SolicitudProrrogaMunicipio, { foreignKey: "solicitud_id" });
+AuditoriaSolicitudProrroga.belongsTo(Usuario, { foreignKey: "usuario_id" });
 
 Gasto.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
@@ -205,5 +224,7 @@ export {
   AuthSession,
   ApiRequestLog,
   RateLimitEvent,
-  ApiRequestMetricHourly
+  ApiRequestMetricHourly,
+  SolicitudProrrogaMunicipio,
+  AuditoriaSolicitudProrroga
 };

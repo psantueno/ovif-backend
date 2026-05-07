@@ -5,13 +5,13 @@ import { requireAdmin } from "../middlewares/requireAdmin.js";
 
 const router = Router();
 
-router.use(authenticateToken, requireAdmin);
+router.use(authenticateToken);
 
 router.get("/select", getPautasSelect);
-router.get("/list", listarPautas);
-router.post("/", crearPauta);
-router.get("/:pautaId", getPautaConvenioParametros);
-router.put("/:pautaId", actualizarPauta);
-router.delete("/:pautaId", eliminarPauta);
+router.get("/list", requireAdmin, listarPautas);
+router.post("/", requireAdmin, crearPauta);
+router.get("/:pautaId", requireAdmin, getPautaConvenioParametros);
+router.put("/:pautaId", requireAdmin, actualizarPauta);
+router.delete("/:pautaId", requireAdmin, eliminarPauta);
 
 export default router;
