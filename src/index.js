@@ -12,6 +12,9 @@ import "./models/index.js";
 
 // === Importación de Middlewares ===
 import { maintenanceMode } from "./middlewares/maintenanceMode.js";
+import { requestLogger } from "./middlewares/requestLogger.js";
+import { createRateLimitHandler } from "./utils/rateLimitHandler.js";
+import { initializeObservability } from "./services/observabilityService.js";
 
 // === Importación de Rutas ===
 import usuariosRoutes from "./routes/usuarios.routes.js";
@@ -64,10 +67,17 @@ app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ limit: "5mb", extended: true }));
 app.use(morgan("dev"));
+app.use(requestLogger);
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000, // 15 min
-    max: 500,                 // máx. 500 requests
+    // Red de seguridad catastrofica: la IP visible no identifica usuarios finales.
+    // La proteccion fina vive en limiters por usuario/endpoint.
+    max: 10000,
+    handler: createRateLimitHandler(
+      "global",
+      { error: "Demasiados intentos. Intente nuevamente más tarde." }
+    ),
   })
 );
 
@@ -121,6 +131,8 @@ async function start() {
   try {
     await sequelize.authenticate();
     console.log("✅ Conexión a la base de datos OK");
+    await initializeObservability();
+    console.log("✅ Observabilidad de requests inicializada");
 
     app.listen(PORT, () => {
       console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);

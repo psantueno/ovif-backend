@@ -42,6 +42,9 @@ import Parametros from './Parametros.js';
 import MunicipioMail from './moduloEjercicios/MunicipioMail.js';
 import EnvioCorreo from './moduloEjercicios/EnvioCorreo.js';
 import AuthSession from './AuthSession.js';
+import ApiRequestLog from './observabilidad/ApiRequestLog.js';
+import RateLimitEvent from './observabilidad/RateLimitEvent.js';
+import ApiRequestMetricHourly from './observabilidad/ApiRequestMetricHourly.js';
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
@@ -199,5 +202,8 @@ export {
   Parametros,
   MunicipioMail,
   EnvioCorreo,
-  AuthSession
+  AuthSession,
+  ApiRequestLog,
+  RateLimitEvent,
+  ApiRequestMetricHourly
 };

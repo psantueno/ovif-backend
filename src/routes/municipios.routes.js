@@ -36,27 +36,36 @@ import { validarFechaLimiteDeCargaPorTipo } from "../middlewares/validarFechaLim
 import { validarRectificacionDisponible } from "../middlewares/validarRectificacionDisponible.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
 import { requireSelfOrAdmin } from "../middlewares/requireSelfOrAdmin.js";
+import {
+  authenticatedUserLimiter,
+  pdfGenerationConcurrency,
+  pdfGenerationLimiter,
+  writeBurstLimiter,
+} from "../middlewares/rateLimiters.js";
 
 const router = Router();
 const validarFechaLimiteGastosRecursos = validarFechaLimiteDeCargaPorTipo("gastos_recursos");
 const validarFechaLimiteRecaudacionesRemuneraciones = validarFechaLimiteDeCargaPorTipo("recaudaciones_remuneraciones");
 const validarFechaLimiteDeterminacionTributaria = validarFechaLimiteDeCargaPorTipo("determinacion_tributaria");
+const usuarioAutenticado = [authenticateToken, authenticatedUserLimiter];
+const escrituraMensual = [authenticateToken, authenticatedUserLimiter, writeBurstLimiter];
+const generacionPdf = [authenticateToken, authenticatedUserLimiter, pdfGenerationLimiter, pdfGenerationConcurrency];
 
 // Lista todos los municipios
-router.get("/", authenticateToken, requireAdmin,  getMunicipios);
+router.get("/", usuarioAutenticado, requireAdmin,  getMunicipios);
 
 // Lista municipios (id y nombre unicamente)
-router.get("/select", authenticateToken, requireAdmin, getMunicipiosSelect);
+router.get("/select", usuarioAutenticado, requireAdmin, getMunicipiosSelect);
 
 // Ejercicios abiertos para el municipio
-router.get("/:municipioId/ejercicios/disponibles", authenticateToken, validarMunicipioAsignado, listarEjerciciosDisponiblesPorMunicipio);
+router.get("/:municipioId/ejercicios/disponibles", usuarioAutenticado, validarMunicipioAsignado, listarEjerciciosDisponiblesPorMunicipio);
 
 // Ejercicios rectificables abiertos para el municipio
-router.get("/:municipioId/ejercicios/rectificaciones/disponibles", authenticateToken, validarMunicipioAsignado, listarEjerciciosRectificacionesDisponiblesPorMunicipio);
+router.get("/:municipioId/ejercicios/rectificaciones/disponibles", usuarioAutenticado, validarMunicipioAsignado, listarEjerciciosRectificacionesDisponiblesPorMunicipio);
 
 router.get(
   "/:municipioId/ejercicios/cerrados",
-  authenticateToken,
+  usuarioAutenticado,
   requireSelfOrAdmin,
   listarEjerciciosCerradosPorMunicipio
 );
@@ -64,14 +73,14 @@ router.get(
 // Partidas de gastos del municipio
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/gastos/partidas",
-  authenticateToken,
+  usuarioAutenticado,
   validarMunicipioAsignado,
   obtenerPartidasGastosMunicipio
 );
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/gastos/informe",
-  authenticateToken,
+  generacionPdf,
   validarMunicipioAsignado,
   generarInformeGastosMunicipio
 );
@@ -80,14 +89,14 @@ router.get(
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recursos/partidas",
-  authenticateToken,
+  usuarioAutenticado,
   validarMunicipioAsignado,
   obtenerPartidasRecursosMunicipio
 );
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recursos/informe",
-  authenticateToken,
+  generacionPdf,
   validarMunicipioAsignado,
   generarInformeRecursosMunicipio
 );
@@ -96,14 +105,14 @@ router.get(
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones/conceptos",
-  authenticateToken,
+  usuarioAutenticado,
   validarMunicipioAsignado,
   obtenerConceptosRecaudacionMunicipio
 );
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones/informe",
-  authenticateToken,
+  generacionPdf,
   validarMunicipioAsignado,
   generarInformeRecaudacionesMunicipio
 );
@@ -112,21 +121,21 @@ router.get(
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones/informe",
-  authenticateToken,
+  generacionPdf,
   validarMunicipioAsignado,
   generarInformeRemuneracionesMunicipio
 );
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/determinacion-tributaria",
-  authenticateToken,
+  usuarioAutenticado,
   validarMunicipioAsignado,
   obtenerDeterminacionesTributariasMunicipio
 );
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/determinacion-tributaria/informe",
-  authenticateToken,
+  generacionPdf,
   validarMunicipioAsignado,
   generarInformeDeterminacionTributariaMunicipio
 );
@@ -134,7 +143,7 @@ router.get(
 // Upserts
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/gastos",
-  authenticateToken,
+  escrituraMensual,
   validarMunicipioAsignado,
   validarFechaLimiteGastosRecursos,
   upsertGastosMunicipio
@@ -142,7 +151,7 @@ router.put(
 
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recursos",
-  authenticateToken,
+  escrituraMensual,
   validarMunicipioAsignado,
   validarFechaLimiteGastosRecursos,
   upsertRecursosMunicipio
@@ -150,7 +159,7 @@ router.put(
 
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones",
-  authenticateToken,
+  escrituraMensual,
   validarMunicipioAsignado,
   validarFechaLimiteRecaudacionesRemuneraciones,
   upsertRecaudacionesMunicipio
@@ -158,7 +167,7 @@ router.put(
 
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones",
-  authenticateToken,
+  escrituraMensual,
   validarMunicipioAsignado,
   validarFechaLimiteRecaudacionesRemuneraciones,
   upsertRemuneracionesMunicipio
@@ -166,7 +175,7 @@ router.put(
 
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/determinacion-tributaria",
-  authenticateToken,
+  escrituraMensual,
   validarMunicipioAsignado,
   validarFechaLimiteDeterminacionTributaria,
   upsertDeterminacionesTributariasMunicipio
@@ -175,7 +184,7 @@ router.put(
 // Rectificaciones
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas",
-  authenticateToken,
+  escrituraMensual,
   validarMunicipioAsignado,
   validarRectificacionDisponible,
   upsertRecaudacionesRectificadasMunicipio
@@ -183,7 +192,7 @@ router.put(
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas/informe",
-  authenticateToken,
+  generacionPdf,
   validarMunicipioAsignado,
   validarRectificacionDisponible,
   generarInformeRecaudacionesRectificadasMunicipio
@@ -191,7 +200,7 @@ router.get(
 
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones-rectificadas",
-  authenticateToken,
+  escrituraMensual,
   validarMunicipioAsignado,
   validarRectificacionDisponible,
   upsertRemuneracionesRectificadasMunicipio
@@ -199,7 +208,7 @@ router.put(
 
 router.get(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones-rectificadas/informe",
-  authenticateToken,
+  generacionPdf,
   validarMunicipioAsignado,
   validarRectificacionDisponible,
   generarInformeRemuneracionesRectificadasMunicipio
@@ -207,21 +216,21 @@ router.get(
 
 router.put(
   "/:municipioId/ejercicios/:ejercicio/mes/:mes/prorroga",
-  authenticateToken,
+  escrituraMensual,
   requireAdmin,
   crearProrrogaMunicipio
 );
 
 // Buscar municipio por ID
-router.get("/:id", authenticateToken, requireAdmin, getMunicipioById);
+router.get("/:id", usuarioAutenticado, requireAdmin, getMunicipioById);
 
 // Crear municipio 
-router.post("/", authenticateToken, requireAdmin, createMunicipio);
+router.post("/", escrituraMensual, requireAdmin, createMunicipio);
 
 // actualizar municipio
-router.put("/:id", authenticateToken, requireAdmin, updateMunicipio);
+router.put("/:id", escrituraMensual, requireAdmin, updateMunicipio);
 
 // eliminar municipio
-router.delete("/:id", authenticateToken, requireAdmin, deleteMunicipio);
+router.delete("/:id", escrituraMensual, requireAdmin, deleteMunicipio);
 
 export default router;
