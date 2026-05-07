@@ -6,6 +6,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const METHOD_VALUES = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
 const RAW_RETENTION_DAYS = 90;
 const ROLLUP_MAX_DAYS = 366;
+const ARGENTINA_HOUR_BUCKET = "DATE_SUB(hour_bucket, INTERVAL 3 HOUR)";
 
 const baseQuerySchema = z.object({
   desde: z.string().regex(DATE_RE).optional(),
@@ -140,21 +141,21 @@ export const obtenerMetricasObservabilidad = async (req, res) => {
       ApiRequestMetricHourly.findAll({
         where,
         attributes: [
-          [literal("DATE_FORMAT(hour_bucket, '%Y-%m-%d')"), "fecha"],
+          [literal(`DATE_FORMAT(${ARGENTINA_HOUR_BUCKET}, '%Y-%m-%d')`), "fecha"],
           [fn("SUM", col("total_requests")), "requests"],
           [fn("AVG", col("avg_duration_ms")), "avg_duration_ms"],
         ],
-        group: [literal("DATE_FORMAT(hour_bucket, '%Y-%m-%d')")],
+        group: [literal(`DATE_FORMAT(${ARGENTINA_HOUR_BUCKET}, '%Y-%m-%d')`)],
         order: [[literal("fecha"), "ASC"]],
         raw: true,
       }),
       ApiRequestMetricHourly.findAll({
         where,
         attributes: [
-          [literal("HOUR(hour_bucket)"), "hora"],
+          [literal(`HOUR(${ARGENTINA_HOUR_BUCKET})`), "hora"],
           [fn("SUM", col("total_requests")), "requests"],
         ],
-        group: [literal("HOUR(hour_bucket)")],
+        group: [literal(`HOUR(${ARGENTINA_HOUR_BUCKET})`)],
         order: [[literal("hora"), "ASC"]],
         raw: true,
       }),
