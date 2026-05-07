@@ -17,15 +17,21 @@ import {
 import { authenticateToken } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
 import { validarMunicipioAsignado } from "../middlewares/validarMunicipioAsignado.js";
+import {
+  authenticatedUserLimiter,
+  reportDownloadLimiter,
+  reportFiltersLimiter,
+  writeBurstLimiter,
+} from "../middlewares/rateLimiters.js";
 
 const router = Router();
 
 // === Informes por módulo (acceso por usuario autenticado con municipio asignado) ===
-router.get("/informes/filtros", authenticateToken, validarMunicipioAsignado, obtenerFiltrosInformes);
-router.get("/informes/download", authenticateToken, validarMunicipioAsignado, descargarInforme);
+router.get("/informes/filtros", authenticateToken, authenticatedUserLimiter, reportFiltersLimiter, validarMunicipioAsignado, obtenerFiltrosInformes);
+router.get("/informes/download", authenticateToken, authenticatedUserLimiter, reportDownloadLimiter, validarMunicipioAsignado, descargarInforme);
 
 // === Resto de endpoints de ejercicios (admin) ===
-router.use(authenticateToken, requireAdmin);
+router.use(authenticateToken, authenticatedUserLimiter, requireAdmin);
 
 // === CRUD de EjerciciosMes ===
 router.get("/", listarEjercicios); 
@@ -36,7 +42,7 @@ router.put("/:ejercicio/mes/:mes", updateEjercicio);
 router.delete("/:ejercicio/mes/:mes", deleteEjercicio);
 
 // === Prórroga por municipio ===
-router.put("/:ejercicio/mes/:mes/municipios/:municipioId/prorroga", prorrogarCierre);
+router.put("/:ejercicio/mes/:mes/municipios/:municipioId/prorroga", writeBurstLimiter, prorrogarCierre);
 
 // === Consultar fecha límite efectiva de un municipio ===
 router.get("/:ejercicio/mes/:mes/municipios/:municipioId", getFechaLimite);

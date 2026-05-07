@@ -18,33 +18,36 @@ import {
 import { authenticateToken } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
 import { requireSelfOrAdmin } from "../middlewares/requireSelfOrAdmin.js";
+import { authenticatedUserLimiter, writeBurstLimiter } from "../middlewares/rateLimiters.js";
 
 const router = Router();
+const usuarioAutenticado = [authenticateToken, authenticatedUserLimiter];
+const escrituraUsuarios = [authenticateToken, authenticatedUserLimiter, writeBurstLimiter];
 
 // Listar todos los usuarios
-router.get("/", authenticateToken, requireAdmin, getUsuarios);
+router.get("/", usuarioAutenticado, requireAdmin, getUsuarios);
 // Lista los municipios asociados al usuario
-router.get("/me/municipios", authenticateToken, obtenerMisMunicipios);
+router.get("/me/municipios", usuarioAutenticado, obtenerMisMunicipios);
 // Buscar por ID
-router.get("/:id", authenticateToken, requireAdmin, getUsuarioById);
+router.get("/:id", usuarioAutenticado, requireAdmin, getUsuarioById);
 // Municipios asignados a un usuario específico
-router.get("/:id/municipios", authenticateToken, requireSelfOrAdmin, getUsuarioMunicipios);
+router.get("/:id/municipios", usuarioAutenticado, requireSelfOrAdmin, getUsuarioMunicipios);
 // Roles asignados a un usuario específico
-router.get("/:id/roles", authenticateToken, requireAdmin, getUsuarioRoles);
+router.get("/:id/roles", usuarioAutenticado, requireAdmin, getUsuarioRoles);
 // Actualizar municipios asignados a un usuario
-router.put("/:id/municipios", authenticateToken, requireAdmin, updateUsuarioMunicipios);
+router.put("/:id/municipios", escrituraUsuarios, requireAdmin, updateUsuarioMunicipios);
 // Crear usuario
-router.post("/", authenticateToken, requireAdmin,createUsuario);
+router.post("/", escrituraUsuarios, requireAdmin,createUsuario);
 // Actualizar usuario
-router.put("/:id", authenticateToken, requireAdmin, updateUsuario);
+router.put("/:id", escrituraUsuarios, requireAdmin, updateUsuario);
 // Editar roles del usuario
-router.put("/:id/roles", authenticateToken, requireAdmin, updateUsuarioRoles);
+router.put("/:id/roles", escrituraUsuarios, requireAdmin, updateUsuarioRoles);
 // Soft delete - Sin uso actualmente
 // router.delete("/:id", authenticateToken, softDeleteUsuario);
 // Delete permanente
-router.delete("/:id", authenticateToken, requireAdmin, deleteUsuario);
+router.delete("/:id", escrituraUsuarios, requireAdmin, deleteUsuario);
 // Cambiar estado activo/inactivo
-router.patch("/:id/toggle", authenticateToken, requireAdmin, toggleUsuarioActivo);
+router.patch("/:id/toggle", escrituraUsuarios, requireAdmin, toggleUsuarioActivo);
 
 
 

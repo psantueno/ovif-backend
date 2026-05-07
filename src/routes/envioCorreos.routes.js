@@ -5,10 +5,11 @@ import {
 } from "../controllers/envioCorreos.controller.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
+import { adminHeavyLimiter, authenticatedUserLimiter } from "../middlewares/rateLimiters.js";
 
 const router = Router();
 
-router.use(authenticateToken, requireAdmin);
+router.use(authenticateToken, authenticatedUserLimiter, adminHeavyLimiter, requireAdmin);
 
 // Estadísticas de envíos
 router.get("/stats", obtenerEstadisticasEnvios);
