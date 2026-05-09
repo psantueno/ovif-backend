@@ -1,4 +1,4 @@
-import { Usuario, Rol } from "../models/index.js";
+import { Usuario, Rol, UsuarioMunicipio } from "../models/index.js";
 
 const adminRoleNames = (process.env.ADMIN_ROLE_NAMES || process.env.ADMIN_ROLE_NAME || "Administrador")
   .split(",")
@@ -14,12 +14,17 @@ export const requireSelfOrAdmin = async (req, res, next) => {
       return res.status(401).json({ error: "Usuario no autenticado" });
     }
 
-    // Acceso propio permitido
-    if (userId === targetId) {
-      return next();
+    const acceso = await UsuarioMunicipio.findOne({
+      where: {
+        usuario_id: userId,
+        municipio_id: targetId,
+      },
+    });
+
+    if(acceso){
+      return next()
     }
 
-    // Si no es el mismo usuario, verificar si es admin
     const usuario = await Usuario.findByPk(userId, {
       attributes: ["usuario_id"],
       include: [
