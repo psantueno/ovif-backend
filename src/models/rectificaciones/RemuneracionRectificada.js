@@ -18,19 +18,19 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     type: DataTypes.STRING(20),
     primaryKey: true
   },
-  apellido_nombre: {
-    type: DataTypes.STRING(255),
-    allowNull: false
-  },
   legajo: {
     type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  apellido_nombre: {
+    type: DataTypes.STRING(255),
     allowNull: false
   },
   fecha_ingreso: {
     type: DataTypes.DATEONLY,
     allowNull: false
   },
-  cargo_salarial: {
+  categoria: {
     type: DataTypes.STRING(100),
     allowNull: false
   },
@@ -38,17 +38,22 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     type: DataTypes.STRING(100),
     allowNull: false
   },
-  fecha_alta_regimen_laboral: {
+  regimen_laboral: {
+    type: DataTypes.STRING(255),
+    allowNull: false
+  },
+  fecha_inicio_servicio: {
     type: DataTypes.DATEONLY,
     allowNull: false
   },
-  fecha_baja_regimen_laboral: {
+  fecha_fin_servicio: {
     type: DataTypes.DATEONLY,
-    allowNull: false
+    allowNull: true,
+    defaultValue: null
   },
   total_remuneracion_neta: {
     type: DataTypes.DECIMAL(20,2),
-    allowNull: false
+    allowNull: true
   },
   basico_cargo_salarial: {
     type: DataTypes.DECIMAL(20,2),
@@ -67,19 +72,20 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     type: DataTypes.DECIMAL(20,2),
     allowNull: false
   },
-  ropa: {
+  total_ropa: {
     type: DataTypes.DECIMAL(20,2),
     allowNull: true,
     defaultValue: null
   },
-  bonos: {
+  total_bonos: {
     type: DataTypes.DECIMAL(20,2),
     allowNull: true,
     defaultValue: null
   },
   asignaciones_familiares: {
     type: DataTypes.DECIMAL(20,2),
-    allowNull: false
+    allowNull: true,
+    defaultValue: null
   },
   total_descuentos: {
     type: DataTypes.DECIMAL(20,2),
@@ -87,15 +93,11 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
   },
   total_issn: {
     type: DataTypes.DECIMAL(20,2),
-    allowNull: false
+    allowNull: true,
+    defaultValue: null
   },
-  bonificacion: {
-  type: DataTypes.DECIMAL(20,2),
-  allowNull: true,
-  defaultValue: null
-},
   cant_hs_extra_50: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.DECIMAL(6,2),
     allowNull: true,
     defaultValue: null
   },
@@ -105,7 +107,7 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     defaultValue: null
   },
   cant_hs_extra_100: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.DECIMAL(6,2),
     allowNull: true,
     defaultValue: null
   },
@@ -118,11 +120,7 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     type: DataTypes.DECIMAL(20,2),
     allowNull: false
   },
-  seguro_vida: {
-    type: DataTypes.DECIMAL(20,2),
-    allowNull: false
-  },
-  otros_conceptos: {
+  seguro_vida_obligatorio: {
     type: DataTypes.DECIMAL(20,2),
     allowNull: false
   }

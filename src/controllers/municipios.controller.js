@@ -25,6 +25,7 @@ import {
   obtenerPeriodosRegularesDisponiblesPorMunicipio,
   resolverPeriodoRegular,
 } from "../utils/periodosRegulares.js";
+import sequelize from "../config/db.js";
 
 const toISODate = (value) => {
   if (!value) return null;
@@ -932,7 +933,6 @@ export const upsertGastosMunicipio = async (req, res) => {
     return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
   }
 
-  const sequelize = Gasto.sequelize;
   const transaction = await sequelize.transaction();
 
   try {
@@ -1058,7 +1058,6 @@ export const upsertRecursosMunicipio = async (req, res) => {
     return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
   }
 
-  const sequelize = Recurso.sequelize;
   const transaction = await sequelize.transaction();
 
   try {
@@ -1363,7 +1362,6 @@ export const upsertRecaudacionesMunicipio = async (req, res) => {
     return res.status(400).json({ error: "El campo conceptos debe ser un arreglo" });
   }
 
-  const sequelize = Recaudacion.sequelize;
   const transaction = await sequelize.transaction();
 
   try {
@@ -1389,19 +1387,19 @@ export const upsertRecaudacionesMunicipio = async (req, res) => {
     const errores = [];
 
     for (const item of conceptos) {
-      const validRecurso = RecaudacionSchema.safeParse({
+      const validRecaudacion = RecaudacionSchema.safeParse({
         codigo_tributo: item?.codigo_tributo,
         descripcion: item?.descripcion,
         importe_recaudacion: item?.importe_recaudacion,
         ente_recaudador: item?.ente_recaudador,
       });
 
-      if (!validRecurso.success) {
-        errores.push(`Error procesando la fila con código ${item?.codigo_tributo ?? "sin código"}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
+      if (!validRecaudacion.success) {
+        errores.push(`Error procesando la fila con código ${item?.codigo_tributo ?? "sin código"}: ${zodErrorsToArray(validRecaudacion.error.issues).join(", ")}`);
         continue;
       }
 
-      const payload = validRecurso.data;
+      const payload = validRecaudacion.data;
 
       const where = {
         recaudaciones_ejercicio: ejercicioNum,
@@ -1676,7 +1674,6 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
     return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
   }
 
-  const sequelize = Recurso.sequelize;
   const transaction = await sequelize.transaction();
 
   try {
@@ -1702,7 +1699,7 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
     let errores = [];
 
     for (const item of remuneraciones) {
-      const validRecurso = RemuneracionSchema.safeParse({
+      const validRemuneracion = RemuneracionSchema.safeParse({
         cuil: item.cuil,
         legajo: item.legajo,
         apellido_nombre: item.apellido_nombre,
@@ -1716,9 +1713,9 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
         total_remunerativo: item.total_remunerativo ?? 0,
         sac: item.sac ?? 0,
         cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-        importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+        importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
         cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-        importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+        importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
         total_no_remunerativo: item.total_no_remunerativo ?? 0,
         total_bonos: item.total_bonos ?? 0,
         total_ropa: item.total_ropa ?? 0,
@@ -1730,8 +1727,8 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
         neto_a_cobrar: item.neto_a_cobrar ?? 0
       });
 
-      if (!validRecurso.success) {
-        errores.push(`Error procesando la remuneracion con CUIL ${item?.cuil}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
+      if (!validRemuneracion.success) {
+        errores.push(`Error procesando la remuneracion con CUIL ${item?.cuil}: ${zodErrorsToArray(validRemuneracion.error.issues).join(", ")}`);
         continue;
       }
 
@@ -1783,9 +1780,9 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
           total_remunerativo: item.total_remunerativo ?? 0,
           sac: item.sac ?? 0,
           cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-          importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+          importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
           cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-          importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+          importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
           total_no_remunerativo: item.total_no_remunerativo ?? 0,
           total_bonos: item.total_bonos ?? 0,
           total_ropa: item.total_ropa ?? 0,
@@ -1821,7 +1818,7 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
         existente.sector = item.sector;
         huboCambios = true;
       }
-      if(tieneRegimenLaboral && !compararValores(existente.sector, item.sector)){
+      if(tieneRegimenLaboral && !compararValores(existente.regimen_laboral, item.regimen_laboral)){
         existente.regimen_laboral = item.regimen_laboral;
         huboCambios = true;
       }
@@ -1988,7 +1985,6 @@ export const upsertDeterminacionesTributariasMunicipio = async (req, res) => {
     });
   }
 
-  const sequelize = DeterminacionTributaria.sequelize;
   const transaction = await sequelize.transaction();
 
   try {
@@ -2242,7 +2238,6 @@ export const upsertRecaudacionesRectificadasMunicipio = async (req, res) => {
     return res.status(400).json({ error: "El campo conceptos debe ser un arreglo" });
   }
 
-  const sequelize = RecaudacionRectificada.sequelize;
   const transaction = await sequelize.transaction();
 
   try {
@@ -2264,19 +2259,19 @@ export const upsertRecaudacionesRectificadasMunicipio = async (req, res) => {
     const errores = [];
 
     for (const item of conceptos) {
-      const validRecurso = RecaudacionSchema.safeParse({
+      const validRecaudacion = RecaudacionSchema.safeParse({
         codigo_tributo: item?.codigo_tributo,
         descripcion: item?.descripcion,
         importe_recaudacion: item?.importe_recaudacion,
         ente_recaudador: item?.ente_recaudador,
       });
 
-      if (!validRecurso.success) {
-        errores.push(`Error procesando la fila con código ${item?.codigo_tributo ?? "sin código"}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
+      if (!validRecaudacion.success) {
+        errores.push(`Error procesando la fila con código ${item?.codigo_tributo ?? "sin código"}: ${zodErrorsToArray(validRecaudacion.error.issues).join(", ")}`);
         continue;
       }
 
-      const payload = validRecurso.data;
+      const payload = validRecaudacion.data;
 
       const where = {
         recaudaciones_ejercicio: ejercicioNum,
@@ -2546,7 +2541,6 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
     return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
   }
 
-  const sequelize = Recurso.sequelize;
   const transaction = await sequelize.transaction();
 
   try {
@@ -2569,7 +2563,7 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
     let errores = [];
 
     for (const item of remuneraciones) {
-      const validRecurso = RemuneracionSchema.safeParse({
+      const validRemuneracion = RemuneracionSchema.safeParse({
         cuil: item.cuil,
         legajo: item.legajo,
         apellido_nombre: item.apellido_nombre,
@@ -2583,9 +2577,9 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
         total_remunerativo: item.total_remunerativo ?? 0,
         sac: item.sac ?? 0,
         cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-        importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+        importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
         cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-        importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+        importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
         total_no_remunerativo: item.total_no_remunerativo ?? 0,
         total_bonos: item.total_bonos ?? 0,
         total_ropa: item.total_ropa ?? 0,
@@ -2597,8 +2591,8 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
         neto_a_cobrar: item.neto_a_cobrar ?? 0
       });
 
-      if (!validRecurso.success) {
-        errores.push(`Error procesando la remuneracion con CUIL ${item?.cuil}: ${zodErrorsToArray(validRecurso.error.issues).join(", ")}`);
+      if (!validRemuneracion.success) {
+        errores.push(`Error procesando la remuneracion con CUIL ${item?.cuil}: ${zodErrorsToArray(validRemuneracion.error.issues).join(", ")}`);
         continue;
       }
 
@@ -2650,9 +2644,9 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
           total_remunerativo: item.total_remunerativo ?? 0,
           sac: item.sac ?? 0,
           cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-          importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+          importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
           cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-          importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+          importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
           total_no_remunerativo: item.total_no_remunerativo ?? 0,
           total_bonos: item.total_bonos ?? 0,
           total_ropa: item.total_ropa ?? 0,
@@ -2688,7 +2682,7 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
         existente.sector = item.sector;
         huboCambios = true;
       }
-      if(tieneRegimenLaboral && !compararValores(existente.sector, item.sector)){
+      if(tieneRegimenLaboral && !compararValores(existente.regimen_laboral, item.regimen_laboral)){
         existente.regimen_laboral = item.regimen_laboral;
         huboCambios = true;
       }
