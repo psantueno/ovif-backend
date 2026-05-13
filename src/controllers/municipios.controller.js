@@ -1713,9 +1713,9 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
         total_remunerativo: item.total_remunerativo ?? 0,
         sac: item.sac ?? 0,
         cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-        importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+        importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
         cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-        importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+        importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
         total_no_remunerativo: item.total_no_remunerativo ?? 0,
         total_bonos: item.total_bonos ?? 0,
         total_ropa: item.total_ropa ?? 0,
@@ -1780,9 +1780,9 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
           total_remunerativo: item.total_remunerativo ?? 0,
           sac: item.sac ?? 0,
           cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-          importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+          importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
           cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-          importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+          importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
           total_no_remunerativo: item.total_no_remunerativo ?? 0,
           total_bonos: item.total_bonos ?? 0,
           total_ropa: item.total_ropa ?? 0,
@@ -1818,7 +1818,7 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
         existente.sector = item.sector;
         huboCambios = true;
       }
-      if(tieneRegimenLaboral && !compararValores(existente.sector, item.sector)){
+      if(tieneRegimenLaboral && !compararValores(existente.regimen_laboral, item.regimen_laboral)){
         existente.regimen_laboral = item.regimen_laboral;
         huboCambios = true;
       }
@@ -2577,9 +2577,9 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
         total_remunerativo: item.total_remunerativo ?? 0,
         sac: item.sac ?? 0,
         cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-        importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+        importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
         cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-        importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+        importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
         total_no_remunerativo: item.total_no_remunerativo ?? 0,
         total_bonos: item.total_bonos ?? 0,
         total_ropa: item.total_ropa ?? 0,
@@ -2644,9 +2644,9 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
           total_remunerativo: item.total_remunerativo ?? 0,
           sac: item.sac ?? 0,
           cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-          importe_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+          importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
           cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-          importe_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+          importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
           total_no_remunerativo: item.total_no_remunerativo ?? 0,
           total_bonos: item.total_bonos ?? 0,
           total_ropa: item.total_ropa ?? 0,
@@ -2682,7 +2682,7 @@ export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
         existente.sector = item.sector;
         huboCambios = true;
       }
-      if(tieneRegimenLaboral && !compararValores(existente.sector, item.sector)){
+      if(tieneRegimenLaboral && !compararValores(existente.regimen_laboral, item.regimen_laboral)){
         existente.regimen_laboral = item.regimen_laboral;
         huboCambios = true;
       }
