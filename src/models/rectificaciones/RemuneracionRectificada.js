@@ -97,7 +97,7 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     defaultValue: null
   },
   cant_hs_extra_50: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.DECIMAL(6,2),
     allowNull: true,
     defaultValue: null
   },
@@ -107,7 +107,7 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     defaultValue: null
   },
   cant_hs_extra_100: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.DECIMAL(6,2),
     allowNull: true,
     defaultValue: null
   },

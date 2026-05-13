@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const obtenerNumeroDecimal = (value) => Number(String(value).replace(',', '.'));
+
 const decimalSchema = z.preprocess((value) => {
     // si ya es número (Excel lo parseó)
     if (typeof value === "number") {
@@ -19,6 +21,28 @@ const decimalSchema = z.preprocess((value) => {
 
 },
 z.number({ error: 'El importe debe ser un número decimal válido' }));
+
+const cantidadHorasExtraSchema = z.preprocess((value) => {
+    if (typeof value === "number") {
+        return value;
+    }
+
+    if (typeof value === "string") {
+        if (!/^\d+(,\d{1,2})?$/.test(value)) {
+            return value;
+        }
+
+        return obtenerNumeroDecimal(value);
+    }
+
+    return value;
+},
+z
+    .number({ error: 'La cantidad de horas extra debe ser un número decimal válido' })
+    .min(0, 'La cantidad de horas extra debe ser un número mayor o igual a 0')
+    .max(9999.99, 'La cantidad de horas extra no puede superar 9999,99')
+    .refine((n) => Number.isFinite(n), 'La cantidad de horas extra debe ser un número decimal válido')
+    .refine((n) => Number.isInteger(n * 100), 'La cantidad de horas extra admite hasta 2 decimales'));
 
 export const RemuneracionSchema = z.object({
     legajo: z
@@ -54,17 +78,9 @@ export const RemuneracionSchema = z.object({
     basico_cargo_salarial: decimalSchema,
     total_remunerativo: decimalSchema,
     sac: decimalSchema,
-    cant_hs_extra_50: z
-        .number('La cantidad de horas extra 50% debe ser un número')
-        .int('La cantidad de horas extra 50% debe ser un número entero')
-        .min(0, 'La cantidad de horas extra 50% debe ser un número mayor a 0')
-        .refine(n => isFinite(Number(n)) && !isNaN(n), 'La cantidad de horas extra 50% debe ser un número entero mayor a 0'),
+    cant_hs_extra_50: cantidadHorasExtraSchema,
     importe_hs_extra_50: decimalSchema,
-    cant_hs_extra_100: z
-        .number('La cantidad de horas extra 100% debe ser un número')
-        .int('La cantidad de horas extra 100% debe ser un número entero')
-        .min(0, 'La cantidad de horas extra 100% debe ser un número mayor a 0')
-        .refine(n => isFinite(Number(n)) && !isNaN(n), 'La cantidad de horas extra 100% debe ser un número entero mayor a 0'),
+    cant_hs_extra_100: cantidadHorasExtraSchema,
     importe_hs_extra_100: decimalSchema,
     total_no_remunerativo: decimalSchema,
     total_ropa: decimalSchema,
