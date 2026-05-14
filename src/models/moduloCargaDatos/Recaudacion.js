@@ -23,7 +23,7 @@ const Recaudacion = sequelize.define("Recaudacion", {
     allowNull: false
   },
   importe_recaudacion: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: false
   },
   ente_recaudador: {

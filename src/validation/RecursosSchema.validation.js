@@ -3,9 +3,9 @@ import { z } from 'zod';
 const decimalField = (label) =>
   z.number({ message: `${label} debe ser un número` }).refine((value) => {
     const str = value.toString();
-    return /^-?\d{1,34}(\.\d{1,2})?$/.test(str);
+    return /^-?\d{1,36}(\.\d{1,2})?$/.test(str);
   }, {
-    message: `${label} debe tener hasta 34 dígitos enteros y hasta 2 decimales`,
+    message: `${label} debe tener hasta 36 dígitos enteros y hasta 2 decimales`,
   });
 
 export const RecursosSchema = z.object({
