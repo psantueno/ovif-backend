@@ -956,10 +956,30 @@ export const upsertGastosMunicipio = async (req, res) => {
     let sinCambios = 0;
 
     const errores = [];
+    const partidasPorCodigo = new Map();
+
+    for (const item of partidas) {
+      const codigo = Number(item?.codigo_partida);
+      if (!Number.isFinite(codigo)) {
+        continue;
+      }
+      partidasPorCodigo.set(codigo, (partidasPorCodigo.get(codigo) ?? 0) + 1);
+    }
+
+    const partidasDuplicadas = new Set(
+      Array.from(partidasPorCodigo.entries())
+        .filter(([, cantidad]) => cantidad > 1)
+        .map(([codigo]) => codigo)
+    );
 
     for (const item of partidas) {
       try{
         const codigo = Number(item?.codigo_partida);
+
+        if (partidasDuplicadas.has(codigo)) {
+          errores.push(`Error procesando la partida con código ${item?.codigo_partida}: El codigo_partida ${codigo} está duplicado en el archivo.`);
+          continue;
+        }
 
         const datosGasto = {
           codigo_partida: codigo,
@@ -1081,10 +1101,30 @@ export const upsertRecursosMunicipio = async (req, res) => {
     let actualizados = 0;
     let sinCambios = 0;
     let errores = [];
+    const recursosPorCodigo = new Map();
+
+    for (const item of partidas) {
+      const codigo = Number(item?.codigo_recurso);
+      if (!Number.isFinite(codigo)) {
+        continue;
+      }
+      recursosPorCodigo.set(codigo, (recursosPorCodigo.get(codigo) ?? 0) + 1);
+    }
+
+    const recursosDuplicados = new Set(
+      Array.from(recursosPorCodigo.entries())
+        .filter(([, cantidad]) => cantidad > 1)
+        .map(([codigo]) => codigo)
+    );
 
     for (const item of partidas) {
       try {
         const codigo = Number(item?.codigo_recurso);
+
+        if (recursosDuplicados.has(codigo)) {
+          errores.push(`Error procesando el recurso con código ${item?.codigo_recurso}: El cod_recurso ${codigo} está duplicado en el archivo.`);
+          continue;
+        }
 
         const datosRecurso = {
           codigo_recurso: codigo,

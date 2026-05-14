@@ -13,10 +13,10 @@ export const RecaudacionSchema = z.object({
         .refine((value) => 
         {
             const str = value.toString();
-            return /^\d{1,18}(\.\d{1,2})?$/.test(str);
+            return /^\d{1,36}(\.\d{1,2})?$/.test(str);
         },
         {
-            message: "El número debe tener hasta 18 dígitos enteros y hasta 2 decimales",
+            message: "El número debe tener hasta 36 dígitos enteros y hasta 2 decimales",
         }
     ),
     ente_recaudador: z.string({ message: "El ente recaudador es obligatorio" })
