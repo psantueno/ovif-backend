@@ -52,47 +52,47 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     defaultValue: null
   },
   total_remuneracion_neta: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: true
   },
   basico_cargo_salarial: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: false
   },
   total_remunerativo: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: false
   },
   sac: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: true,
     defaultValue: null
   },
   total_no_remunerativo: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: false
   },
   total_ropa: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: true,
     defaultValue: null
   },
   total_bonos: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: true,
     defaultValue: null
   },
   asignaciones_familiares: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: true,
     defaultValue: null
   },
   total_descuentos: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: false
   },
   total_issn: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: true,
     defaultValue: null
   },
@@ -102,7 +102,7 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     defaultValue: null
   },
   importe_hs_extra_50: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: true,
     defaultValue: null
   },
@@ -112,16 +112,16 @@ const RemuneracionRectificada = sequelize.define("RemuneracionRectificada", {
     defaultValue: null
   },
   importe_hs_extra_100: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: true,
     defaultValue: null
   },
   art: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: false
   },
   seguro_vida_obligatorio: {
-    type: DataTypes.DECIMAL(20,2),
+    type: DataTypes.DECIMAL(36,2),
     allowNull: false
   }
 }, {
