@@ -24,6 +24,7 @@ const Recurso = sequelize.define("Recurso", {
   },
   codigo_fuente_financiera: {
     type: DataTypes.INTEGER,
+    primaryKey: true,
     allowNull: false
   },
   descripcion_fuente: {
