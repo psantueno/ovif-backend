@@ -52,6 +52,22 @@ const MODULOS_VALIDOS = [
 ];
 const TIPOS_CIERRE = [...Object.values(TIPOS_CIERRE_MODULO)];
 
+const parsePositiveIntegerQuery = (value, nombreParametro) => {
+  if (value === undefined || value === null || value === "") {
+    return { ok: true, value: null };
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0 || String(parsed) !== String(value).trim()) {
+    return {
+      ok: false,
+      error: `El parámetro '${nombreParametro}' debe ser un número entero positivo.`,
+    };
+  }
+
+  return { ok: true, value: parsed };
+};
+
 
 // Listar todos los ejercicios
 // GET /api/ejercicios
@@ -60,6 +76,8 @@ export const listarEjercicios = async (req, res) => {
     const page = Number.parseInt(req.query.page, 10) || 1;
     const limit = Number.parseInt(req.query.limit, 10) || 12;
     const yearRaw = req.query.year;
+    const convenioRaw = req.query.convenio_id;
+    const tipoPautaRaw = req.query.tipo_pauta_id;
 
     const sanitizedPage = Number.isFinite(page) && page > 0 ? page : 1;
     const sanitizedLimit = Number.isFinite(limit) && limit > 0 ? limit : 12;
@@ -74,6 +92,42 @@ export const listarEjercicios = async (req, res) => {
       where.ejercicio = yearParsed;
     }
 
+    const convenioParsed = parsePositiveIntegerQuery(convenioRaw, "convenio_id");
+    if (!convenioParsed.ok) {
+      return res.status(400).json({ error: convenioParsed.error });
+    }
+    if (convenioParsed.value !== null) {
+      where.convenio_id = convenioParsed.value;
+    }
+
+    const tipoPautaParsed = parsePositiveIntegerQuery(tipoPautaRaw, "tipo_pauta_id");
+    if (!tipoPautaParsed.ok) {
+      return res.status(400).json({ error: tipoPautaParsed.error });
+    }
+
+    const pautaInclude = {
+      model: PautaConvenio,
+      attributes: ["pauta_id", "descripcion", "tipo_pauta_id"],
+      include: [
+        {
+          model: TipoPauta,
+          as: "TipoPauta",
+          attributes: [
+            "tipo_pauta_id",
+            "codigo",
+            "nombre",
+            "descripcion",
+            "requiere_periodo_rectificar",
+          ],
+        },
+      ],
+    };
+
+    if (tipoPautaParsed.value !== null) {
+      pautaInclude.where = { tipo_pauta_id: tipoPautaParsed.value };
+      pautaInclude.required = true;
+    }
+
     const { rows, count } = await EjercicioMes.findAndCountAll({
       where,
       include: [
@@ -81,23 +135,7 @@ export const listarEjercicios = async (req, res) => {
           model: Convenio,
           attributes: ["convenio_id", "nombre"],
         },
-        {
-          model: PautaConvenio,
-          attributes: ["pauta_id", "descripcion", "tipo_pauta_id"],
-          include: [
-            {
-              model: TipoPauta,
-              as: "TipoPauta",
-              attributes: [
-                "tipo_pauta_id",
-                "codigo",
-                "nombre",
-                "descripcion",
-                "requiere_periodo_rectificar",
-              ],
-            },
-          ],
-        },
+        pautaInclude,
       ],
       order: [
         ["ejercicio", "DESC"],
