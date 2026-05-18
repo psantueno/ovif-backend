@@ -45,6 +45,8 @@ import AuthSession from './AuthSession.js';
 import ApiRequestLog from './observabilidad/ApiRequestLog.js';
 import RateLimitEvent from './observabilidad/RateLimitEvent.js';
 import ApiRequestMetricHourly from './observabilidad/ApiRequestMetricHourly.js';
+import SolicitudProrroga from './SolicitudProrroga.js';
+import SolicitudProrrogaEstados from './SolicitudProrrogaEstados.js';
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
@@ -98,6 +100,23 @@ AuditoriaProrrogaMunicipio.belongsTo(Convenio, { foreignKey: "convenio_id" });
 AuditoriaProrrogaMunicipio.belongsTo(PautaConvenio, { foreignKey: "pauta_id" });
 AuditoriaProrrogaMunicipio.belongsTo(Usuario, { foreignKey: "gestionado_por" });
 ProrrogaMunicipio.hasMany(AuditoriaProrrogaMunicipio, { foreignKey: "prorroga_id" });
+
+// SolicitudProrroga
+Municipio.hasMany(SolicitudProrroga, { foreignKey: "municipio_id" });
+Convenio.hasMany(SolicitudProrroga, { foreignKey: "convenio_id" });
+PautaConvenio.hasMany(SolicitudProrroga, { foreignKey: "pauta_id" });
+ProrrogaMunicipio.hasMany(SolicitudProrroga, { foreignKey: "prorroga_id" });
+SolicitudProrroga.belongsTo(Municipio, { foreignKey: "municipio_id" });
+SolicitudProrroga.belongsTo(Convenio, { foreignKey: "convenio_id" });
+SolicitudProrroga.belongsTo(PautaConvenio, { foreignKey: "pauta_id" });
+SolicitudProrroga.belongsTo(ProrrogaMunicipio, { foreignKey: "prorroga_id" });
+SolicitudProrroga.belongsTo(Usuario, { as: "Solicitante", foreignKey: "solicitado_por" });
+SolicitudProrroga.belongsTo(Usuario, { as: "Resolutor", foreignKey: "resuelto_por" });
+
+// SolicitudProrrogaEstados
+SolicitudProrroga.hasMany(SolicitudProrrogaEstados, { foreignKey: "solicitud_id" });
+SolicitudProrrogaEstados.belongsTo(SolicitudProrroga, { foreignKey: "solicitud_id" });
+SolicitudProrrogaEstados.belongsTo(Usuario, { foreignKey: "usuario_id" });
 
 Gasto.belongsTo(Municipio, { foreignKey: "municipio_id" });
 
@@ -205,5 +224,7 @@ export {
   AuthSession,
   ApiRequestLog,
   RateLimitEvent,
-  ApiRequestMetricHourly
+  ApiRequestMetricHourly,
+  SolicitudProrroga,
+  SolicitudProrrogaEstados
 };

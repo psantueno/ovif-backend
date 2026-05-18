@@ -13,14 +13,14 @@ import { requireAdmin } from "../middlewares/requireAdmin.js";
 
 const router = Router();
 
-router.use(authenticateToken, requireAdmin);
+router.use(authenticateToken);
 
-router.get("/", listarConveniosActivos);
-router.get("/list", listarConvenios);
+router.get("/", requireAdmin, listarConveniosActivos);
+router.get("/list", requireAdmin, listarConvenios);
 router.get("/select", getConveniosSelect);
-router.get("/:convenioId/pautas", listarPautasPorConvenio);
-router.post("/", crearConvenio);
-router.put("/:convenioId", actualizarConvenio);
-router.delete("/:convenioId", eliminarConvenio);
+router.get("/:convenioId/pautas", requireAdmin, listarPautasPorConvenio);
+router.post("/", requireAdmin, crearConvenio);
+router.put("/:convenioId", requireAdmin, actualizarConvenio);
+router.delete("/:convenioId", requireAdmin, eliminarConvenio);
 
 export default router;

@@ -292,6 +292,51 @@ export async function procesarMailsPendientes({
   return resumen;
 }
 
+/**
+ * Encola una notificación relacionada a solicitudes de prórroga.
+ * Usa idRef (grupo_solicitud_id o solicitud_id) + destinatario + tipo como clave idempotente.
+ *
+ * @param {object} params
+ * @param {string} params.tipo - Tipo de email (SOLICITUD_PRORROGA_CREADA, etc.)
+ * @param {string} params.destinatario - Email del destinatario
+ * @param {string} params.nombre - Nombre del destinatario
+ * @param {string} params.asunto - Asunto del email
+ * @param {object} params.payload - Datos para la plantilla
+ * @param {string|number} params.idRef - ID de referencia para idempotencia (grupo_solicitud_id o solicitud_id)
+ * @returns {Promise<{ correo: EnvioCorreo, created: boolean }>}
+ */
+export async function encolarNotificacionSolicitudProrroga({ tipo, destinatario, nombre, asunto, payload, idRef }) {
+  const raw = `${tipo}|${destinatario}|${idRef}`;
+  const idempotencyKey = crypto.createHash("sha256").update(raw).digest("hex");
+
+  const datos = {
+    idempotency_key: idempotencyKey,
+    tipo,
+    destinatario,
+    nombre_destinatario: nombre,
+    asunto,
+    payload,
+    estado: "PENDIENTE",
+    next_retry_at: new Date(),
+  };
+
+  try {
+    const correo = await EnvioCorreo.create(datos);
+    return { correo, created: true };
+  } catch (error) {
+    if (!(error instanceof UniqueConstraintError) && error?.name !== "SequelizeUniqueConstraintError") {
+      throw error;
+    }
+
+    const existente = await EnvioCorreo.findOne({ where: { idempotency_key: idempotencyKey } });
+    if (existente) {
+      return { correo: existente, created: false };
+    }
+
+    throw error;
+  }
+}
+
 // ─── Envío directo (sin outbox) ──────────────────────────────────────────────
 
 // Envía correo de restablecimiento de contraseña con enlace de un solo uso.

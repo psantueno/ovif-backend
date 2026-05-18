@@ -64,7 +64,7 @@ router.get("/:municipioId/ejercicios/disponibles", usuarioAutenticado, validarMu
 router.get("/:municipioId/ejercicios/rectificaciones/disponibles", usuarioAutenticado, validarMunicipioAsignado, listarEjerciciosRectificacionesDisponiblesPorMunicipio);
 
 router.get(
-  "/:municipioId/ejercicios/cerrados",
+  "/:id/ejercicios/cerrados",
   usuarioAutenticado,
   requireSelfOrAdmin,
   listarEjerciciosCerradosPorMunicipio
