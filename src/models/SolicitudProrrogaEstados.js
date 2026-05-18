@@ -1,10 +1,10 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
-const AuditoriaSolicitudProrroga = sequelize.define(
-    "AuditoriaSolicitudProrroga",
+const SolicitudProrrogaEstados = sequelize.define(
+    "SolicitudProrrogaEstados",
     {
-        auditoria_id: {
+        movimiento_id: {
             type: DataTypes.INTEGER,
             primaryKey: true,
             autoIncrement: true,
@@ -47,9 +47,9 @@ const AuditoriaSolicitudProrroga = sequelize.define(
         },
     },
     {
-        tableName: "ovif_auditoria_solicitudes_prorroga",
+        tableName: "ovif_solicitud_prorroga_estados",
         timestamps: false,
     }
 );
 
-export default AuditoriaSolicitudProrroga;
+export default SolicitudProrrogaEstados;

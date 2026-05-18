@@ -39,19 +39,6 @@ export const requireSelfOrAdmin = async (req, res, next) => {
 
     if (!usuario) {
       return res.status(404).json({ error: "Usuario no encontrado" });
-    }*/
-
-    // Verificar que tenga el municipio asignado
-
-    const acceso = await UsuarioMunicipio.findOne({
-      where: {
-        usuario_id: userId,
-        municipio_id: targetId,
-      },
-    });
-
-    if(acceso){
-      return next()
     }
 
     const isAdmin = (usuario.Roles || []).some((rol) =>

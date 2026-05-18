@@ -1,8 +1,8 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
-const SolicitudProrrogaMunicipio = sequelize.define(
-    "SolicitudProrrogaMunicipio",
+const SolicitudProrroga = sequelize.define(
+    "SolicitudProrroga",
     {
         solicitud_id: {
             type: DataTypes.INTEGER,
@@ -104,11 +104,11 @@ const SolicitudProrrogaMunicipio = sequelize.define(
         },
     },
     {
-        tableName: "ovif_solicitudes_prorroga_municipio",
+        tableName: "ovif_solicitudes_prorroga",
         timestamps: true,
         createdAt: "fecha_creacion",
         updatedAt: "fecha_actualizacion",
     }
 );
 
-export default SolicitudProrrogaMunicipio;
+export default SolicitudProrroga;

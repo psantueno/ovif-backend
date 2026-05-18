@@ -162,6 +162,13 @@ const obtenerNombreMes = (mesNumero) => {
   return meses[mesNumero] || "Sin especificar";
 };
 
+const getDDMMYYYY = (str) => {
+  if (!str) return null;
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
 // ─── Plantilla: Cierre de módulos ────────────────────────────────────────────
 // Notifica al municipio que se cerró el plazo de carga para uno o más módulos.
 function renderCierreModulos(payload) {
@@ -376,11 +383,407 @@ function renderResetPassword(payload) {
 };
 }
 
+// ─── Plantilla: Solicitud de prórroga creada ────────────────────────────────
+// Notifica a los admins que un operario envió una nueva solicitud de prórroga.
+function renderSolicitudProrrogaCreada(payload) {
+  const { nombre, solicitante, municipios = [] } = payload;
+
+  const filasTabla = municipios.map((item) => `
+    <tr>
+      <td style="padding:10px 20px; border-bottom:1px solid rgba(255,255,255,0.15); vertical-align:top;">
+        <div style="font-size:13px; color:#d0d0d0; margin-bottom:2px;">Municipio</div>
+        <div style="font-size:15px; font-weight:700;">${item.municipio}</div>
+      </td>
+      <td style="padding:10px 20px; border-bottom:1px solid rgba(255,255,255,0.15); vertical-align:top;">
+        <div style="font-size:13px; color:#d0d0d0; margin-bottom:2px;">Período</div>
+        <div style="font-size:15px; font-weight:700;">${obtenerNombreMes(item.mes)} ${item.ejercicio}</div>
+      </td>
+      <td style="padding:10px 20px; border-bottom:1px solid rgba(255,255,255,0.15); vertical-align:top;">
+        <div style="font-size:13px; color:#d0d0d0; margin-bottom:2px;">Pauta</div>
+        <div style="font-size:15px; font-weight:700;">${item.pauta}</div>
+      </td>
+      <td style="padding:10px 20px; border-bottom:1px solid rgba(255,255,255,0.15); vertical-align:top;">
+        <div style="font-size:13px; color:#d0d0d0; margin-bottom:2px;">Fecha solicitada</div>
+        <div style="font-size:15px; font-weight:700;">${getDDMMYYYY(item.fechaSolicitada)}</div>
+      </td>
+    </tr>
+  `).join("");
+
+  return { html: `
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background-color:#ffffff; padding:20px 0;"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="632"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="
+              max-width:632px;
+              width:632px;
+              background-color:#F4E0B6;
+              border-radius:20px;
+              overflow:hidden;
+              border-collapse:separate;
+            "
+          >
+            ${BANNER}
+            <tr>
+              <td style="font-family:Arial, sans-serif; color:#2b3e4c; padding:32px;">
+                <p style="margin-top:0;">Hola ${nombre},</p>
+                <p>
+                  <b>${solicitante}</b> realizó una nueva solicitud de prórroga para
+                  ${municipios.length === 1 ? "el siguiente período" : "los siguientes períodos"}:
+                </p>
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="
+                    background:#2b3e4c;
+                    color:#ffffff;
+                    border-radius:8px;
+                    overflow:hidden;
+                    margin:20px 0;
+                  "
+                >
+                  ${filasTabla}
+                </table>
+                <p style="margin-top:16px; font-size:13px; color:#6b7280;">
+                  Este mensaje fue generado automáticamente por OVIF - APP.
+                  Por favor, no responder este correo.
+                </p>
+              </td>
+            </tr>
+            ${FOOTER}
+          </table>
+        </td>
+      </tr>
+    </table>`,
+    attachments: [
+      { filename: "ovif-logo.svg", path: "./src/assets/emails/ovif-logo.svg", cid: "ovif-logo" },
+      { filename: "gobierno-logo.svg", path: "./src/assets/emails/gobierno-logo.svg", cid: "gobierno-logo" },
+      { filename: "neuquen-logo.svg", path: "./src/assets/emails/neuquen-logo.svg", cid: "neuquen-logo" },
+    ],
+  };
+}
+
+// ─── Plantilla: Solicitud de prórroga cancelada ──────────────────────────────
+// Notifica a los admins que una solicitud fue cancelada por el operario.
+function renderSolicitudProrrogaCancelada(payload) {
+  const { nombre, solicitante, municipio, ejercicio, mes, pauta, motivoCancelacion } = payload;
+
+  return { html: `
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background-color:#ffffff; padding:20px 0;"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="632"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="
+              max-width:632px;
+              width:632px;
+              background-color:#F4E0B6;
+              border-radius:20px;
+              overflow:hidden;
+              border-collapse:separate;
+            "
+          >
+            ${BANNER}
+            <tr>
+              <td style="font-family:Arial, sans-serif; color:#2b3e4c; padding:32px;">
+                <p style="margin-top:0;">Hola ${nombre},</p>
+                <p>
+                  <b>${solicitante}</b> canceló una solicitud de prórroga.
+                </p>
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="
+                    background:#2b3e4c;
+                    color:#ffffff;
+                    border-radius:8px;
+                    overflow:hidden;
+                    margin:20px 0;
+                  "
+                >
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Municipio</div>
+                      <div style="font-size:18px; font-weight:700;">${municipio}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Período</div>
+                      <div style="font-size:18px; font-weight:700;">${obtenerNombreMes(mes)} ${ejercicio}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Pauta</div>
+                      <div style="font-size:18px; font-weight:700;">${pauta}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px;">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Motivo de cancelación</div>
+                      <div style="font-size:16px;">${motivoCancelacion}</div>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin-top:16px; font-size:13px; color:#6b7280;">
+                  Este mensaje fue generado automáticamente por OVIF - APP.
+                  Por favor, no responder este correo.
+                </p>
+              </td>
+            </tr>
+            ${FOOTER}
+          </table>
+        </td>
+      </tr>
+    </table>`,
+    attachments: [
+      { filename: "ovif-logo.svg", path: "./src/assets/emails/ovif-logo.svg", cid: "ovif-logo" },
+      { filename: "gobierno-logo.svg", path: "./src/assets/emails/gobierno-logo.svg", cid: "gobierno-logo" },
+      { filename: "neuquen-logo.svg", path: "./src/assets/emails/neuquen-logo.svg", cid: "neuquen-logo" },
+    ],
+  };
+}
+
+// ─── Plantilla: Solicitud de prórroga aprobada ───────────────────────────────
+// Notifica al operario que su solicitud fue aprobada, con la fecha efectiva.
+function renderSolicitudProrrogaAprobada(payload) {
+  const { nombre, municipio, ejercicio, mes, pauta, fechaAprobada, comentario } = payload;
+
+  return { html: `
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background-color:#ffffff; padding:20px 0;"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="632"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="
+              max-width:632px;
+              width:632px;
+              background-color:#F4E0B6;
+              border-radius:20px;
+              overflow:hidden;
+              border-collapse:separate;
+            "
+          >
+            ${BANNER}
+            <tr>
+              <td style="font-family:Arial, sans-serif; color:#2b3e4c; padding:32px;">
+                <p style="margin-top:0;">Hola ${nombre},</p>
+                <p>
+                  Tu solicitud de prórroga fue <b>aprobada</b>.
+                  A continuación encontrás el detalle:
+                </p>
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="
+                    background:#2b3e4c;
+                    color:#ffffff;
+                    border-radius:8px;
+                    overflow:hidden;
+                    margin:20px 0;
+                  "
+                >
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Municipio</div>
+                      <div style="font-size:18px; font-weight:700;">${municipio}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Período</div>
+                      <div style="font-size:18px; font-weight:700;">${obtenerNombreMes(mes)} ${ejercicio}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Pauta</div>
+                      <div style="font-size:18px; font-weight:700;">${pauta}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px;${comentario ? " border-bottom:1px solid rgba(255,255,255,0.35);" : ""}">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Nueva fecha de cierre</div>
+                      <div style="font-size:20px; font-weight:700;">${getDDMMYYYY(fechaAprobada)}</div>
+                    </td>
+                  </tr>
+                  ${comentario ? `
+                  <tr>
+                    <td style="padding:14px 20px;">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Comentario</div>
+                      <div style="font-size:15px;">${comentario}</div>
+                    </td>
+                  </tr>` : ""}
+                </table>
+                <p style="margin-top:16px; font-size:13px; color:#6b7280;">
+                  Este mensaje fue generado automáticamente por OVIF - APP.
+                  Por favor, no responder este correo.
+                </p>
+              </td>
+            </tr>
+            ${FOOTER}
+          </table>
+        </td>
+      </tr>
+    </table>`,
+    attachments: [
+      { filename: "ovif-logo.svg", path: "./src/assets/emails/ovif-logo.svg", cid: "ovif-logo" },
+      { filename: "gobierno-logo.svg", path: "./src/assets/emails/gobierno-logo.svg", cid: "gobierno-logo" },
+      { filename: "neuquen-logo.svg", path: "./src/assets/emails/neuquen-logo.svg", cid: "neuquen-logo" },
+    ],
+  };
+}
+
+// ─── Plantilla: Solicitud de prórroga rechazada ──────────────────────────────
+// Notifica al operario que su solicitud fue rechazada, con el motivo del rechazo.
+function renderSolicitudProrrogaRechazada(payload) {
+  const { nombre, municipio, ejercicio, mes, pauta, comentario } = payload;
+
+  return { html: `
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background-color:#ffffff; padding:20px 0;"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="632"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="
+              max-width:632px;
+              width:632px;
+              background-color:#F4E0B6;
+              border-radius:20px;
+              overflow:hidden;
+              border-collapse:separate;
+            "
+          >
+            ${BANNER}
+            <tr>
+              <td style="font-family:Arial, sans-serif; color:#2b3e4c; padding:32px;">
+                <p style="margin-top:0;">Hola ${nombre},</p>
+                <p>
+                  Tu solicitud de prórroga fue <b>rechazada</b>.
+                  A continuación encontrás el detalle:
+                </p>
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="
+                    background:#2b3e4c;
+                    color:#ffffff;
+                    border-radius:8px;
+                    overflow:hidden;
+                    margin:20px 0;
+                  "
+                >
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Municipio</div>
+                      <div style="font-size:18px; font-weight:700;">${municipio}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Período</div>
+                      <div style="font-size:18px; font-weight:700;">${obtenerNombreMes(mes)} ${ejercicio}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Pauta</div>
+                      <div style="font-size:18px; font-weight:700;">${pauta}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px;">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Motivo del rechazo</div>
+                      <div style="font-size:15px;">${comentario}</div>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin-top:16px; font-size:13px; color:#6b7280;">
+                  Este mensaje fue generado automáticamente por OVIF - APP.
+                  Por favor, no responder este correo.
+                </p>
+              </td>
+            </tr>
+            ${FOOTER}
+          </table>
+        </td>
+      </tr>
+    </table>`,
+    attachments: [
+      { filename: "ovif-logo.svg", path: "./src/assets/emails/ovif-logo.svg", cid: "ovif-logo" },
+      { filename: "gobierno-logo.svg", path: "./src/assets/emails/gobierno-logo.svg", cid: "gobierno-logo" },
+      { filename: "neuquen-logo.svg", path: "./src/assets/emails/neuquen-logo.svg", cid: "neuquen-logo" },
+    ],
+  };
+}
+
 // ─── Registro de plantillas ──────────────────────────────────────────────────
 
 const renderers = {
   CIERRE_MODULOS: renderCierreModulos,
   RESET_PASSWORD: renderResetPassword,
+  SOLICITUD_PRORROGA_CREADA: renderSolicitudProrrogaCreada,
+  SOLICITUD_PRORROGA_CANCELADA: renderSolicitudProrrogaCancelada,
+  SOLICITUD_PRORROGA_APROBADA: renderSolicitudProrrogaAprobada,
+  SOLICITUD_PRORROGA_RECHAZADA: renderSolicitudProrrogaRechazada,
 };
 
 // Renderiza el HTML de un correo según su tipo y payload.
