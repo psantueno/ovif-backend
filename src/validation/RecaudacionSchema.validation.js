@@ -1,9 +1,12 @@
 import { z } from 'zod';
 
+const MYSQL_INT_MAX = 2147483647;
+
 export const RecaudacionSchema = z.object({
     codigo_tributo: z.number({ message: "El código de tributo debe ser un número entero" })
         .int({ message: "El código de tributo debe ser un número entero" })
-        .nonnegative({ message: "El código de tributo debe ser un número entero mayor o igual a 0" }),
+        .nonnegative({ message: "El código de tributo debe ser un número entero mayor o igual a 0" })
+        .max(MYSQL_INT_MAX, { message: `El código de tributo no puede superar ${MYSQL_INT_MAX}` }),
     descripcion: z.string({ message: "La descripción es obligatoria" })
         .trim()
         .min(1, { message: "La descripción es obligatoria" })

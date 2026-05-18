@@ -11,9 +11,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ─── Mocks de modelos (vi.hoisted para que estén disponibles en vi.mock) ──
 
-const { mockFindOne, mockDestroy, mockSave, mockReload } = vi.hoisted(() => {
+const { mockFindOne, mockDestroy, mockSave, mockReload, mockFindAndCountAll } = vi.hoisted(() => {
   const mockSave = vi.fn().mockResolvedValue(undefined);
   const mockReload = vi.fn().mockResolvedValue(undefined);
+  const mockFindAndCountAll = vi.fn().mockResolvedValue({ rows: [], count: 0 });
 
   const REGISTROS = [
     { ejercicio: 2026, mes: 3, convenio_id: 4, pauta_id: 7, fecha_inicio: "2026-03-01", fecha_fin: "2026-04-25" },
@@ -45,12 +46,13 @@ const { mockFindOne, mockDestroy, mockSave, mockReload } = vi.hoisted(() => {
     return Promise.resolve(idx >= 0 ? 1 : 0);
   });
 
-  return { mockFindOne, mockDestroy, mockSave, mockReload };
+  return { mockFindOne, mockDestroy, mockSave, mockReload, mockFindAndCountAll };
 });
 
 // Mock de Sequelize y modelos
 vi.mock("../src/models/index.js", () => ({
   EjercicioMes: {
+    findAndCountAll: mockFindAndCountAll,
     findOne: mockFindOne,
     destroy: mockDestroy,
   },
@@ -73,7 +75,7 @@ vi.mock("../src/utils/cierreModulo.js", () => ({
   normalizeTipoCierre: vi.fn(),
 }));
 
-import { updateEjercicio, deleteEjercicio } from "../src/controllers/ejercicios.controller.js";
+import { listarEjercicios, updateEjercicio, deleteEjercicio } from "../src/controllers/ejercicios.controller.js";
 
 // ─── Helpers para crear req/res fake ────────────────────────────────
 
@@ -112,7 +114,75 @@ const crearReqDelete = ({ ejercicio, mes, convenio_id, pauta_id }) => ({
   user: { usuario_id: 1 },
 });
 
+const crearReqList = (query = {}) => ({
+  query,
+});
+
 // ─── Tests ──────────────────────────────────────────────────────────
+
+describe("listarEjercicios — filtros", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("filtra por ejercicio, convenio_id y tipo_pauta_id", async () => {
+    const req = crearReqList({
+      page: "2",
+      limit: "5",
+      year: "2026",
+      convenio_id: "4",
+      tipo_pauta_id: "3",
+    });
+    const res = crearRes();
+
+    await listarEjercicios(req, res);
+
+    expect(mockFindAndCountAll).toHaveBeenCalledTimes(1);
+    const options = mockFindAndCountAll.mock.calls[0][0];
+    expect(options.where).toEqual({ ejercicio: 2026, convenio_id: 4 });
+    expect(options.offset).toBe(5);
+    expect(options.limit).toBe(5);
+
+    const pautaInclude = options.include.find((include) => include.attributes?.includes("pauta_id"));
+    expect(pautaInclude.where).toEqual({ tipo_pauta_id: 3 });
+    expect(pautaInclude.required).toBe(true);
+  });
+
+  it("no fuerza inner join de pauta si no se filtra por tipo_pauta_id", async () => {
+    const req = crearReqList({ convenio_id: "4" });
+    const res = crearRes();
+
+    await listarEjercicios(req, res);
+
+    const options = mockFindAndCountAll.mock.calls[0][0];
+    const pautaInclude = options.include.find((include) => include.attributes?.includes("pauta_id"));
+    expect(options.where).toEqual({ convenio_id: 4 });
+    expect(pautaInclude.where).toBeUndefined();
+    expect(pautaInclude.required).toBeUndefined();
+  });
+
+  it("rechaza convenio_id inválido", async () => {
+    const req = crearReqList({ convenio_id: "abc" });
+    const res = crearRes();
+
+    await listarEjercicios(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toMatch(/convenio_id/i);
+    expect(mockFindAndCountAll).not.toHaveBeenCalled();
+  });
+
+  it("rechaza tipo_pauta_id inválido", async () => {
+    const req = crearReqList({ tipo_pauta_id: "0" });
+    const res = crearRes();
+
+    await listarEjercicios(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toMatch(/tipo_pauta_id/i);
+    expect(mockFindAndCountAll).not.toHaveBeenCalled();
+  });
+});
 
 describe("updateEjercicio — PK completa", () => {
   beforeEach(() => {

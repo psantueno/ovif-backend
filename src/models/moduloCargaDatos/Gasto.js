@@ -19,15 +19,16 @@ const Gasto = sequelize.define("Gasto", {
     primaryKey: true
   },
   descripcion: {
-    type: DataTypes.STRING(255),
+    type: DataTypes.TEXT,
     allowNull: false
   },
   codigo_fuente_financiera: {
     type: DataTypes.INTEGER,
+    primaryKey: true,
     allowNull: false
   },
   descripcion_fuente: {
-    type: DataTypes.STRING(255),
+    type: DataTypes.TEXT,
     allowNull: false
   },
   formulado: {

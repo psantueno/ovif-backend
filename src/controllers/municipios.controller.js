@@ -91,7 +91,7 @@ const obtenerGastosMunicipio = async (municipioId, ejercicio, mes) => {
       gastos_mes: mes,
       municipio_id: municipioId,
     },
-    order: [["codigo_partida", "ASC"]],
+    order: [["codigo_partida", "ASC"], ["codigo_fuente_financiera", "ASC"]],
   });
 
   return gastos.map((g) => g.toJSON());
@@ -104,7 +104,7 @@ const obtenerRecursosMunicipio = async (municipioId, ejercicio, mes) => {
       recursos_mes: mes,
       municipio_id: municipioId,
     },
-    order: [["codigo_recurso", "ASC"]],
+    order: [["codigo_recurso", "ASC"], ["codigo_fuente_financiera", "ASC"]],
   });
 
   return recursos.map((r) => r.toJSON());
@@ -956,35 +956,39 @@ export const upsertGastosMunicipio = async (req, res) => {
     let sinCambios = 0;
 
     const errores = [];
-    const partidasPorCodigo = new Map();
+    const partidasPorClave = new Map();
 
     for (const item of partidas) {
       const codigo = Number(item?.codigo_partida);
-      if (!Number.isFinite(codigo)) {
+      const fuente = Number(item?.codigo_fuente_financiera);
+      if (!Number.isFinite(codigo) || !Number.isFinite(fuente)) {
         continue;
       }
-      partidasPorCodigo.set(codigo, (partidasPorCodigo.get(codigo) ?? 0) + 1);
+      const clave = `${codigo}__${fuente}`;
+      partidasPorClave.set(clave, (partidasPorClave.get(clave) ?? 0) + 1);
     }
 
     const partidasDuplicadas = new Set(
-      Array.from(partidasPorCodigo.entries())
+      Array.from(partidasPorClave.entries())
         .filter(([, cantidad]) => cantidad > 1)
-        .map(([codigo]) => codigo)
+        .map(([clave]) => clave)
     );
 
     for (const item of partidas) {
       try{
         const codigo = Number(item?.codigo_partida);
+        const fuente = Number(item?.codigo_fuente_financiera);
+        const clave = `${codigo}__${fuente}`;
 
-        if (partidasDuplicadas.has(codigo)) {
-          errores.push(`Error procesando la partida con código ${item?.codigo_partida}: El codigo_partida ${codigo} está duplicado en el archivo.`);
+        if (partidasDuplicadas.has(clave)) {
+          errores.push(`Error procesando la partida con código ${item?.codigo_partida}: La combinación codigo_partida ${codigo} y codigo_fuente_financiera ${fuente} está duplicada en el archivo.`);
           continue;
         }
 
         const datosGasto = {
           codigo_partida: codigo,
           descripcion: item?.descripcion ?? "",
-          codigo_fuente_financiera: Number(item?.codigo_fuente_financiera),
+          codigo_fuente_financiera: fuente,
           descripcion_fuente: item?.descripcion_fuente ?? "",
           formulado: Number(item?.formulado ?? 0),
           modificado: Number(item?.modificado ?? 0),
@@ -1004,6 +1008,7 @@ export const upsertGastosMunicipio = async (req, res) => {
           gastos_mes: mesNum,
           municipio_id: municipioNum,
           codigo_partida: codigo,
+          codigo_fuente_financiera: datosGasto.codigo_fuente_financiera,
         };
 
         const existente = await Gasto.findOne({ where, transaction });
@@ -1101,35 +1106,39 @@ export const upsertRecursosMunicipio = async (req, res) => {
     let actualizados = 0;
     let sinCambios = 0;
     let errores = [];
-    const recursosPorCodigo = new Map();
+    const recursosPorClave = new Map();
 
     for (const item of partidas) {
       const codigo = Number(item?.codigo_recurso);
-      if (!Number.isFinite(codigo)) {
+      const fuente = Number(item?.codigo_fuente_financiera);
+      if (!Number.isFinite(codigo) || !Number.isFinite(fuente)) {
         continue;
       }
-      recursosPorCodigo.set(codigo, (recursosPorCodigo.get(codigo) ?? 0) + 1);
+      const clave = `${codigo}__${fuente}`;
+      recursosPorClave.set(clave, (recursosPorClave.get(clave) ?? 0) + 1);
     }
 
     const recursosDuplicados = new Set(
-      Array.from(recursosPorCodigo.entries())
+      Array.from(recursosPorClave.entries())
         .filter(([, cantidad]) => cantidad > 1)
-        .map(([codigo]) => codigo)
+        .map(([clave]) => clave)
     );
 
     for (const item of partidas) {
       try {
         const codigo = Number(item?.codigo_recurso);
+        const fuente = Number(item?.codigo_fuente_financiera);
+        const clave = `${codigo}__${fuente}`;
 
-        if (recursosDuplicados.has(codigo)) {
-          errores.push(`Error procesando el recurso con código ${item?.codigo_recurso}: El cod_recurso ${codigo} está duplicado en el archivo.`);
+        if (recursosDuplicados.has(clave)) {
+          errores.push(`Error procesando el recurso con código ${item?.codigo_recurso}: La combinación cod_recurso ${codigo} y codigo_fuente_financiera ${fuente} está duplicada en el archivo.`);
           continue;
         }
 
         const datosRecurso = {
           codigo_recurso: codigo,
           descripcion: item?.descripcion ?? "",
-          codigo_fuente_financiera: Number(item?.codigo_fuente_financiera),
+          codigo_fuente_financiera: fuente,
           descripcion_fuente: item?.descripcion_fuente ?? "",
           vigente: Number(item?.vigente ?? 0),
           percibido: Number(item?.percibido ?? 0),
@@ -1147,6 +1156,7 @@ export const upsertRecursosMunicipio = async (req, res) => {
           recursos_mes: mesNum,
           municipio_id: municipioNum,
           codigo_recurso: codigo,
+          codigo_fuente_financiera: datosRecurso.codigo_fuente_financiera,
         };
 
         const existente = await Recurso.findOne({ where, transaction });
@@ -1178,8 +1188,12 @@ export const upsertRecursosMunicipio = async (req, res) => {
 
     await transaction.commit();
 
+    const message = errores.length > 0
+      ? `Recursos procesados con errores: ${errores.length}`
+      : "Recursos procesados correctamente";
+
     return res.json({
-      message: "Recursos procesados correctamente",
+      message,
       resumen: {
         creados,
         actualizados,

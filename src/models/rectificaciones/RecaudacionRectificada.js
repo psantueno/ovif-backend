@@ -15,7 +15,7 @@ const RecaudacionRectificada = sequelize.define("RecaudacionRectificada", {
     primaryKey: true
   },
   codigo_tributo: {
-    type: DataTypes.BIGINT,
+    type: DataTypes.INTEGER,
     primaryKey: true
   },
   descripcion: {
