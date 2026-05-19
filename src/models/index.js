@@ -47,6 +47,7 @@ import RateLimitEvent from './observabilidad/RateLimitEvent.js';
 import ApiRequestMetricHourly from './observabilidad/ApiRequestMetricHourly.js';
 import SolicitudProrroga from './SolicitudProrroga.js';
 import SolicitudProrrogaEstados from './SolicitudProrrogaEstados.js';
+import AuditoriaBorrado from './moduloCargaDatos/AuditoriaBorrado.js';
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
@@ -226,5 +227,6 @@ export {
   RateLimitEvent,
   ApiRequestMetricHourly,
   SolicitudProrroga,
-  SolicitudProrrogaEstados
+  SolicitudProrrogaEstados,
+  AuditoriaBorrado
 };
