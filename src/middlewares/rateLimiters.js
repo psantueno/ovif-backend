@@ -59,6 +59,12 @@ export const adminHeavyLimiter = createUserRateLimiter({
   message: "Demasiadas consultas administrativas. Espere unos minutos e intente nuevamente.",
 });
 
+export const deleteBurstLimiter = createUserRateLimiter({
+  limiter: "delete-burst",
+  max: 10,
+  message: "Demasiadas operaciones de borrado. Espere unos minutos e intente nuevamente.",
+});
+
 export function pdfGenerationConcurrency(req, res, next) {
   const userId = userIdFromRequest(req);
   const current = pdfConcurrencyByUser.get(userId) || 0;

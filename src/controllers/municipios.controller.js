@@ -26,6 +26,8 @@ import {
   resolverPeriodoRegular,
 } from "../utils/periodosRegulares.js";
 import sequelize from "../config/db.js";
+import { ejecutarBorrado } from "../services/borrado.service.js";
+import { BorradoParamsSchema } from "../validation/BorradoParamsSchema.validation.js";
 
 const toISODate = (value) => {
   if (!value) return null;
@@ -2934,3 +2936,191 @@ const verificarDeterminacionTributariaDisponible = async (
 
   return resultado.disponible;
 }
+
+// ─── Helpers compartidos para controllers de borrado ─────────────────────────
+
+const validarParamsBorrado = (req, res) => {
+  const parsed = BorradoParamsSchema.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Parámetros inválidos",
+      detalles: parsed.error.issues.map((e) => e.message),
+    });
+    return null;
+  }
+  return parsed.data;
+};
+
+const manejarResultadoBorrado = (res, result) => {
+  if (result.code === "USER_RATE_LIMITED") {
+    return res.status(403).json({ code: result.code, message: result.message });
+  }
+  if (result.code === "MODULE_CLOSED") {
+    return res.status(409).json({ code: result.code, message: result.message });
+  }
+  return res.status(200).json(result);
+};
+
+// ─── Borrado de gastos ────────────────────────────────────────────────────────
+
+export const borrarGastos = async (req, res) => {
+  const params = validarParamsBorrado(req, res);
+  if (!params) return;
+
+  try {
+    const result = await ejecutarBorrado({
+      modulo: "GASTOS",
+      tipoCarga: "REGULAR",
+      tipoPautaCodigo: "gastos_recursos",
+      ejercicio: params.ejercicio,
+      mes: params.mes,
+      municipioId: params.municipioId,
+      usuarioId: req.user.usuario_id,
+      ip: req.ip,
+    });
+    return manejarResultadoBorrado(res, result);
+  } catch (error) {
+    console.error("❌ borrarGastos:", error);
+    return res.status(500).json({ error: "Error al borrar gastos" });
+  }
+};
+
+// ─── Borrado de recursos ──────────────────────────────────────────────────────
+
+export const borrarRecursos = async (req, res) => {
+  const params = validarParamsBorrado(req, res);
+  if (!params) return;
+
+  try {
+    const result = await ejecutarBorrado({
+      modulo: "RECURSOS",
+      tipoCarga: "REGULAR",
+      tipoPautaCodigo: "gastos_recursos",
+      ejercicio: params.ejercicio,
+      mes: params.mes,
+      municipioId: params.municipioId,
+      usuarioId: req.user.usuario_id,
+      ip: req.ip,
+    });
+    return manejarResultadoBorrado(res, result);
+  } catch (error) {
+    console.error("❌ borrarRecursos:", error);
+    return res.status(500).json({ error: "Error al borrar recursos" });
+  }
+};
+
+// ─── Borrado de recaudaciones ─────────────────────────────────────────────────
+
+export const borrarRecaudaciones = async (req, res) => {
+  const params = validarParamsBorrado(req, res);
+  if (!params) return;
+
+  try {
+    const result = await ejecutarBorrado({
+      modulo: "RECAUDACIONES",
+      tipoCarga: "REGULAR",
+      tipoPautaCodigo: "recaudaciones_remuneraciones",
+      ejercicio: params.ejercicio,
+      mes: params.mes,
+      municipioId: params.municipioId,
+      usuarioId: req.user.usuario_id,
+      ip: req.ip,
+    });
+    return manejarResultadoBorrado(res, result);
+  } catch (error) {
+    console.error("❌ borrarRecaudaciones:", error);
+    return res.status(500).json({ error: "Error al borrar recaudaciones" });
+  }
+};
+
+export const borrarRecaudacionesRectificadas = async (req, res) => {
+  const params = validarParamsBorrado(req, res);
+  if (!params) return;
+
+  try {
+    const result = await ejecutarBorrado({
+      modulo: "RECAUDACIONES",
+      tipoCarga: "RECTIFICACION",
+      tipoPautaCodigo: "recaudaciones_remuneraciones",
+      ejercicio: params.ejercicio,
+      mes: params.mes,
+      municipioId: params.municipioId,
+      usuarioId: req.user.usuario_id,
+      ip: req.ip,
+    });
+    return manejarResultadoBorrado(res, result);
+  } catch (error) {
+    console.error("❌ borrarRecaudacionesRectificadas:", error);
+    return res.status(500).json({ error: "Error al borrar recaudaciones rectificadas" });
+  }
+};
+
+// ─── Borrado de remuneraciones ────────────────────────────────────────────────
+
+export const borrarRemuneraciones = async (req, res) => {
+  const params = validarParamsBorrado(req, res);
+  if (!params) return;
+
+  try {
+    const result = await ejecutarBorrado({
+      modulo: "REMUNERACIONES",
+      tipoCarga: "REGULAR",
+      tipoPautaCodigo: "recaudaciones_remuneraciones",
+      ejercicio: params.ejercicio,
+      mes: params.mes,
+      municipioId: params.municipioId,
+      usuarioId: req.user.usuario_id,
+      ip: req.ip,
+    });
+    return manejarResultadoBorrado(res, result);
+  } catch (error) {
+    console.error("❌ borrarRemuneraciones:", error);
+    return res.status(500).json({ error: "Error al borrar remuneraciones" });
+  }
+};
+
+export const borrarRemuneracionesRectificadas = async (req, res) => {
+  const params = validarParamsBorrado(req, res);
+  if (!params) return;
+
+  try {
+    const result = await ejecutarBorrado({
+      modulo: "REMUNERACIONES",
+      tipoCarga: "RECTIFICACION",
+      tipoPautaCodigo: "recaudaciones_remuneraciones",
+      ejercicio: params.ejercicio,
+      mes: params.mes,
+      municipioId: params.municipioId,
+      usuarioId: req.user.usuario_id,
+      ip: req.ip,
+    });
+    return manejarResultadoBorrado(res, result);
+  } catch (error) {
+    console.error("❌ borrarRemuneracionesRectificadas:", error);
+    return res.status(500).json({ error: "Error al borrar remuneraciones rectificadas" });
+  }
+};
+
+// ─── Borrado de determinación tributaria ─────────────────────────────────────
+
+export const borrarDeterminaciones = async (req, res) => {
+  const params = validarParamsBorrado(req, res);
+  if (!params) return;
+
+  try {
+    const result = await ejecutarBorrado({
+      modulo: "DETERMINACION_TRIBUTARIA",
+      tipoCarga: "REGULAR",
+      tipoPautaCodigo: "determinacion_tributaria",
+      ejercicio: params.ejercicio,
+      mes: params.mes,
+      municipioId: params.municipioId,
+      usuarioId: req.user.usuario_id,
+      ip: req.ip,
+    });
+    return manejarResultadoBorrado(res, result);
+  } catch (error) {
+    console.error("❌ borrarDeterminaciones:", error);
+    return res.status(500).json({ error: "Error al borrar determinaciones tributarias" });
+  }
+};

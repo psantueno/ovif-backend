@@ -28,6 +28,13 @@ import {
   generarInformeRemuneracionesRectificadasMunicipio,
   crearProrrogaMunicipio,
   deleteMunicipio,
+  borrarGastos,
+  borrarRecursos,
+  borrarRecaudaciones,
+  borrarRecaudacionesRectificadas,
+  borrarRemuneraciones,
+  borrarRemuneracionesRectificadas,
+  borrarDeterminaciones,
 } from "../controllers/municipios.controller.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
@@ -41,6 +48,7 @@ import {
   pdfGenerationConcurrency,
   pdfGenerationLimiter,
   writeBurstLimiter,
+  deleteBurstLimiter,
 } from "../middlewares/rateLimiters.js";
 
 const router = Router();
@@ -232,5 +240,65 @@ router.put("/:id", escrituraMensual, requireAdmin, updateMunicipio);
 
 // eliminar municipio
 router.delete("/:id", escrituraMensual, requireAdmin, deleteMunicipio);
+
+// ─── Borrado de cargas por periodo ─────────────────────────────────────────────────
+
+const borradoMensual = [authenticateToken, authenticatedUserLimiter, deleteBurstLimiter];
+
+router.delete(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/gastos",
+  borradoMensual,
+  validarMunicipioAsignado,
+  validarFechaLimiteGastosRecursos,
+  borrarGastos
+);
+
+router.delete(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recursos",
+  borradoMensual,
+  validarMunicipioAsignado,
+  validarFechaLimiteGastosRecursos,
+  borrarRecursos
+);
+
+router.delete(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones",
+  borradoMensual,
+  validarMunicipioAsignado,
+  validarFechaLimiteRecaudacionesRemuneraciones,
+  borrarRecaudaciones
+);
+
+router.delete(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones",
+  borradoMensual,
+  validarMunicipioAsignado,
+  validarFechaLimiteRecaudacionesRemuneraciones,
+  borrarRemuneraciones
+);
+
+router.delete(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/determinacion-tributaria",
+  borradoMensual,
+  validarMunicipioAsignado,
+  validarFechaLimiteDeterminacionTributaria,
+  borrarDeterminaciones
+);
+
+router.delete(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/recaudaciones-rectificadas",
+  borradoMensual,
+  validarMunicipioAsignado,
+  validarRectificacionDisponible,
+  borrarRecaudacionesRectificadas
+);
+
+router.delete(
+  "/:municipioId/ejercicios/:ejercicio/mes/:mes/remuneraciones-rectificadas",
+  borradoMensual,
+  validarMunicipioAsignado,
+  validarRectificacionDisponible,
+  borrarRemuneracionesRectificadas
+);
 
 export default router;

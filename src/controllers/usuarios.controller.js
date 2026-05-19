@@ -1,7 +1,7 @@
 import { Op, literal  } from "sequelize";
 import sequelize from "../config/db.js";
 // Modelos
-import { Usuario, Rol, Municipio, AuditoriaProrrogaMunicipio, UsuarioMunicipio, UsuarioRol } from "../models/index.js";
+import { Usuario, Rol, Municipio, AuditoriaProrrogaMunicipio, UsuarioMunicipio, UsuarioRol, AuditoriaBorrado } from "../models/index.js";
 import { CreateUsuarioSchema } from "../validation/UsuarioSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
 
@@ -359,7 +359,23 @@ export const deleteUsuario = async (req, res) => {
       });
     }
 
-    // 3️⃣ Eliminar usuario (y sus relaciones en cascada)
+    // 3️⃣ Verificar si tiene registros de borrado de cargas
+    const borrados = await AuditoriaBorrado.count({
+      where: { usuario_id: id },
+    });
+
+    if (borrados > 0) {
+      return res.status(409).json({
+        error:
+          "No se puede eliminar el usuario porque tiene operaciones de borrado de cargas registradas.",
+        code: "USER_HAS_BORRADO_LOGS",
+        details: {
+          borrados_vinculados: borrados,
+        },
+      });
+    }
+
+    // 4️⃣ Eliminar usuario (y sus relaciones en cascada)
     await user.destroy();
 
     return res.json({
