@@ -168,14 +168,17 @@ describe("ejecutarBorrado()", () => {
     );
   });
 
-  it("rechaza con USER_RATE_LIMITED si el usuario tiene ≥3 borrados en la última hora", async () => {
+  it("registra anomalía en console.warn si el usuario tiene ≥3 borrados en la última hora, pero permite continuar", async () => {
     mockAuditoriaBorradoCount.mockResolvedValue(3);
+    mockGastoDestroy.mockResolvedValue(1);
+    mockAuditoriaBorradoCreate.mockResolvedValue({ borrado_id: 99 });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = await ejecutarBorrado(baseParams);
 
-    expect(result.code).toBe("USER_RATE_LIMITED");
-    expect(mockGastoDestroy).not.toHaveBeenCalled();
-    expect(mockTransactionCommit).not.toHaveBeenCalled();
+    expect(result.code).toBe("DATA_DELETED");
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("ANOMALIA_BORRADO"));
+    warnSpy.mockRestore();
   });
 
   it("permite borrado si el usuario tiene exactamente 2 borrados en la última hora", async () => {
