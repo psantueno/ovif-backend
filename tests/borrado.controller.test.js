@@ -142,19 +142,6 @@ describe("borrarGastos()", () => {
     expect(res.body.code).toBe("MODULE_CLOSED");
   });
 
-  it("retorna 403 con USER_RATE_LIMITED si ≥3 borrados en 1 hora", async () => {
-    mockEjecutarBorrado.mockResolvedValue({
-      code: "USER_RATE_LIMITED",
-      deleted_count: 0,
-      audit_id: null,
-      message: "Límite alcanzado.",
-    });
-    const res = createRes();
-    await borrarGastos(createReq(), res);
-    expect(res.statusCode).toBe(403);
-    expect(res.body.code).toBe("USER_RATE_LIMITED");
-  });
-
   it("retorna 500 si el servicio lanza una excepción", async () => {
     mockEjecutarBorrado.mockRejectedValue(new Error("DB failure"));
     const res = createRes();

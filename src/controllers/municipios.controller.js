@@ -2952,9 +2952,6 @@ const validarParamsBorrado = (req, res) => {
 };
 
 const manejarResultadoBorrado = (res, result) => {
-  if (result.code === "USER_RATE_LIMITED") {
-    return res.status(403).json({ code: result.code, message: result.message });
-  }
   if (result.code === "MODULE_CLOSED") {
     return res.status(409).json({ code: result.code, message: result.message });
   }

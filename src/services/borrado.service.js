@@ -13,7 +13,7 @@ import {
 } from "../models/index.js";
 import { resolverPeriodoRegular } from "../utils/periodosRegulares.js";
 
-const BORRADOS_POR_HORA_MAX = 3;
+const BORRADOS_ANOMALIA_UMBRAL = 3;
 
 /**
  * Mapea modulo + tipoCarga al modelo Sequelize y sus columnas de filtro.
@@ -91,7 +91,7 @@ export const ejecutarBorrado = async ({
   usuarioId,
   ip = null,
 }) => {
-  // 1. Verificar rate limit: máx BORRADOS_POR_HORA_MAX borrados en la última hora
+  // 1. Anomalía de observabilidad: registrar si supera el umbral, pero sin bloquear
   const unaHoraAtras = new Date(Date.now() - 60 * 60 * 1000);
   const borradosRecientes = await AuditoriaBorrado.count({
     where: {
@@ -100,16 +100,10 @@ export const ejecutarBorrado = async ({
     },
   });
 
-  if (borradosRecientes >= BORRADOS_POR_HORA_MAX) {
+  if (borradosRecientes >= BORRADOS_ANOMALIA_UMBRAL) {
     console.warn(
-      `⚠️ USER_RATE_LIMITED: usuario ${usuarioId} intentó ${borradosRecientes + 1} borrados en 1 hora`
+      `⚠️ ANOMALIA_BORRADO: usuario ${usuarioId} acumula ${borradosRecientes + 1} borrados en la última hora`
     );
-    return {
-      code: "USER_RATE_LIMITED",
-      deleted_count: 0,
-      audit_id: null,
-      message: `Límite de borrados alcanzado. Se permiten hasta ${BORRADOS_POR_HORA_MAX} borrados por hora.`,
-    };
   }
 
   // 2. Resolver modelo y condición WHERE
