@@ -69,9 +69,10 @@ const mapRemuneracionParaInforme = (remuneracion, regimenesMap = new Map()) => {
       remuneracion?.categoria ??
         remuneracion?.cargo_salarial
     ),
-    total_remunerativo: toNumberOrZero(remuneracion?.total_remunerativo),
-    total_no_remunerativo: toNumberOrZero(remuneracion?.total_no_remunerativo),
-    total_descuentos: toNumberOrZero(remuneracion?.total_descuentos),
+    seguro_vida: toNumberOrZero(remuneracion?.seguro_vida_obligatorio),
+    art: toNumberOrZero(remuneracion?.art),
+    issn: toNumberOrZero(remuneracion?.total_issn),
+    desc_personales: toNumberOrZero(remuneracion?.total_descuentos),
     neto_a_cobrar: toNumberOrZero(
       remuneracion?.total_remuneracion_neta ??
         remuneracion?.neto_a_cobrar ??
