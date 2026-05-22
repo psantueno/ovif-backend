@@ -1717,7 +1717,124 @@ export const generarInformeRemuneracionesMunicipio = async (req, res) => {
   }
 }
 
-export const upsertRemuneracionesMunicipio = async (req, res) => {
+const REMUNERACION_CAMPOS_ACTUALIZABLES = [
+  ["apellido_nombre", "apellido_nombre", "string"],
+  ["categoria", "categoria", "string"],
+  ["sector", "sector", "string"],
+  ["fecha_ingreso", "fecha_ingreso", "string"],
+  ["fecha_inicio_servicio", "fecha_inicio_servicio", "string"],
+  ["fecha_fin_servicio", "fecha_fin_servicio", "string"],
+  ["basico_cargo_salarial", "basico_cargo_salarial", "number"],
+  ["total_remunerativo", "total_remunerativo", "number"],
+  ["sac", "sac", "number"],
+  ["cant_hs_extra_50", "cant_hs_extra_50", "number"],
+  ["importe_hs_extra_50", "importe_hs_extra_50", "number"],
+  ["cant_hs_extra_100", "cant_hs_extra_100", "number"],
+  ["importe_hs_extra_100", "importe_hs_extra_100", "number"],
+  ["total_no_remunerativo", "total_no_remunerativo", "number"],
+  ["total_bonos", "total_bonos", "number"],
+  ["total_ropa", "total_ropa", "number"],
+  ["asignaciones_familiares", "asignaciones_familiares", "number"],
+  ["total_descuentos", "total_descuentos", "number"],
+  ["total_issn", "total_issn", "number"],
+  ["art", "art", "number"],
+  ["seguro_vida_obligatorio", "seguro_vida_obligatorio", "number"],
+  ["neto_a_cobrar", "total_remuneracion_neta", "number"],
+];
+
+const construirRemuneracionParaValidar = (item = {}) => ({
+  cuil: item.cuil,
+  legajo: item.legajo,
+  apellido_nombre: item.apellido_nombre,
+  regimen_laboral: item.regimen_laboral,
+  categoria: item.categoria,
+  sector: item.sector,
+  fecha_ingreso: item.fecha_ingreso,
+  fecha_inicio_servicio: item.fecha_inicio_servicio,
+  fecha_fin_servicio: item.fecha_fin_servicio ?? null,
+  basico_cargo_salarial: item.basico_cargo_salarial ?? 0,
+  total_remunerativo: item.total_remunerativo ?? 0,
+  sac: item.sac ?? 0,
+  cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
+  importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
+  cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
+  importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
+  total_no_remunerativo: item.total_no_remunerativo ?? 0,
+  total_bonos: item.total_bonos ?? 0,
+  total_ropa: item.total_ropa ?? 0,
+  asignaciones_familiares: item.asignaciones_familiares ?? 0,
+  total_descuentos: item.total_descuentos ?? 0,
+  total_issn: item.total_issn ?? 0,
+  art: item.art ?? 0,
+  seguro_vida_obligatorio: item.seguro_vida_obligatorio ?? 0,
+  neto_a_cobrar: item.neto_a_cobrar ?? 0,
+});
+
+const validarPayloadRemuneraciones = (remuneraciones) => {
+  if (!Array.isArray(remuneraciones)) {
+    return {
+      rows: [],
+      errors: ["El campo remuneraciones debe ser un arreglo"],
+    };
+  }
+
+  const rows = [];
+  const errors = [];
+  const clavesPorCuilRegimen = new Set();
+
+  remuneraciones.forEach((item, index) => {
+    const validRemuneracion = RemuneracionSchema.safeParse(construirRemuneracionParaValidar(item));
+
+    if (!validRemuneracion.success) {
+      errors.push(
+        `Error procesando la remuneracion en la fila ${index + 1} con CUIL ${item?.cuil ?? "sin CUIL"}: ${zodErrorsToArray(validRemuneracion.error.issues).join(", ")}`
+      );
+      return;
+    }
+
+    const payload = validRemuneracion.data;
+    const clave = `${payload.cuil}::${payload.regimen_laboral.toLocaleLowerCase("es")}`;
+    if (clavesPorCuilRegimen.has(clave)) {
+      errors.push(`La combinación CUIL ${payload.cuil} y régimen ${payload.regimen_laboral} está duplicada en el archivo`);
+      return;
+    }
+
+    clavesPorCuilRegimen.add(clave);
+    rows.push({ item, payload });
+  });
+
+  return { rows, errors };
+};
+
+const crearErrorRemuneracion = (statusCode, message, errors = undefined) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.publicErrors = errors;
+  return error;
+};
+
+const esConflictoRemuneracion = (error) =>
+  error?.name === "SequelizeUniqueConstraintError" ||
+  error?.parent?.code === "ER_DUP_ENTRY" ||
+  error?.parent?.errno === 1062 ||
+  error?.parent?.sqlState === "45000" ||
+  error?.original?.code === "ER_DUP_ENTRY" ||
+  error?.original?.errno === 1062 ||
+  error?.original?.sqlState === "45000";
+
+const obtenerMensajeConflictoRemuneracion = (error) =>
+  error?.parent?.sqlMessage ||
+  error?.original?.sqlMessage ||
+  error?.message ||
+  "Conflicto guardando remuneraciones";
+
+const procesarUpsertRemuneraciones = async ({
+  req,
+  res,
+  Modelo,
+  verificarDisponible,
+  mensajePeriodoNoDisponible,
+}) => {
   const { ejercicio, mes, municipioId } = req.params;
   const { remuneraciones } = req.body ?? {};
 
@@ -1731,17 +1848,19 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
     return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
   }
 
-  const transaction = await sequelize.transaction();
+  const payloadValidado = validarPayloadRemuneraciones(remuneraciones);
+  if (payloadValidado.errors.length > 0) {
+    return res.status(400).json({ error: "Error en los datos de remuneraciones", errors: payloadValidado.errors });
+  }
 
+  let transaction;
   try {
-    const disponible = await verificarRecaudacionRemuneracionDisponible(
-      municipioNum,
-      ejercicioNum,
-      mesNum
-    );
+    transaction = await sequelize.transaction();
+
+    const disponible = await verificarDisponible(municipioNum, ejercicioNum, mesNum);
     if (!disponible) {
       await transaction.rollback();
-      return res.status(400).json({ error: "El período no está disponible para modificar remuneraciones" });
+      return res.status(400).json({ error: mensajePeriodoNoDisponible });
     }
 
     const municipio = await Municipio.findByPk(municipioNum, { attributes: ["municipio_id"] });
@@ -1755,103 +1874,46 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
     let sinCambios = 0;
     let errores = [];
 
-    for (const item of remuneraciones) {
-      const validRemuneracion = RemuneracionSchema.safeParse({
-        cuil: item.cuil,
-        legajo: item.legajo,
-        apellido_nombre: item.apellido_nombre,
-        regimen_laboral: item.regimen_laboral,
-        categoria: item.categoria,
-        sector: item.sector,
-        fecha_ingreso: item.fecha_ingreso,
-        fecha_inicio_servicio: item.fecha_inicio_servicio,
-        fecha_fin_servicio: item.fecha_fin_servicio ?? null,
-        basico_cargo_salarial: item.basico_cargo_salarial ?? 0,
-        total_remunerativo: item.total_remunerativo ?? 0,
-        sac: item.sac ?? 0,
-        cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-        importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
-        cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-        importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
-        total_no_remunerativo: item.total_no_remunerativo ?? 0,
-        total_bonos: item.total_bonos ?? 0,
-        total_ropa: item.total_ropa ?? 0,
-        asignaciones_familiares: item.asignaciones_familiares ?? 0,
-        total_descuentos: item.total_descuentos ?? 0,
-        total_issn: item.total_issn ?? 0,
-        art: item.art ?? 0,
-        seguro_vida_obligatorio: item.seguro_vida_obligatorio ?? 0,
-        neto_a_cobrar: item.neto_a_cobrar ?? 0
-      });
-
-      if (!validRemuneracion.success) {
-        errores.push(`Error procesando la remuneracion con CUIL ${item?.cuil}: ${zodErrorsToArray(validRemuneracion.error.issues).join(", ")}`);
-        continue;
-      }
-
-      const tieneApellidoNombre = Object.prototype.hasOwnProperty.call(item, "apellido_nombre");
-      const tieneCategoria = Object.prototype.hasOwnProperty.call(item, "categoria");
-      const tieneSector = Object.prototype.hasOwnProperty.call(item, "sector");
-      const tieneFechaIngreso = Object.prototype.hasOwnProperty.call(item, "fecha_ingreso");
-      const tieneFechaInicioServicio = Object.prototype.hasOwnProperty.call(item, "fecha_inicio_servicio");
-      const tieneFechaFinServicio = Object.prototype.hasOwnProperty.call(item, "fecha_fin_servicio");
-      const tieneTotalRemunerativo = Object.prototype.hasOwnProperty.call(item, "total_remunerativo");
-      const tieneSac = Object.prototype.hasOwnProperty.call(item, "sac");
-      const tieneCantHsExtra50 = Object.prototype.hasOwnProperty.call(item, "cant_hs_extra_50");
-      const tieneImporteHsExtra50 = Object.prototype.hasOwnProperty.call(item, "importe_hs_extra_50");
-      const tieneCantHsExtra100 = Object.prototype.hasOwnProperty.call(item, "cant_hs_extra_100");
-      const tieneImporteHsExtra100 = Object.prototype.hasOwnProperty.call(item, "importe_hs_extra_100");    
-      const tieneTotalNoRemunerativo = Object.prototype.hasOwnProperty.call(item, "total_no_remunerativo");    
-      const tieneTotalBonos = Object.prototype.hasOwnProperty.call(item, "total_bonos");    
-      const tieneTotalRopa = Object.prototype.hasOwnProperty.call(item, "total_ropa");    
-      const tieneAsignacionesFamiliares = Object.prototype.hasOwnProperty.call(item, "asignaciones_familiares");
-      const tieneTotalDescuentos = Object.prototype.hasOwnProperty.call(item, "total_descuentos");  
-      const tieneTotalIssn = Object.prototype.hasOwnProperty.call(item, "total_issn");      
-      const tieneArt = Object.prototype.hasOwnProperty.call(item, "art");
-      const tieneSeguroVidaObligatorio = Object.prototype.hasOwnProperty.call(item, "seguro_vida_obligatorio");
-      const tieneRemuneracionNeta = Object.prototype.hasOwnProperty.call(item, "neto_a_cobrar");
-      const tieneRegimenLaboral = Object.prototype.hasOwnProperty.call(item, "regimen_laboral");
-
+    for (const { item, payload } of payloadValidado.rows) {
       const where = {
         remuneraciones_ejercicio: ejercicioNum,
         remuneraciones_mes: mesNum,
         municipio_id: municipioNum,
-        cuil: item.cuil,
-        legajo: item.legajo,
+        cuil: payload.cuil,
+        regimen_laboral: payload.regimen_laboral,
       };
 
-      const existente = await Remuneracion.findOne({ where, transaction });
+      const existente = await Modelo.findOne({ where, transaction });
 
       if (!existente) {
         const data = { 
-          ...where, 
-          apellido_nombre: item.apellido_nombre,
-          regimen_laboral: item.regimen_laboral,
-          categoria: item.categoria,
-          sector: item.sector,
-          regimen_laboral: item.regimen_laboral,
-          fecha_ingreso: item.fecha_ingreso,
-          fecha_inicio_servicio: item.fecha_inicio_servicio,
-          fecha_fin_servicio: item.fecha_fin_servicio ?? null,
-          basico_cargo_salarial: item.basico_cargo_salarial ?? 0,
-          total_remunerativo: item.total_remunerativo ?? 0,
-          sac: item.sac ?? 0,
-          cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-          importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
-          cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-          importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
-          total_no_remunerativo: item.total_no_remunerativo ?? 0,
-          total_bonos: item.total_bonos ?? 0,
-          total_ropa: item.total_ropa ?? 0,
-          asignaciones_familiares: item.asignaciones_familiares ?? 0,
-          total_descuentos: item.total_descuentos ?? 0,
-          total_issn: item.total_issn ?? 0,
-          art: item.art ?? 0,
-          seguro_vida_obligatorio: item.seguro_vida_obligatorio ?? 0,
-          total_remuneracion_neta: item.neto_a_cobrar ?? 0,
+          ...where,
+          legajo: payload.legajo,
+          apellido_nombre: payload.apellido_nombre,
+          categoria: payload.categoria,
+          sector: payload.sector,
+          fecha_ingreso: payload.fecha_ingreso,
+          fecha_inicio_servicio: payload.fecha_inicio_servicio,
+          fecha_fin_servicio: payload.fecha_fin_servicio ?? null,
+          basico_cargo_salarial: payload.basico_cargo_salarial,
+          total_remunerativo: payload.total_remunerativo,
+          sac: payload.sac,
+          cant_hs_extra_50: payload.cant_hs_extra_50,
+          importe_hs_extra_50: payload.importe_hs_extra_50,
+          cant_hs_extra_100: payload.cant_hs_extra_100,
+          importe_hs_extra_100: payload.importe_hs_extra_100,
+          total_no_remunerativo: payload.total_no_remunerativo,
+          total_bonos: payload.total_bonos,
+          total_ropa: payload.total_ropa,
+          asignaciones_familiares: payload.asignaciones_familiares,
+          total_descuentos: payload.total_descuentos,
+          total_issn: payload.total_issn,
+          art: payload.art,
+          seguro_vida_obligatorio: payload.seguro_vida_obligatorio,
+          total_remuneracion_neta: payload.neto_a_cobrar,
         };
 
-        await Remuneracion.create(
+        await Modelo.create(
           {
             ...data,
           },
@@ -1861,95 +1923,23 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
         continue;
       }
 
+      if (Number(existente.legajo) !== Number(payload.legajo)) {
+        throw crearErrorRemuneracion(
+          400,
+          `No se permite modificar el legajo para el CUIL ${payload.cuil} y régimen ${payload.regimen_laboral}`
+        );
+      }
+
       let huboCambios = false;
 
-      if (tieneApellidoNombre && !compararValores(existente.apellido_nombre, item.apellido_nombre)) {
-        existente.apellido_nombre = item.apellido_nombre;
-        huboCambios = true;
-      }
-      if (tieneCategoria && !compararValores(existente.categoria, item.categoria)) {
-        existente.categoria = item.categoria;
-        huboCambios = true;
-      }
-      if (tieneSector && !compararValores(existente.sector, item.sector)) {
-        existente.sector = item.sector;
-        huboCambios = true;
-      }
-      if(tieneRegimenLaboral && !compararValores(existente.regimen_laboral, item.regimen_laboral)){
-        existente.regimen_laboral = item.regimen_laboral;
-        huboCambios = true;
-      }
-      if (tieneFechaIngreso && !compararValores(existente.fecha_ingreso, item.fecha_ingreso)) {
-        existente.fecha_ingreso = item.fecha_ingreso;
-        huboCambios = true;
-      }
-      if (tieneFechaInicioServicio && !compararValores(existente.fecha_inicio_servicio, item.fecha_inicio_servicio)) {
-        existente.fecha_inicio_servicio = item.fecha_inicio_servicio;
-        huboCambios = true;
-      }
-      if (tieneFechaFinServicio && !compararValores(existente.fecha_fin_servicio, item.fecha_fin_servicio)) {
-        existente.fecha_fin_servicio = item.fecha_fin_servicio;
-        huboCambios = true;
-      }
-      if (tieneTotalRemunerativo && !compararValores(existente.total_remunerativo, item.total_remunerativo, 'number')) {
-        existente.total_remunerativo = item.total_remunerativo;
-        huboCambios = true;
-      }
-      if (tieneSac && !compararValores(existente.sac, item.sac, 'number')) {
-        existente.sac = item.sac;
-        huboCambios = true;
-      }
-      if (tieneCantHsExtra50 && !compararValores(existente.cant_hs_extra_50, item.cant_hs_extra_50, 'number')) {
-        existente.cant_hs_extra_50 = item.cant_hs_extra_50;
-        huboCambios = true;
-      }
-      if (tieneImporteHsExtra50 && !compararValores(existente.importe_hs_extra_50, item.importe_hs_extra_50, 'number')) {
-        existente.importe_hs_extra_50 = item.importe_hs_extra_50;
-        huboCambios = true;
-      }
-      if (tieneCantHsExtra100 && !compararValores(existente.cant_hs_extra_100, item.cant_hs_extra_100, 'number')) {
-        existente.cant_hs_extra_100 = item.cant_hs_extra_100;
-        huboCambios = true;
-      }
-      if (tieneImporteHsExtra100 && !compararValores(existente.importe_hs_extra_100, item.importe_hs_extra_100, 'number')) {
-        existente.importe_hs_extra_100 = item.importe_hs_extra_100;
-        huboCambios = true;
-      }
-      if (tieneTotalNoRemunerativo && !compararValores(existente.total_no_remunerativo, item.total_no_remunerativo, 'number')) {
-        existente.total_no_remunerativo = item.total_no_remunerativo;
-        huboCambios = true;
-      }
-      if (tieneTotalBonos && !compararValores(existente.total_bonos, item.total_bonos, 'number')) {
-        existente.total_bonos = item.total_bonos;
-        huboCambios = true;
-      }
-      if (tieneTotalRopa && !compararValores(existente.ropa, item.ropa, 'number')) {
-        existente.ropa = item.ropa;
-        huboCambios = true;
-      }
-      if (tieneAsignacionesFamiliares && !compararValores(existente.asignaciones_familiares, item.asignaciones_familiares, 'number')) {
-        existente.asignaciones_familiares = item.asignaciones_familiares;
-        huboCambios = true;
-      }
-      if (tieneTotalDescuentos && !compararValores(existente.total_descuentos, item.total_descuentos, 'number')) {
-        existente.total_descuentos = item.total_descuentos;
-        huboCambios = true;
-      }
-      if (tieneTotalIssn && !compararValores(existente.total_issn, item.total_issn, 'number')) {
-        existente.total_issn = item.sac;
-        huboCambios = true;
-      }
-      if (tieneArt && !compararValores(existente.art, item.art, 'number')) {
-        existente.art = item.art;
-        huboCambios = true;
-      }
-      if (tieneSeguroVidaObligatorio && !compararValores(existente.seguro_vida_obligatorio, item.seguro_vida_obligatorio, 'number')) {
-        existente.seguro_vida_obligatorio = item.seguro_vida_obligatorio;
-        huboCambios = true;
-      }
-      if (tieneRemuneracionNeta && !compararValores(existente.total_remuneracion_neta, item.total_remuneracion_neta, 'number')) {
-        existente.total_remuneracion_neta = item.total_remuneracion_neta;
-        huboCambios = true;
+      for (const [payloadKey, modelKey, tipo] of REMUNERACION_CAMPOS_ACTUALIZABLES) {
+        if (
+          Object.prototype.hasOwnProperty.call(item, payloadKey) &&
+          !compararValores(existente[modelKey], payload[payloadKey], tipo)
+        ) {
+          existente[modelKey] = payload[payloadKey];
+          huboCambios = true;
+        }
       }
 
       if (!huboCambios) {
@@ -1973,11 +1963,31 @@ export const upsertRemuneracionesMunicipio = async (req, res) => {
       },
     });
   } catch (error) {
-    await transaction.rollback();
+    if (transaction) {
+      await transaction.rollback();
+    }
+    if (error?.statusCode === 400) {
+      return res.status(400).json({
+        error: error.message,
+        ...(error.publicErrors ? { errors: error.publicErrors } : {}),
+      });
+    }
+    if (esConflictoRemuneracion(error)) {
+      return res.status(409).json({ error: obtenerMensajeConflictoRemuneracion(error) });
+    }
     console.error("❌ Error realizando upsert de remuneraciones del municipio:", error);
     return res.status(500).json({ error: "Error guardando los remuneraciones" });
   }
 };
+
+export const upsertRemuneracionesMunicipio = async (req, res) =>
+  procesarUpsertRemuneraciones({
+    req,
+    res,
+    Modelo: Remuneracion,
+    verificarDisponible: verificarRecaudacionRemuneracionDisponible,
+    mensajePeriodoNoDisponible: "El período no está disponible para modificar remuneraciones",
+  });
 
 export const obtenerDeterminacionesTributariasMunicipio = async (req, res) => {
   const { ejercicio, mes, municipioId } = req.params;
@@ -2584,264 +2594,14 @@ export const generarInformeRemuneracionesRectificadasMunicipio = async (req, res
   }
 }
 
-export const upsertRemuneracionesRectificadasMunicipio = async (req, res) => {
-  const { ejercicio, mes, municipioId } = req.params;
-  const { remuneraciones } = req.body ?? {};
-
-  const ejercicioNum = Number(ejercicio);
-  const mesNum = Number(mes);
-  const municipioNum = Number(municipioId);
-
-  const valid = EjerciciosSchema.safeParse({ ejercicio: ejercicioNum, mes: mesNum, municipio_id: municipioNum });
-
-  if (!valid.success) {
-    return res.status(400).json({ message: "Error en los datos de entrada", errors: zodErrorsToArray(valid.error.issues) });
-  }
-
-  const transaction = await sequelize.transaction();
-
-  try {
-    const disponible = await verificarRectificacionDisponible(municipioNum, ejercicioNum, mesNum);
-
-    if (!disponible) {
-      await transaction.rollback();
-      return res.status(400).json({ error: "El período no está disponible para modificar remuneraciones" });
-    }
-
-    const municipio = await Municipio.findByPk(municipioNum, { attributes: ["municipio_id"] });
-    if (!municipio) {
-      await transaction.rollback();
-      return res.status(404).json({ error: "Municipio no encontrado" });
-    }
-
-    let creados = 0;
-    let actualizados = 0;
-    let sinCambios = 0;
-    let errores = [];
-
-    for (const item of remuneraciones) {
-      const validRemuneracion = RemuneracionSchema.safeParse({
-        cuil: item.cuil,
-        legajo: item.legajo,
-        apellido_nombre: item.apellido_nombre,
-        regimen_laboral: item.regimen_laboral,
-        categoria: item.categoria,
-        sector: item.sector,
-        fecha_ingreso: item.fecha_ingreso,
-        fecha_inicio_servicio: item.fecha_inicio_servicio,
-        fecha_fin_servicio: item.fecha_fin_servicio ?? null,
-        basico_cargo_salarial: item.basico_cargo_salarial ?? 0,
-        total_remunerativo: item.total_remunerativo ?? 0,
-        sac: item.sac ?? 0,
-        cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-        importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
-        cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-        importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
-        total_no_remunerativo: item.total_no_remunerativo ?? 0,
-        total_bonos: item.total_bonos ?? 0,
-        total_ropa: item.total_ropa ?? 0,
-        asignaciones_familiares: item.asignaciones_familiares ?? 0,
-        total_descuentos: item.total_descuentos ?? 0,
-        total_issn: item.total_issn ?? 0,
-        art: item.art ?? 0,
-        seguro_vida_obligatorio: item.seguro_vida_obligatorio ?? 0,
-        neto_a_cobrar: item.neto_a_cobrar ?? 0
-      });
-
-      if (!validRemuneracion.success) {
-        errores.push(`Error procesando la remuneracion con CUIL ${item?.cuil}: ${zodErrorsToArray(validRemuneracion.error.issues).join(", ")}`);
-        continue;
-      }
-
-      const tieneApellidoNombre = Object.prototype.hasOwnProperty.call(item, "apellido_nombre");
-      const tieneCategoria = Object.prototype.hasOwnProperty.call(item, "categoria");
-      const tieneSector = Object.prototype.hasOwnProperty.call(item, "sector");
-      const tieneFechaIngreso = Object.prototype.hasOwnProperty.call(item, "fecha_ingreso");
-      const tieneFechaInicioServicio = Object.prototype.hasOwnProperty.call(item, "fecha_inicio_servicio");
-      const tieneFechaFinServicio = Object.prototype.hasOwnProperty.call(item, "fecha_fin_servicio");
-      const tieneTotalRemunerativo = Object.prototype.hasOwnProperty.call(item, "total_remunerativo");
-      const tieneSac = Object.prototype.hasOwnProperty.call(item, "sac");
-      const tieneCantHsExtra50 = Object.prototype.hasOwnProperty.call(item, "cant_hs_extra_50");
-      const tieneImporteHsExtra50 = Object.prototype.hasOwnProperty.call(item, "importe_hs_extra_50");
-      const tieneCantHsExtra100 = Object.prototype.hasOwnProperty.call(item, "cant_hs_extra_100");
-      const tieneImporteHsExtra100 = Object.prototype.hasOwnProperty.call(item, "importe_hs_extra_100");    
-      const tieneTotalNoRemunerativo = Object.prototype.hasOwnProperty.call(item, "total_no_remunerativo");    
-      const tieneTotalBonos = Object.prototype.hasOwnProperty.call(item, "total_bonos");    
-      const tieneTotalRopa = Object.prototype.hasOwnProperty.call(item, "total_ropa");    
-      const tieneAsignacionesFamiliares = Object.prototype.hasOwnProperty.call(item, "asignaciones_familiares");
-      const tieneTotalDescuentos = Object.prototype.hasOwnProperty.call(item, "total_descuentos");  
-      const tieneTotalIssn = Object.prototype.hasOwnProperty.call(item, "total_issn");      
-      const tieneArt = Object.prototype.hasOwnProperty.call(item, "art");
-      const tieneSeguroVidaObligatorio = Object.prototype.hasOwnProperty.call(item, "seguro_vida_obligatorio");
-      const tieneRemuneracionNeta = Object.prototype.hasOwnProperty.call(item, "neto_a_cobrar");
-      const tieneRegimenLaboral = Object.prototype.hasOwnProperty.call(item, "regimen_laboral");
-
-      const where = {
-        remuneraciones_ejercicio: ejercicioNum,
-        remuneraciones_mes: mesNum,
-        municipio_id: municipioNum,
-        cuil: item.cuil,
-        legajo: item.legajo,
-      };
-
-      const existente = await RemuneracionRectificada.findOne({ where, transaction });
-
-      if (!existente) {
-        const data = { 
-          ...where, 
-          apellido_nombre: item.apellido_nombre,
-          regimen_laboral: item.regimen_laboral,
-          categoria: item.categoria,
-          sector: item.sector,
-          regimen_laboral: item.regimen_laboral,
-          fecha_ingreso: item.fecha_ingreso,
-          fecha_inicio_servicio: item.fecha_inicio_servicio,
-          fecha_fin_servicio: item.fecha_fin_servicio ?? null,
-          basico_cargo_salarial: item.basico_cargo_salarial ?? 0,
-          total_remunerativo: item.total_remunerativo ?? 0,
-          sac: item.sac ?? 0,
-          cant_hs_extra_50: item.cant_hs_extra_50 ?? 0,
-          importe_hs_extra_50: item.importe_hs_extra_50 ?? 0,
-          cant_hs_extra_100: item.cant_hs_extra_100 ?? 0,
-          importe_hs_extra_100: item.importe_hs_extra_100 ?? 0,
-          total_no_remunerativo: item.total_no_remunerativo ?? 0,
-          total_bonos: item.total_bonos ?? 0,
-          total_ropa: item.total_ropa ?? 0,
-          asignaciones_familiares: item.asignaciones_familiares ?? 0,
-          total_descuentos: item.total_descuentos ?? 0,
-          total_issn: item.total_issn ?? 0,
-          art: item.art ?? 0,
-          seguro_vida_obligatorio: item.seguro_vida_obligatorio ?? 0,
-          total_remuneracion_neta: item.neto_a_cobrar ?? 0,
-        };
-
-        await RemuneracionRectificada.create(
-          {
-            ...data,
-          },
-          { transaction }
-        );
-        creados += 1;
-        continue;
-      }
-
-      let huboCambios = false;
-
-      if (tieneApellidoNombre && !compararValores(existente.apellido_nombre, item.apellido_nombre)) {
-        existente.apellido_nombre = item.apellido_nombre;
-        huboCambios = true;
-      }
-      if (tieneCategoria && !compararValores(existente.categoria, item.categoria)) {
-        existente.categoria = item.categoria;
-        huboCambios = true;
-      }
-      if (tieneSector && !compararValores(existente.sector, item.sector)) {
-        existente.sector = item.sector;
-        huboCambios = true;
-      }
-      if(tieneRegimenLaboral && !compararValores(existente.regimen_laboral, item.regimen_laboral)){
-        existente.regimen_laboral = item.regimen_laboral;
-        huboCambios = true;
-      }
-      if (tieneFechaIngreso && !compararValores(existente.fecha_ingreso, item.fecha_ingreso)) {
-        existente.fecha_ingreso = item.fecha_ingreso;
-        huboCambios = true;
-      }
-      if (tieneFechaInicioServicio && !compararValores(existente.fecha_inicio_servicio, item.fecha_inicio_servicio)) {
-        existente.fecha_inicio_servicio = item.fecha_inicio_servicio;
-        huboCambios = true;
-      }
-      if (tieneFechaFinServicio && !compararValores(existente.fecha_fin_servicio, item.fecha_fin_servicio)) {
-        existente.fecha_fin_servicio = item.fecha_fin_servicio;
-        huboCambios = true;
-      }
-      if (tieneTotalRemunerativo && !compararValores(existente.total_remunerativo, item.total_remunerativo, 'number')) {
-        existente.total_remunerativo = item.total_remunerativo;
-        huboCambios = true;
-      }
-      if (tieneSac && !compararValores(existente.sac, item.sac, 'number')) {
-        existente.sac = item.sac;
-        huboCambios = true;
-      }
-      if (tieneCantHsExtra50 && !compararValores(existente.cant_hs_extra_50, item.cant_hs_extra_50, 'number')) {
-        existente.cant_hs_extra_50 = item.cant_hs_extra_50;
-        huboCambios = true;
-      }
-      if (tieneImporteHsExtra50 && !compararValores(existente.importe_hs_extra_50, item.importe_hs_extra_50, 'number')) {
-        existente.importe_hs_extra_50 = item.importe_hs_extra_50;
-        huboCambios = true;
-      }
-      if (tieneCantHsExtra100 && !compararValores(existente.cant_hs_extra_100, item.cant_hs_extra_100, 'number')) {
-        existente.cant_hs_extra_100 = item.cant_hs_extra_100;
-        huboCambios = true;
-      }
-      if (tieneImporteHsExtra100 && !compararValores(existente.importe_hs_extra_100, item.importe_hs_extra_100, 'number')) {
-        existente.importe_hs_extra_100 = item.importe_hs_extra_100;
-        huboCambios = true;
-      }
-      if (tieneTotalNoRemunerativo && !compararValores(existente.total_no_remunerativo, item.total_no_remunerativo, 'number')) {
-        existente.total_no_remunerativo = item.total_no_remunerativo;
-        huboCambios = true;
-      }
-      if (tieneTotalBonos && !compararValores(existente.total_bonos, item.total_bonos, 'number')) {
-        existente.total_bonos = item.total_bonos;
-        huboCambios = true;
-      }
-      if (tieneTotalRopa && !compararValores(existente.ropa, item.ropa, 'number')) {
-        existente.ropa = item.ropa;
-        huboCambios = true;
-      }
-      if (tieneAsignacionesFamiliares && !compararValores(existente.asignaciones_familiares, item.asignaciones_familiares, 'number')) {
-        existente.asignaciones_familiares = item.asignaciones_familiares;
-        huboCambios = true;
-      }
-      if (tieneTotalDescuentos && !compararValores(existente.total_descuentos, item.total_descuentos, 'number')) {
-        existente.total_descuentos = item.total_descuentos;
-        huboCambios = true;
-      }
-      if (tieneTotalIssn && !compararValores(existente.total_issn, item.total_issn, 'number')) {
-        existente.total_issn = item.sac;
-        huboCambios = true;
-      }
-      if (tieneArt && !compararValores(existente.art, item.art, 'number')) {
-        existente.art = item.art;
-        huboCambios = true;
-      }
-      if (tieneSeguroVidaObligatorio && !compararValores(existente.seguro_vida_obligatorio, item.seguro_vida_obligatorio, 'number')) {
-        existente.seguro_vida_obligatorio = item.seguro_vida_obligatorio;
-        huboCambios = true;
-      }
-      if (tieneRemuneracionNeta && !compararValores(existente.total_remuneracion_neta, item.total_remuneracion_neta, 'number')) {
-        existente.total_remuneracion_neta = item.total_remuneracion_neta;
-        huboCambios = true;
-      }
-
-      if (!huboCambios) {
-        sinCambios += 1;
-        continue;
-      }
-
-      await existente.save({ transaction });
-      actualizados += 1;
-    }
-
-    await transaction.commit();
-
-    return res.json({
-      message: "Remuneraciones procesadas correctamente",
-      resumen: {
-        creados,
-        actualizados,
-        sinCambios,
-        errores
-      },
-    });
-  } catch (error) {
-    await transaction.rollback();
-    console.error("❌ Error realizando upsert de remuneraciones del municipio:", error);
-    return res.status(500).json({ error: "Error guardando los remuneraciones" });
-  }
-};
+export const upsertRemuneracionesRectificadasMunicipio = async (req, res) =>
+  procesarUpsertRemuneraciones({
+    req,
+    res,
+    Modelo: RemuneracionRectificada,
+    verificarDisponible: verificarRectificacionDisponible,
+    mensajePeriodoNoDisponible: "El período no está disponible para modificar remuneraciones",
+  });
 
 const compararValores = (existente, nuevo, tipo = 'string') => {
   if(tipo === 'string'){
