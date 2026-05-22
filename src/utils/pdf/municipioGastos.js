@@ -154,9 +154,11 @@ export const buildInformeGastos = ({ municipioNombre, ejercicio, mes, gastos, to
     )
   }
 
+  const _now = new Date();
+  const _tz = { timeZone: "America/Argentina/Buenos_Aires" };
   const footerText = cierreId
     ? `Identificación del documento: ${cierreId}.`
-    : `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`;
+    : `Documento de control emitido por ${usuarioNombre}, el ${_now.toLocaleDateString("es-AR", _tz)} ${_now.toLocaleTimeString("es-AR", { ..._tz, hour12: false })}`;
 
   const docDefinition = {
     pageSize: "A4",

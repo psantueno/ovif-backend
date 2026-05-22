@@ -1268,7 +1268,7 @@ export const generarInformeGastosMunicipio = async (req, res) => {
       mes: mesNum,
       gastos,
       totales,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre
     });
 
@@ -1345,7 +1345,7 @@ export const generarInformeRecursosMunicipio = async (req, res) => {
       mes: mesNum,
       recursos,
       totales,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre
     });
 
@@ -1601,7 +1601,7 @@ export const generarInformeRecaudacionesMunicipio = async (req, res) => {
       conceptos: mappedConceptos,
       totalesPorCodigo,
       totalImporte,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre
     });
 
@@ -1696,7 +1696,7 @@ export const generarInformeRemuneracionesMunicipio = async (req, res) => {
       mes: mesNum,
       remuneraciones: remuneracionesPlanas,
       regimenes: regimenesPlanos,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre 
     });
 
@@ -2262,7 +2262,7 @@ export const generarInformeDeterminacionTributariaMunicipio = async (req, res) =
       mes: mesNum,
       determinaciones: detalle,
       resumen,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio?.nombre ?? "Convenio",
     });
 
@@ -2479,7 +2479,7 @@ export const generarInformeRecaudacionesRectificadasMunicipio = async (req, res)
       conceptos: mappedConceptos,
       totalesPorCodigo,
       totalImporte,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre,
       esRectificacion: true
     });
@@ -2572,7 +2572,7 @@ export const generarInformeRemuneracionesRectificadasMunicipio = async (req, res
       mes: mesNum,
       remuneraciones: remuneracionesPlanas,
       regimenes: regimenesPlanos,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre ,
       esRectificacion: true
     });

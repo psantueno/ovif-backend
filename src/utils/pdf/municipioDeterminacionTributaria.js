@@ -121,7 +121,7 @@ const buildBadge = (text) => {
 const THICK_LINE_COLOR = "#b8c7d2";
 const THICK_LINE_WIDTH = 1.2;
 
-const sectionDivider = {
+const makeSectionDivider = () => ({
   canvas: [
     {
       type: "line",
@@ -133,7 +133,7 @@ const sectionDivider = {
       lineColor: THICK_LINE_COLOR,
     },
   ],
-};
+});
 
 const summaryTableLayout = {
   hLineColor: () => THICK_LINE_COLOR,
@@ -216,7 +216,6 @@ export const buildInformeDeterminacionTributaria = ({
           },
         ],
       },
-      sectionDivider,
       {
         columns: [
           {
@@ -258,7 +257,6 @@ export const buildInformeDeterminacionTributaria = ({
         style: "sectionTitle",
         margin: [0, 0, 0, 6],
       },
-      sectionDivider,
       {
         table: {
           headerRows: 1,
@@ -299,9 +297,11 @@ export const buildInformeDeterminacionTributaria = ({
     );
   }
 
-  const footerText = cierreId 
+  const _now = new Date();
+  const _tz = { timeZone: "America/Argentina/Buenos_Aires" };
+  const footerText = cierreId
     ? `Identificación del documento: ${cierreId}.`
-    : `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`;
+    : `Documento de control emitido por ${usuarioNombre}, el ${_now.toLocaleDateString("es-AR", _tz)} ${_now.toLocaleTimeString("es-AR", { ..._tz, hour12: false })}`;
 
     
   const docDefinition = {
@@ -323,36 +323,26 @@ export const buildInformeDeterminacionTributaria = ({
       },
     ],
     footer: (currentPage, pageCount) => ({
-      margin: [20, 15, 20, 20],
-      stack: [
+      columns: [
         {
-          ...sectionDivider,
+          width: "*",
+          text: [
+            { text: "Generado por: ", style: "footerLabel" },
+            { text: usuarioNombre || "Sin usuario", style: "footerValue" },
+            cierreId
+              ? { text: " | Cierre ID: ", style: "footerLabel" }
+              : "",
+            cierreId ? { text: String(cierreId), style: "footerValue" } : "",
+          ],
         },
         {
-          columns: [
-            {
-              width: "*",
-              text: [
-                { text: "Generado por: ", style: "footerLabel" },
-                { text: usuarioNombre || "Sin usuario", style: "footerValue" },
-                { text: " | Convenio: ", style: "footerLabel" },
-                { text: convenioNombre || "Sin convenio", style: "footerValue" },
-                cierreId
-                  ? { text: " | Cierre ID: ", style: "footerLabel" }
-                  : "",
-                cierreId ? { text: String(cierreId), style: "footerValue" } : "",
-              ],
-            },
-            {
-              width: "auto",
-              text: `Pagina ${currentPage} de ${pageCount}`,
-              style: "footerValue",
-              alignment: "right",
-            },
-          ],
-          margin: [0, 8, 0, 0],
+          width: "auto",
+          text: `Página ${currentPage} de ${pageCount}`,
+          style: "footerValue",
+          alignment: "right",
         },
       ],
+      margin: [20, 10, 20, 0],
     }),
     defaultStyle: {
       font: "Manrope",
