@@ -40,7 +40,8 @@ const Remuneracion = sequelize.define("Remuneracion", {
   },
   regimen_laboral: {
     type: DataTypes.STRING(255),
-    allowNull: false
+    allowNull: false,
+    primaryKey: true
   },
   fecha_inicio_servicio: {
     type: DataTypes.DATEONLY,

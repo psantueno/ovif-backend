@@ -2,6 +2,18 @@ import { z } from 'zod';
 
 const obtenerNumeroDecimal = (value) => Number(String(value).replace(',', '.'));
 
+const stringTrimSchema = (tipo, requerido) =>
+    z.preprocess((value) => {
+        if (typeof value === 'string' || typeof value === 'number') {
+            return String(value).trim();
+        }
+
+        return value;
+    },
+    z
+        .string(`${tipo} debe ser una cadena de carateres`)
+        .min(1, requerido));
+
 const decimalSchema = z.preprocess((value) => {
     // si ya es número (Excel lo parseó)
     if (typeof value === "number") {
@@ -50,18 +62,12 @@ export const RemuneracionSchema = z.object({
         .int('El legajo debe ser un número entero')
         .min(0, 'El legajo debe ser un número mayor a 0')
         .refine(n => isFinite(Number(n)) && !isNaN(n), 'El legajo debe ser un número entero mayor a 0'),
-    cuil: z
-        .string('El CUIL debe ser una cadena de carateres')
-        .min(1, 'El CUIL es obligatorio'),
+    cuil: stringTrimSchema('El CUIL', 'El CUIL es obligatorio'),
     apellido_nombre: z
         .string('El CUIL debe ser una cadena de carateres')
         .min(1, 'El CUIL es obligatorio'),
-    regimen_laboral: z
-        .string('El regimen laboral debe ser una cadena de carateres')
-        .min(1, 'El regimen laboral es obligatorio'),
-    categoria: z
-        .string('La categoria debe ser una cadena de carateres')
-        .min(1, 'La categoria es obligatorio'),
+    regimen_laboral: stringTrimSchema('El regimen laboral', 'El regimen laboral es obligatorio'),
+    categoria: stringTrimSchema('La categoria', 'La categoria es obligatorio'),
     sector: z
         .string('La categoria debe ser una cadena de carateres')
         .min(1, 'La categoria es obligatorio'),
