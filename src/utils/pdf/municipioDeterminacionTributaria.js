@@ -121,7 +121,7 @@ const buildBadge = (text) => {
 const THICK_LINE_COLOR = "#b8c7d2";
 const THICK_LINE_WIDTH = 1.2;
 
-const sectionDivider = {
+const makeSectionDivider = () => ({
   canvas: [
     {
       type: "line",
@@ -133,7 +133,7 @@ const sectionDivider = {
       lineColor: THICK_LINE_COLOR,
     },
   ],
-};
+});
 
 const summaryTableLayout = {
   hLineColor: () => THICK_LINE_COLOR,
@@ -216,7 +216,6 @@ export const buildInformeDeterminacionTributaria = ({
           },
         ],
       },
-      { ...sectionDivider },
       {
         columns: [
           {
@@ -258,7 +257,6 @@ export const buildInformeDeterminacionTributaria = ({
         style: "sectionTitle",
         margin: [0, 0, 0, 6],
       },
-      { ...sectionDivider },
       {
         table: {
           headerRows: 1,
