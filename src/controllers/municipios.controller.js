@@ -213,6 +213,13 @@ const calcularResumenDeterminacionTributaria = (determinaciones = []) =>
     }
   );
 
+const responderInformeSinDatos = (res) =>
+  res.status(200).json({
+    generado: false,
+    message:
+      "Todavía no hay datos cargados para este período. Cuando los cargues, vas a poder generar el informe.",
+  });
+
 // Obtener todos los municipios
 export const getMunicipios = async (req, res) => {
   try {
@@ -1243,7 +1250,7 @@ export const generarInformeGastosMunicipio = async (req, res) => {
     const gastos = await obtenerGastosMunicipio(municipioNum, ejercicioNum, mesNum);
 
     if (!gastos || gastos.length === 0) {
-      return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
+      return responderInformeSinDatos(res);
     }
 
     const totales = gastos.reduce((acc, g) => {
@@ -1322,7 +1329,7 @@ export const generarInformeRecursosMunicipio = async (req, res) => {
     const recursos = await obtenerRecursosMunicipio(municipioNum, ejercicioNum, mesNum);
 
     if (!recursos || recursos.length === 0) {
-      return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
+      return responderInformeSinDatos(res);
     }
 
     const totales = recursos.reduce((acc, r) => {
@@ -1569,7 +1576,7 @@ export const generarInformeRecaudacionesMunicipio = async (req, res) => {
     });
 
     if (!recaudaciones || recaudaciones.length === 0) {
-      return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
+      return responderInformeSinDatos(res);
     }
 
     const mappedConceptos = recaudaciones
@@ -1661,7 +1668,7 @@ export const generarInformeRemuneracionesMunicipio = async (req, res) => {
     });
 
     if (!remuneraciones || remuneraciones.length === 0) {
-      return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
+      return responderInformeSinDatos(res);
     }
 
     const regimenes = await RegimenLaboral.findAll({
@@ -2238,9 +2245,7 @@ export const generarInformeDeterminacionTributariaMunicipio = async (req, res) =
     });
 
     if (!determinaciones || determinaciones.length === 0) {
-      return res.status(404).json({
-        error: "No hay datos guardados para generar el informe",
-      });
+      return responderInformeSinDatos(res);
     }
 
     const detalle = determinaciones.map(mapearDetalleDeterminacionTributaria);
@@ -2447,7 +2452,7 @@ export const generarInformeRecaudacionesRectificadasMunicipio = async (req, res)
     });
 
     if (!recaudaciones || recaudaciones.length === 0) {
-      return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
+      return responderInformeSinDatos(res);
     }
 
     const mappedConceptos = recaudaciones
@@ -2537,7 +2542,7 @@ export const generarInformeRemuneracionesRectificadasMunicipio = async (req, res
     });
 
     if (!remuneraciones || remuneraciones.length === 0) {
-      return res.status(404).json({ error: "No hay datos guardados para generar el informe" });
+      return responderInformeSinDatos(res);
     }
 
     const regimenes = await RegimenLaboral.findAll({
