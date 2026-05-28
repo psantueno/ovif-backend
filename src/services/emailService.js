@@ -17,6 +17,7 @@ import crypto from "crypto";
 import { Op, UniqueConstraintError, col } from "sequelize";
 import EnvioCorreo from "../models/moduloEjercicios/EnvioCorreo.js";
 import { renderizarCorreoHtml } from "./plantillasCorreo.js";
+import { getModuloCierreLabel } from "../utils/cierreModulo.js";
 
 
 // ─── Configuración SMTP ──────────────────────────────────────────────────────
@@ -84,7 +85,7 @@ export async function encolarEnvioCierreModulos({ destinatario, nombre, ejercici
     tipo: "CIERRE_MODULOS",
     destinatario,
     nombre_destinatario: nombre,
-    asunto: `[OVIF - APP] Cierre de módulos ${modulosNormalizados.join(", ")} - ${ejercicio} - ${obtenerNombreMes(mes)}`,
+    asunto: `[OVIF - APP] Cierre de módulos ${modulosNormalizados.map(getModuloCierreLabel).join(", ")} - ${ejercicio} - ${obtenerNombreMes(mes)}`,
     payload: {
       nombre,
       ejercicio,
@@ -135,7 +136,12 @@ async function enviarCorreo(correo, { nextRetryAt = null } = {}) {
   }
 
   try {
-    const mailData = renderizarCorreoHtml(correo.tipo, correo.payload);
+    let payloadParsed = correo.payload;
+    console.log("📨 Enviando correo ID", correo.id, "con payload typeof:", typeof payloadParsed);
+    if (typeof payloadParsed === "string") {
+      try { payloadParsed = JSON.parse(payloadParsed); } catch { payloadParsed = {}; }
+    }
+    const mailData = renderizarCorreoHtml(correo.tipo, payloadParsed);
     const response = await transporter.sendMail({
       from: sender,
       to: correo.destinatario,
@@ -338,6 +344,42 @@ export async function encolarNotificacionSolicitudProrroga({ tipo, destinatario,
 }
 
 // ─── Envío directo (sin outbox) ──────────────────────────────────────────────
+
+/**
+ * Encola un correo de prueba de cierre de módulos (tipo CIERRE_MODULOS_TEST).
+ * La clave idempotente incluye un UUID para permitir múltiples ejecuciones del test
+ * sin colisionar con registros anteriores.
+ *
+ * @param {object} params
+ * @param {string} params.destinatario - EMAIL_TEST
+ * @param {string} params.nombre
+ * @param {number} params.ejercicio
+ * @param {number} params.mes
+ * @param {string[]} params.modulos - módulos del par (se ordenan internamente)
+ * @param {boolean} params.esProrroga
+ * @returns {Promise<{ correo: EnvioCorreo, created: boolean }>}
+ */
+export async function encolarMailTestCierre({ destinatario, nombre, ejercicio, mes, modulos, esProrroga }) {
+  const modulosNormalizados = [...modulos].sort();
+  const modulosOrdenados = modulosNormalizados.join(",");
+
+  const raw = `CIERRE_MODULOS_TEST|${destinatario}|${ejercicio}|${mes}|${modulosOrdenados}|${crypto.randomUUID()}`;
+  const idempotencyKey = crypto.createHash("sha256").update(raw).digest("hex");
+
+  const datos = {
+    idempotency_key: idempotencyKey,
+    tipo: "CIERRE_MODULOS_TEST",
+    destinatario,
+    nombre_destinatario: nombre,
+    asunto: `[OVIF - TEST] Cierre de módulos ${modulosNormalizados.map(getModuloCierreLabel).join(", ")} - ${ejercicio} - ${obtenerNombreMes(mes)}`,
+    payload: { nombre, ejercicio, mes, modulos: modulosNormalizados, esProrroga },
+    estado: "PENDIENTE",
+    next_retry_at: new Date(),
+  };
+
+  const correo = await EnvioCorreo.create(datos);
+  return { correo, created: true };
+}
 
 // Envía correo de restablecimiento de contraseña con enlace de un solo uso.
 // Usado desde auth.controller.js en el flujo de "olvidé mi contraseña".

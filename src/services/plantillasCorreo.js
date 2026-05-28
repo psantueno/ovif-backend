@@ -224,18 +224,18 @@ function renderCierreModulos(payload) {
 	</table>`,
 	attachments: [
 			{
-					filename: 'ovif-logo.svg',
-					path: './src/assets/emails/ovif-logo.svg',
+					filename: 'ovif-logo.png',
+					path: './src/assets/emails/ovif-logo.png',
 					cid: 'ovif-logo' // same cid value as in the html img src
 			},
 			{
-					filename: 'gobierno-logo.svg',
-					path: './src/assets/emails/gobierno-logo.svg',
+					filename: 'gobierno-logo.png',
+					path: './src/assets/emails/gobierno-logo.png',
 					cid: 'gobierno-logo' // same cid value as in the html img src
 			},
 			{
-					filename: 'neuquen-logo.svg',
-					path: './src/assets/emails/neuquen-logo.svg',
+					filename: 'neuquen-logo.png',
+					path: './src/assets/emails/neuquen-logo.png',
 					cid: 'neuquen-logo' // same cid value as in the html img src
 			}
 	],
@@ -375,8 +375,8 @@ function renderResetPassword(payload) {
     </table>`,
     attachments: [
         {
-            filename: 'ovif-logo.svg',
-            path: './src/assets/emails/ovif-logo.svg',
+            filename: 'ovif-logo.png',
+            path: './src/assets/emails/ovif-logo.png',
             cid: 'ovif-logo'
         }
     ]
@@ -471,9 +471,9 @@ function renderSolicitudProrrogaCreada(payload) {
       </tr>
     </table>`,
     attachments: [
-      { filename: "ovif-logo.svg", path: "./src/assets/emails/ovif-logo.svg", cid: "ovif-logo" },
-      { filename: "gobierno-logo.svg", path: "./src/assets/emails/gobierno-logo.svg", cid: "gobierno-logo" },
-      { filename: "neuquen-logo.svg", path: "./src/assets/emails/neuquen-logo.svg", cid: "neuquen-logo" },
+      { filename: "ovif-logo.png", path: "./src/assets/emails/ovif-logo.png", cid: "ovif-logo" },
+      { filename: "gobierno-logo.png", path: "./src/assets/emails/gobierno-logo.png", cid: "gobierno-logo" },
+      { filename: "neuquen-logo.png", path: "./src/assets/emails/neuquen-logo.png", cid: "neuquen-logo" },
     ],
   };
 }
@@ -567,9 +567,9 @@ function renderSolicitudProrrogaCancelada(payload) {
       </tr>
     </table>`,
     attachments: [
-      { filename: "ovif-logo.svg", path: "./src/assets/emails/ovif-logo.svg", cid: "ovif-logo" },
-      { filename: "gobierno-logo.svg", path: "./src/assets/emails/gobierno-logo.svg", cid: "gobierno-logo" },
-      { filename: "neuquen-logo.svg", path: "./src/assets/emails/neuquen-logo.svg", cid: "neuquen-logo" },
+      { filename: "ovif-logo.png", path: "./src/assets/emails/ovif-logo.png", cid: "ovif-logo" },
+      { filename: "gobierno-logo.png", path: "./src/assets/emails/gobierno-logo.png", cid: "gobierno-logo" },
+      { filename: "neuquen-logo.png", path: "./src/assets/emails/neuquen-logo.png", cid: "neuquen-logo" },
     ],
   };
 }
@@ -671,9 +671,9 @@ function renderSolicitudProrrogaAprobada(payload) {
       </tr>
     </table>`,
     attachments: [
-      { filename: "ovif-logo.svg", path: "./src/assets/emails/ovif-logo.svg", cid: "ovif-logo" },
-      { filename: "gobierno-logo.svg", path: "./src/assets/emails/gobierno-logo.svg", cid: "gobierno-logo" },
-      { filename: "neuquen-logo.svg", path: "./src/assets/emails/neuquen-logo.svg", cid: "neuquen-logo" },
+      { filename: "ovif-logo.png", path: "./src/assets/emails/ovif-logo.png", cid: "ovif-logo" },
+      { filename: "gobierno-logo.png", path: "./src/assets/emails/gobierno-logo.png", cid: "gobierno-logo" },
+      { filename: "neuquen-logo.png", path: "./src/assets/emails/neuquen-logo.png", cid: "neuquen-logo" },
     ],
   };
 }
@@ -768,9 +768,9 @@ function renderSolicitudProrrogaRechazada(payload) {
       </tr>
     </table>`,
     attachments: [
-      { filename: "ovif-logo.svg", path: "./src/assets/emails/ovif-logo.svg", cid: "ovif-logo" },
-      { filename: "gobierno-logo.svg", path: "./src/assets/emails/gobierno-logo.svg", cid: "gobierno-logo" },
-      { filename: "neuquen-logo.svg", path: "./src/assets/emails/neuquen-logo.svg", cid: "neuquen-logo" },
+      { filename: "ovif-logo.png", path: "./src/assets/emails/ovif-logo.png", cid: "ovif-logo" },
+      { filename: "gobierno-logo.png", path: "./src/assets/emails/gobierno-logo.png", cid: "gobierno-logo" },
+      { filename: "neuquen-logo.png", path: "./src/assets/emails/neuquen-logo.png", cid: "neuquen-logo" },
     ],
   };
 }
@@ -779,6 +779,7 @@ function renderSolicitudProrrogaRechazada(payload) {
 
 const renderers = {
   CIERRE_MODULOS: renderCierreModulos,
+  CIERRE_MODULOS_TEST: renderCierreModulos,
   RESET_PASSWORD: renderResetPassword,
   SOLICITUD_PRORROGA_CREADA: renderSolicitudProrrogaCreada,
   SOLICITUD_PRORROGA_CANCELADA: renderSolicitudProrrogaCancelada,

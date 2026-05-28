@@ -35,6 +35,7 @@ import tiposPautaRoutes from "./routes/tiposPauta.routes.js";
 import municipiosMailsRoutes from "./routes/municipiosMails.routes.js";
 import envioCorreosRoutes from "./routes/envioCorreos.routes.js";
 import solicitudesProrrogaRoutes from "./routes/solicitudesProrrogaMunicipio.routes.js";
+import testsRoutes from "./routes/tests.routes.js";
 
 // === Importación de CRON cierre automático del ejercicio/mes ===
 import "./cron/cierreAutomatico.js";
@@ -107,6 +108,7 @@ app.use("/api/tipos-pauta", tiposPautaRoutes);
 app.use("/api/municipios-mails", municipiosMailsRoutes);
 app.use("/api/envio-correos", envioCorreosRoutes);
 app.use("/api/solicitudes-prorroga", solicitudesProrrogaRoutes);
+app.use("/api/tests", testsRoutes);
 
 // === Healthcheck (con verificación de BD) ===
 app.get("/api/health", async (req, res) => {
