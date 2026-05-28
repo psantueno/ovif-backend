@@ -89,17 +89,19 @@ const buildSummaryByRegimen = (remuneraciones = []) => {
     const categoriaSummary = categoriasMap.get(categoria) ?? {
       categoria,
       total_personas: 0,
-      total_remunerativo: 0,
-      total_no_remunerativo: 0,
-      total_descuentos: 0,
+      seguro_vida: 0,
+      art: 0,
+      issn: 0,
+      desc_personales: 0,
       neto_a_cobrar: 0,
     };
 
     categoriaSummary.total_personas += 1;
-    categoriaSummary.total_remunerativo += toNumber(item?.total_remunerativo);
-    categoriaSummary.total_no_remunerativo += toNumber(item?.total_no_remunerativo);
-    categoriaSummary.total_descuentos += toNumber(item?.total_descuentos);
-    categoriaSummary.neto_a_cobrar += toNumber(item?.neto_a_cobrar ?? item?.total_remuneracion_neta ?? item?.remuneracion_neta);
+    categoriaSummary.seguro_vida += toNumber(item?.seguro_vida);
+    categoriaSummary.art += toNumber(item?.art);
+    categoriaSummary.issn += toNumber(item?.issn);
+    categoriaSummary.desc_personales += toNumber(item?.desc_personales);
+    categoriaSummary.neto_a_cobrar += toNumber(item?.neto_a_cobrar);
 
     categoriasMap.set(categoria, categoriaSummary);
   });
@@ -194,33 +196,37 @@ export const buildInformeRemuneraciones = ({
       const headerRow = [
         { text: "CATEGORÍA", style: "tableHeader", valign: "middle" },
         { text: "TOTAL PERSONAS", style: "tableHeader", alignment: "right", valign: "middle" },
-        { text: "TOTAL REMUNERATIVO", style: "tableHeader", alignment: "right", valign: "middle" },
-        { text: "TOTAL NO REMUNERATIVO", style: "tableHeader", alignment: "right", valign: "middle" },
-        { text: "TOTAL DESCUENTOS", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "SEGURO DE VIDA", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "ART", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "ISSN", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "DESC. PERSONALES", style: "tableHeader", alignment: "right", valign: "middle" },
         { text: "NETO A COBRAR", style: "tableHeader", alignment: "right", valign: "middle" },
       ];
 
       const rows = categorySummary.map((item) => [
         { text: item.categoria, style: "itemDescripcion" },
         { text: String(item.total_personas), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(item.total_remunerativo), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(item.total_no_remunerativo), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(item.total_descuentos), alignment: "right", style: "itemImporte" },
+        { text: currencyFormatter.format(item.seguro_vida), alignment: "right", style: "itemImporte" },
+        { text: currencyFormatter.format(item.art), alignment: "right", style: "itemImporte" },
+        { text: currencyFormatter.format(item.issn), alignment: "right", style: "itemImporte" },
+        { text: currencyFormatter.format(item.desc_personales), alignment: "right", style: "itemImporte" },
         { text: currencyFormatter.format(item.neto_a_cobrar), alignment: "right", style: "itemImporte" },
       ]);
 
       const totalPersonas = categorySummary.reduce((acc, item) => acc + toNumber(item.total_personas), 0);
-      const totalRemunerativo = categorySummary.reduce((acc, item) => acc + toNumber(item.total_remunerativo), 0);
-      const totalNoRemunerativo = categorySummary.reduce((acc, item) => acc + toNumber(item.total_no_remunerativo), 0);
-      const totalDescuentos = categorySummary.reduce((acc, item) => acc + toNumber(item.total_descuentos), 0);
+      const totalSeguroVida = categorySummary.reduce((acc, item) => acc + toNumber(item.seguro_vida), 0);
+      const totalArt = categorySummary.reduce((acc, item) => acc + toNumber(item.art), 0);
+      const totalIssn = categorySummary.reduce((acc, item) => acc + toNumber(item.issn), 0);
+      const totalDescPersonales = categorySummary.reduce((acc, item) => acc + toNumber(item.desc_personales), 0);
       const totalNeto = categorySummary.reduce((acc, item) => acc + toNumber(item.neto_a_cobrar), 0);
 
       const totalRow = [
         { text: "TOTAL", style: "totalLabel" },
         { text: String(totalPersonas), style: "totalValue" },
-        { text: currencyFormatter.format(totalRemunerativo), style: "totalValue" },
-        { text: currencyFormatter.format(totalNoRemunerativo), style: "totalValue" },
-        { text: currencyFormatter.format(totalDescuentos), style: "totalValue" },
+        { text: currencyFormatter.format(totalSeguroVida), style: "totalValue" },
+        { text: currencyFormatter.format(totalArt), style: "totalValue" },
+        { text: currencyFormatter.format(totalIssn), style: "totalValue" },
+        { text: currencyFormatter.format(totalDescPersonales), style: "totalValue" },
         { text: currencyFormatter.format(totalNeto), style: "totalValue" },
       ];
 
@@ -229,7 +235,7 @@ export const buildInformeRemuneraciones = ({
 
       content.push({
         table: {
-          widths: [180, 90, 105, 115, 95, 95],
+          widths: [150, 70, 100, 70, 80, 100, 95],
           headerRows: 1,
           body: tableBody,
         },
@@ -247,9 +253,11 @@ export const buildInformeRemuneraciones = ({
     });
   }
 
+  const _now = new Date();
+  const _tz = { timeZone: "America/Argentina/Buenos_Aires" };
   const footerText = cierreId
     ? `Identificación del documento: ${cierreId}.`
-    : `Este informe fue generado manualmente por el usuario ${usuarioNombre} y no es un comprobante válido de presentación y/o cumplimiento del envío de la información tal como lo establece el convenio ${convenioNombre}`;
+    : `Documento de control emitido por ${usuarioNombre}, el ${_now.toLocaleDateString("es-AR", _tz)} ${_now.toLocaleTimeString("es-AR", { ..._tz, hour12: false })}`;
 
   const docDefinition = {
     pageSize: "A4",

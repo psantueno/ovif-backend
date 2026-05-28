@@ -69,9 +69,10 @@ const mapRemuneracionParaInforme = (remuneracion, regimenesMap = new Map()) => {
       remuneracion?.categoria ??
         remuneracion?.cargo_salarial
     ),
-    total_remunerativo: toNumberOrZero(remuneracion?.total_remunerativo),
-    total_no_remunerativo: toNumberOrZero(remuneracion?.total_no_remunerativo),
-    total_descuentos: toNumberOrZero(remuneracion?.total_descuentos),
+    seguro_vida: toNumberOrZero(remuneracion?.seguro_vida_obligatorio),
+    art: toNumberOrZero(remuneracion?.art),
+    issn: toNumberOrZero(remuneracion?.total_issn),
+    desc_personales: toNumberOrZero(remuneracion?.total_descuentos),
     neto_a_cobrar: toNumberOrZero(
       remuneracion?.total_remuneracion_neta ??
         remuneracion?.neto_a_cobrar ??
@@ -1274,7 +1275,7 @@ export const generarInformeGastosMunicipio = async (req, res) => {
       mes: mesNum,
       gastos,
       totales,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre
     });
 
@@ -1351,7 +1352,7 @@ export const generarInformeRecursosMunicipio = async (req, res) => {
       mes: mesNum,
       recursos,
       totales,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre
     });
 
@@ -1607,7 +1608,7 @@ export const generarInformeRecaudacionesMunicipio = async (req, res) => {
       conceptos: mappedConceptos,
       totalesPorCodigo,
       totalImporte,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre
     });
 
@@ -1702,7 +1703,7 @@ export const generarInformeRemuneracionesMunicipio = async (req, res) => {
       mes: mesNum,
       remuneraciones: remuneracionesPlanas,
       regimenes: regimenesPlanos,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre 
     });
 
@@ -2266,7 +2267,7 @@ export const generarInformeDeterminacionTributariaMunicipio = async (req, res) =
       mes: mesNum,
       determinaciones: detalle,
       resumen,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio?.nombre ?? "Convenio",
     });
 
@@ -2483,7 +2484,7 @@ export const generarInformeRecaudacionesRectificadasMunicipio = async (req, res)
       conceptos: mappedConceptos,
       totalesPorCodigo,
       totalImporte,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre,
       esRectificacion: true
     });
@@ -2576,7 +2577,7 @@ export const generarInformeRemuneracionesRectificadasMunicipio = async (req, res
       mes: mesNum,
       remuneraciones: remuneracionesPlanas,
       regimenes: regimenesPlanos,
-      usuarioNombre: `${user.nombre} ${user.apellido}`,
+      usuarioNombre: user.usuario,
       convenioNombre: convenio.nombre ,
       esRectificacion: true
     });
