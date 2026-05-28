@@ -341,46 +341,48 @@ export const crearSolicitudes = async (req, res) => {
             return creadas;
         });
 
-        // Fire-and-forget: email a admins (un email por lote)
-        try {
-            const [solicitante, admins, municipios, pautas] = await Promise.all([
-                Usuario.findByPk(usuarioId, { attributes: ["nombre", "apellido"] }),
-                obtenerEmailsAdmins(),
-                Municipio.findAll({ where: { municipio_id: { [Op.in]: [...new Set(items.map((i) => i.municipio_id))] } }, attributes: ["municipio_id", "municipio_nombre"] }),
-                PautaConvenio.findAll({ where: { pauta_id: { [Op.in]: [...new Set(items.map((i) => i.pauta_id))] } }, attributes: ["pauta_id", "descripcion"] }),
-            ]);
+        // Fire-and-forget real: la respuesta no espera el envío de mails.
+        void (async () => {
+            try {
+                const [solicitante, admins, municipios, pautas] = await Promise.all([
+                    Usuario.findByPk(usuarioId, { attributes: ["nombre", "apellido"] }),
+                    obtenerEmailsAdmins(),
+                    Municipio.findAll({ where: { municipio_id: { [Op.in]: [...new Set(items.map((i) => i.municipio_id))] } }, attributes: ["municipio_id", "municipio_nombre"] }),
+                    PautaConvenio.findAll({ where: { pauta_id: { [Op.in]: [...new Set(items.map((i) => i.pauta_id))] } }, attributes: ["pauta_id", "descripcion"] }),
+                ]);
 
-            const municipioMap = Object.fromEntries(municipios.map((m) => [m.municipio_id, m.municipio_nombre]));
-            const pautaMap = Object.fromEntries(pautas.map((p) => [p.pauta_id, p.descripcion]));
-            const solicitanteNombre = `${solicitante?.nombre ?? ""} ${solicitante?.apellido ?? ""}`.trim();
+                const municipioMap = Object.fromEntries(municipios.map((m) => [m.municipio_id, m.municipio_nombre]));
+                const pautaMap = Object.fromEntries(pautas.map((p) => [p.pauta_id, p.descripcion]));
+                const solicitanteNombre = `${solicitante?.nombre ?? ""} ${solicitante?.apellido ?? ""}`.trim();
 
-            const itemsEmail = items.map((item) => ({
-                municipio: municipioMap[item.municipio_id] ?? `ID ${item.municipio_id}`,
-                ejercicio: item.ejercicio,
-                mes: item.mes,
-                pauta: pautaMap[item.pauta_id] ?? `ID ${item.pauta_id}`,
-                fechaSolicitada: parseDDMMYYYY(item.fecha_cierre_solicitada),
-                motivo: item.motivo,
-            }));
+                const itemsEmail = items.map((item) => ({
+                    municipio: municipioMap[item.municipio_id] ?? `ID ${item.municipio_id}`,
+                    ejercicio: item.ejercicio,
+                    mes: item.mes,
+                    pauta: pautaMap[item.pauta_id] ?? `ID ${item.pauta_id}`,
+                    fechaSolicitada: parseDDMMYYYY(item.fecha_cierre_solicitada),
+                    motivo: item.motivo,
+                }));
 
-            if (admins.length > 0) {
-                const correos = await Promise.all(
-                    admins.map((admin) =>
-                        encolarNotificacionSolicitudProrroga({
-                            tipo: "SOLICITUD_PRORROGA_CREADA",
-                            destinatario: admin.email,
-                            nombre: `${admin.nombre} ${admin.apellido}`.trim(),
-                            asunto: `[OVIF - APP] Nueva solicitud de prórroga - ${solicitanteNombre}`,
-                            payload: { nombre: `${admin.nombre} ${admin.apellido}`.trim(), solicitante: solicitanteNombre, municipios: itemsEmail },
-                            idRef: grupoId,
-                        })
-                    )
-                );
-                await procesarMailsPendientes({ ids: correos.map((c) => c.correo.id) });
+                if (admins.length > 0) {
+                    const correos = await Promise.all(
+                        admins.map((admin) =>
+                            encolarNotificacionSolicitudProrroga({
+                                tipo: "SOLICITUD_PRORROGA_CREADA",
+                                destinatario: admin.email,
+                                nombre: `${admin.nombre} ${admin.apellido}`.trim(),
+                                asunto: `[OVIF - APP] Nueva solicitud de prórroga - ${solicitanteNombre}`,
+                                payload: { nombre: `${admin.nombre} ${admin.apellido}`.trim(), solicitante: solicitanteNombre, municipios: itemsEmail },
+                                idRef: grupoId,
+                            })
+                        )
+                    );
+                    await procesarMailsPendientes({ ids: correos.map((c) => c.correo.id) });
+                }
+            } catch (emailErr) {
+                console.error("❌ Error procesando email de solicitud creada:", emailErr);
             }
-        } catch (emailErr) {
-            console.error("❌ Error encolando email de solicitud creada:", emailErr);
-        }
+        })();
 
         return res.status(201).json({
             message: "Solicitudes creadas correctamente",
