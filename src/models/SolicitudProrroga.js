@@ -58,6 +58,10 @@ const SolicitudProrroga = sequelize.define(
             allowNull: false,
             defaultValue: "PENDIENTE",
         },
+        tipo: {
+            type: DataTypes.ENUM("AMPLIACION_PLAZO", "CORRECCION_DATOS"),
+            allowNull: true,
+        },
         solicitado_por: {
             type: DataTypes.INTEGER,
             allowNull: false,

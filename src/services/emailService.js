@@ -137,9 +137,13 @@ async function enviarCorreo(correo, { nextRetryAt = null } = {}) {
 
   try {
     let payloadParsed = correo.payload;
-    console.log("📨 Enviando correo ID", correo.id, "con payload typeof:", typeof payloadParsed);
+
     if (typeof payloadParsed === "string") {
-      try { payloadParsed = JSON.parse(payloadParsed); } catch { payloadParsed = {}; }
+      try {
+        payloadParsed = JSON.parse(payloadParsed);
+      } catch {
+        payloadParsed = {};
+      }
     }
     const mailData = renderizarCorreoHtml(correo.tipo, payloadParsed);
     const response = await transporter.sendMail({

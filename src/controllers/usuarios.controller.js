@@ -1,7 +1,7 @@
 import { Op, literal  } from "sequelize";
 import sequelize from "../config/db.js";
 // Modelos
-import { Usuario, Rol, Municipio, AuditoriaProrrogaMunicipio, UsuarioMunicipio, UsuarioRol, AuditoriaBorrado } from "../models/index.js";
+import { Usuario, Rol, Municipio, SolicitudProrrogaEstados, UsuarioMunicipio, UsuarioRol, AuditoriaBorrado } from "../models/index.js";
 import { CreateUsuarioSchema } from "../validation/UsuarioSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
 
@@ -343,18 +343,18 @@ export const deleteUsuario = async (req, res) => {
       });
     }
 
-    // 2️⃣ Verificar si tiene registros en auditorías
-    const auditorias = await AuditoriaProrrogaMunicipio.count({
-      where: { gestionado_por: id },
+    // 2️⃣ Verificar si tiene registros en auditorías de solicitudes de prórroga
+    const auditorias = await SolicitudProrrogaEstados.count({
+      where: { usuario_id: id },
     });
 
     if (auditorias > 0) {
       return res.status(409).json({
         error:
-          "No se puede eliminar el usuario debido a restricciones de integridad de la base de datos.",
+          "No se puede eliminar el usuario porque tiene movimientos de solicitudes de prórroga registrados.",
         code: "USER_HAS_AUDIT_LOGS",
         details: {
-          auditorias_vinculadas: auditorias,
+          solicitudes_prorroga_estados_vinculados: auditorias,
         },
       });
     }

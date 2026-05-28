@@ -1,6 +1,16 @@
 import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
+const parseJsonFallback = (value) => {
+    if (typeof value !== "string") return value;
+
+    try {
+        return JSON.parse(value);
+    } catch {
+        return value;
+    }
+};
+
 const SolicitudProrrogaEstados = sequelize.define(
     "SolicitudProrrogaEstados",
     {
@@ -28,10 +38,16 @@ const SolicitudProrrogaEstados = sequelize.define(
         payload_anterior: {
             type: DataTypes.JSON,
             allowNull: true,
+            get() {
+                return parseJsonFallback(this.getDataValue("payload_anterior"));
+            },
         },
         payload_nuevo: {
             type: DataTypes.JSON,
             allowNull: true,
+            get() {
+                return parseJsonFallback(this.getDataValue("payload_nuevo"));
+            },
         },
         usuario_id: {
             type: DataTypes.INTEGER,
