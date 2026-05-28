@@ -66,6 +66,40 @@ const includesBase = [
 ];
 
 const TIPOS_SOLICITUD_PRORROGA = ["AMPLIACION_PLAZO", "CORRECCION_DATOS"];
+const DEADLOCK_RETRY_ATTEMPTS = 3;
+
+function esErrorTransitorioDeLock(error) {
+    const code = error?.parent?.code || error?.original?.code || error?.code;
+    const errno = error?.parent?.errno || error?.original?.errno || error?.errno;
+    return code === "ER_LOCK_DEADLOCK" ||
+        code === "ER_LOCK_WAIT_TIMEOUT" ||
+        errno === 1213 ||
+        errno === 1205;
+}
+
+function esperar(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function ejecutarConReintentoDeLock(operacion, contexto = "operación") {
+    let ultimoError;
+
+    for (let intento = 1; intento <= DEADLOCK_RETRY_ATTEMPTS; intento++) {
+        try {
+            return await operacion();
+        } catch (error) {
+            ultimoError = error;
+            if (!esErrorTransitorioDeLock(error) || intento === DEADLOCK_RETRY_ATTEMPTS) {
+                throw error;
+            }
+
+            console.warn(`⚠️ ${contexto}: deadlock/lock timeout. Reintentando ${intento + 1}/${DEADLOCK_RETRY_ATTEMPTS}`);
+            await esperar(80 * intento);
+        }
+    }
+
+    throw ultimoError;
+}
 
 async function esMunicipioAsignado(usuarioId, municipioId) {
     const acceso = await UsuarioMunicipio.findOne({
@@ -133,7 +167,7 @@ async function ejecutarAprobacion({ solicitud, tipo, fecha_cierre_aprobada_raw, 
         };
     }
 
-    return sequelize.transaction(async (t) => {
+    return ejecutarConReintentoDeLock(() => sequelize.transaction(async (t) => {
         const sol = await SolicitudProrroga.findByPk(solicitud.solicitud_id, { transaction: t, lock: true });
         if (!sol || sol.estado !== "PENDIENTE") {
             throw { status: 400, message: "La solicitud ya no está en estado PENDIENTE" };
@@ -218,7 +252,7 @@ async function ejecutarAprobacion({ solicitud, tipo, fecha_cierre_aprobada_raw, 
         });
 
         return sol;
-    });
+    }), `aprobación de solicitud ${solicitud.solicitud_id}`);
 }
 
 // ─── Controladores ───────────────────────────────────────────────────────────
@@ -816,57 +850,66 @@ export const aprobarLote = async (req, res) => {
             return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(", ") });
         }
 
-        const resultados = await Promise.all(
-            valid.data.items.map(async (item) => {
-                try {
-                    const solicitud = await SolicitudProrroga.findByPk(item.solicitud_id);
-                    if (!solicitud) return { solicitud_id: item.solicitud_id, success: false, error: "Solicitud no encontrada" };
-                    if (solicitud.estado !== "PENDIENTE") return { solicitud_id: item.solicitud_id, success: false, error: "La solicitud no está en estado PENDIENTE" };
+        const resultados = [];
 
-                    const sol = await ejecutarAprobacion({
-                        solicitud,
-                        tipo: valid.data.tipo,
-                        fecha_cierre_aprobada_raw: item.fecha_cierre_aprobada,
-                        comentario_resolucion: item.comentario_resolucion,
-                        usuarioId,
-                    });
-
-                    // Fire-and-forget email
-                    try {
-                        const [solicitante, municipio, pauta] = await Promise.all([
-                            Usuario.findByPk(sol.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
-                            Municipio.findByPk(sol.municipio_id, { attributes: ["municipio_nombre"] }),
-                            PautaConvenio.findByPk(sol.pauta_id, { attributes: ["descripcion"] }),
-                        ]);
-                        if (solicitante?.email) {
-                            const correo = await encolarNotificacionSolicitudProrroga({
-                                tipo: "SOLICITUD_PRORROGA_APROBADA",
-                                destinatario: solicitante.email,
-                                nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                                asunto: `[OVIF - APP] Tu solicitud de prórroga fue aprobada - ${municipio?.municipio_nombre ?? ""}`,
-                                payload: {
-                                    nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                                    municipio: municipio?.municipio_nombre ?? `ID ${sol.municipio_id}`,
-                                    ejercicio: sol.ejercicio,
-                                    mes: sol.mes,
-                                    pauta: pauta?.descripcion ?? `ID ${sol.pauta_id}`,
-                                    fechaAprobada: toISODate(sol.fecha_cierre_aprobada),
-                                    comentario: sol.comentario_resolucion,
-                                },
-                                idRef: sol.solicitud_id,
-                            });
-                            await procesarMailsPendientes({ ids: [correo.correo.id] });
-                        }
-                    } catch (emailErr) {
-                        console.error(`❌ Error encolando email de aprobación para solicitud ${item.solicitud_id}:`, emailErr);
-                    }
-
-                    return { solicitud_id: item.solicitud_id, success: true };
-                } catch (err) {
-                    return { solicitud_id: item.solicitud_id, success: false, error: err.message || "Error al aprobar" };
+        for (const item of valid.data.items) {
+            try {
+                const solicitud = await SolicitudProrroga.findByPk(item.solicitud_id);
+                if (!solicitud) {
+                    resultados.push({ solicitud_id: item.solicitud_id, success: false, error: "Solicitud no encontrada" });
+                    continue;
                 }
-            })
-        );
+                if (solicitud.estado !== "PENDIENTE") {
+                    resultados.push({ solicitud_id: item.solicitud_id, success: false, error: "La solicitud no está en estado PENDIENTE" });
+                    continue;
+                }
+
+                const sol = await ejecutarAprobacion({
+                    solicitud,
+                    tipo: valid.data.tipo,
+                    fecha_cierre_aprobada_raw: item.fecha_cierre_aprobada,
+                    comentario_resolucion: item.comentario_resolucion,
+                    usuarioId,
+                });
+
+                // Fire-and-forget email
+                try {
+                    const [solicitante, municipio, pauta] = await Promise.all([
+                        Usuario.findByPk(sol.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
+                        Municipio.findByPk(sol.municipio_id, { attributes: ["municipio_nombre"] }),
+                        PautaConvenio.findByPk(sol.pauta_id, { attributes: ["descripcion"] }),
+                    ]);
+                    if (solicitante?.email) {
+                        const correo = await encolarNotificacionSolicitudProrroga({
+                            tipo: "SOLICITUD_PRORROGA_APROBADA",
+                            destinatario: solicitante.email,
+                            nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
+                            asunto: `[OVIF - APP] Tu solicitud de prórroga fue aprobada - ${municipio?.municipio_nombre ?? ""}`,
+                            payload: {
+                                nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
+                                municipio: municipio?.municipio_nombre ?? `ID ${sol.municipio_id}`,
+                                ejercicio: sol.ejercicio,
+                                mes: sol.mes,
+                                pauta: pauta?.descripcion ?? `ID ${sol.pauta_id}`,
+                                fechaAprobada: toISODate(sol.fecha_cierre_aprobada),
+                                comentario: sol.comentario_resolucion,
+                            },
+                            idRef: sol.solicitud_id,
+                        });
+                        await procesarMailsPendientes({ ids: [correo.correo.id] });
+                    }
+                } catch (emailErr) {
+                    console.error(`❌ Error encolando email de aprobación para solicitud ${item.solicitud_id}:`, emailErr);
+                }
+
+                resultados.push({ solicitud_id: item.solicitud_id, success: true });
+            } catch (err) {
+                const mensaje = esErrorTransitorioDeLock(err)
+                    ? "No se pudo aprobar por concurrencia. Intentá nuevamente."
+                    : err.message || "Error al aprobar";
+                resultados.push({ solicitud_id: item.solicitud_id, success: false, error: mensaje });
+            }
+        }
 
         return res.json({ resultados });
     } catch (error) {
@@ -884,68 +927,77 @@ export const rechazarLote = async (req, res) => {
             return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(", ") });
         }
 
-        const resultados = await Promise.all(
-            valid.data.items.map(async (item) => {
-                try {
-                    const solicitud = await SolicitudProrroga.findByPk(item.solicitud_id);
-                    if (!solicitud) return { solicitud_id: item.solicitud_id, success: false, error: "Solicitud no encontrada" };
-                    if (solicitud.estado !== "PENDIENTE") return { solicitud_id: item.solicitud_id, success: false, error: "La solicitud no está en estado PENDIENTE" };
+        const resultados = [];
 
-                    await sequelize.transaction(async (t) => {
-                        solicitud.estado = "RECHAZADA";
-                        solicitud.resuelto_por = usuarioId;
-                        solicitud.fecha_resolucion = new Date();
-                        solicitud.comentario_resolucion = item.comentario_resolucion;
-                        await solicitud.save({ transaction: t });
-
-                        await registrarAuditoria({
-                            solicitud_id: solicitud.solicitud_id,
-                            accion: "RECHAZADA",
-                            estado_anterior: "PENDIENTE",
-                            estado_nuevo: "RECHAZADA",
-                            payload_anterior: { estado: "PENDIENTE" },
-                            payload_nuevo: { estado: "RECHAZADA", comentario_resolucion: item.comentario_resolucion },
-                            usuario_id: usuarioId,
-                            comentario: item.comentario_resolucion,
-                            transaction: t,
-                        });
-                    });
-
-                    // Fire-and-forget email
-                    try {
-                        const [solicitante, municipio, pauta] = await Promise.all([
-                            Usuario.findByPk(solicitud.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
-                            Municipio.findByPk(solicitud.municipio_id, { attributes: ["municipio_nombre"] }),
-                            PautaConvenio.findByPk(solicitud.pauta_id, { attributes: ["descripcion"] }),
-                        ]);
-                        if (solicitante?.email) {
-                            const correo = await encolarNotificacionSolicitudProrroga({
-                                tipo: "SOLICITUD_PRORROGA_RECHAZADA",
-                                destinatario: solicitante.email,
-                                nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                                asunto: `[OVIF - APP] Tu solicitud de prórroga fue rechazada - ${municipio?.municipio_nombre ?? ""}`,
-                                payload: {
-                                    nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                                    municipio: municipio?.municipio_nombre ?? `ID ${solicitud.municipio_id}`,
-                                    ejercicio: solicitud.ejercicio,
-                                    mes: solicitud.mes,
-                                    pauta: pauta?.descripcion ?? `ID ${solicitud.pauta_id}`,
-                                    comentario: item.comentario_resolucion,
-                                },
-                                idRef: solicitud.solicitud_id,
-                            });
-                            await procesarMailsPendientes({ ids: [correo.correo.id] });
-                        }
-                    } catch (emailErr) {
-                        console.error(`❌ Error encolando email de rechazo para solicitud ${item.solicitud_id}:`, emailErr);
-                    }
-
-                    return { solicitud_id: item.solicitud_id, success: true };
-                } catch (err) {
-                    return { solicitud_id: item.solicitud_id, success: false, error: err.message || "Error al rechazar" };
+        for (const item of valid.data.items) {
+            try {
+                const solicitud = await SolicitudProrroga.findByPk(item.solicitud_id);
+                if (!solicitud) {
+                    resultados.push({ solicitud_id: item.solicitud_id, success: false, error: "Solicitud no encontrada" });
+                    continue;
                 }
-            })
-        );
+                if (solicitud.estado !== "PENDIENTE") {
+                    resultados.push({ solicitud_id: item.solicitud_id, success: false, error: "La solicitud no está en estado PENDIENTE" });
+                    continue;
+                }
+
+                await ejecutarConReintentoDeLock(() => sequelize.transaction(async (t) => {
+                    solicitud.estado = "RECHAZADA";
+                    solicitud.resuelto_por = usuarioId;
+                    solicitud.fecha_resolucion = new Date();
+                    solicitud.comentario_resolucion = item.comentario_resolucion;
+                    await solicitud.save({ transaction: t });
+
+                    await registrarAuditoria({
+                        solicitud_id: solicitud.solicitud_id,
+                        accion: "RECHAZADA",
+                        estado_anterior: "PENDIENTE",
+                        estado_nuevo: "RECHAZADA",
+                        payload_anterior: { estado: "PENDIENTE" },
+                        payload_nuevo: { estado: "RECHAZADA", comentario_resolucion: item.comentario_resolucion },
+                        usuario_id: usuarioId,
+                        comentario: item.comentario_resolucion,
+                        transaction: t,
+                    });
+                }), `rechazo de solicitud ${solicitud.solicitud_id}`);
+
+                // Fire-and-forget email
+                try {
+                    const [solicitante, municipio, pauta] = await Promise.all([
+                        Usuario.findByPk(solicitud.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
+                        Municipio.findByPk(solicitud.municipio_id, { attributes: ["municipio_nombre"] }),
+                        PautaConvenio.findByPk(solicitud.pauta_id, { attributes: ["descripcion"] }),
+                    ]);
+                    if (solicitante?.email) {
+                        const correo = await encolarNotificacionSolicitudProrroga({
+                            tipo: "SOLICITUD_PRORROGA_RECHAZADA",
+                            destinatario: solicitante.email,
+                            nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
+                            asunto: `[OVIF - APP] Tu solicitud de prórroga fue rechazada - ${municipio?.municipio_nombre ?? ""}`,
+                            payload: {
+                                nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
+                                municipio: municipio?.municipio_nombre ?? `ID ${solicitud.municipio_id}`,
+                                ejercicio: solicitud.ejercicio,
+                                mes: solicitud.mes,
+                                pauta: pauta?.descripcion ?? `ID ${solicitud.pauta_id}`,
+                                comentario: item.comentario_resolucion,
+                            },
+                            idRef: solicitud.solicitud_id,
+                        });
+                        await procesarMailsPendientes({ ids: [correo.correo.id] });
+                    }
+                } catch (emailErr) {
+                    console.error(`❌ Error encolando email de rechazo para solicitud ${item.solicitud_id}:`, emailErr);
+                }
+
+                resultados.push({ solicitud_id: item.solicitud_id, success: true });
+            } catch (err) {
+                const mensaje = esErrorTransitorioDeLock(err)
+                    ? "No se pudo rechazar por concurrencia. Intentá nuevamente."
+                    : err.message || "Error al rechazar";
+                resultados.push({ solicitud_id: item.solicitud_id, success: false, error: mensaje });
+            }
+        }
 
         return res.json({ resultados });
     } catch (error) {
