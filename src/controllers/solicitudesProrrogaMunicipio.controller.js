@@ -658,41 +658,43 @@ export const cancelarSolicitud = async (req, res) => {
             });
         });
 
-        // Fire-and-forget: email a admins
-        try {
-            const [municipio, pauta, solicitante, admins] = await Promise.all([
-                Municipio.findByPk(solicitud.municipio_id, { attributes: ["municipio_nombre"] }),
-                PautaConvenio.findByPk(solicitud.pauta_id, { attributes: ["descripcion"] }),
-                Usuario.findByPk(solicitud.solicitado_por, { attributes: ["nombre", "apellido"] }),
-                obtenerEmailsAdmins(),
-            ]);
+        // Fire-and-forget real: la respuesta no espera el envío de mails.
+        void (async () => {
+            try {
+                const [municipio, pauta, solicitante, admins] = await Promise.all([
+                    Municipio.findByPk(solicitud.municipio_id, { attributes: ["municipio_nombre"] }),
+                    PautaConvenio.findByPk(solicitud.pauta_id, { attributes: ["descripcion"] }),
+                    Usuario.findByPk(solicitud.solicitado_por, { attributes: ["nombre", "apellido"] }),
+                    obtenerEmailsAdmins(),
+                ]);
 
-            if (admins.length > 0) {
-                const correos = await Promise.all(
-                    admins.map((admin) =>
-                        encolarNotificacionSolicitudProrroga({
-                            tipo: "SOLICITUD_PRORROGA_CANCELADA",
-                            destinatario: admin.email,
-                            nombre: `${admin.nombre} ${admin.apellido}`.trim(),
-                            asunto: `[OVIF - APP] Solicitud de prórroga cancelada - ${municipio?.municipio_nombre ?? ""}`,
-                            payload: {
+                if (admins.length > 0) {
+                    const correos = await Promise.all(
+                        admins.map((admin) =>
+                            encolarNotificacionSolicitudProrroga({
+                                tipo: "SOLICITUD_PRORROGA_CANCELADA",
+                                destinatario: admin.email,
                                 nombre: `${admin.nombre} ${admin.apellido}`.trim(),
-                                solicitante: `${solicitante?.nombre ?? ""} ${solicitante?.apellido ?? ""}`.trim(),
-                                municipio: municipio?.municipio_nombre ?? `ID ${solicitud.municipio_id}`,
-                                ejercicio: solicitud.ejercicio,
-                                mes: solicitud.mes,
-                                pauta: pauta?.descripcion ?? `ID ${solicitud.pauta_id}`,
-                                motivoCancelacion: motivo_cancelacion,
-                            },
-                            idRef: solicitud.solicitud_id,
-                        })
-                    )
-                );
-                await procesarMailsPendientes({ ids: correos.map((c) => c.correo.id) });
+                                asunto: `[OVIF - APP] Solicitud de prórroga cancelada - ${municipio?.municipio_nombre ?? ""}`,
+                                payload: {
+                                    nombre: `${admin.nombre} ${admin.apellido}`.trim(),
+                                    solicitante: `${solicitante?.nombre ?? ""} ${solicitante?.apellido ?? ""}`.trim(),
+                                    municipio: municipio?.municipio_nombre ?? `ID ${solicitud.municipio_id}`,
+                                    ejercicio: solicitud.ejercicio,
+                                    mes: solicitud.mes,
+                                    pauta: pauta?.descripcion ?? `ID ${solicitud.pauta_id}`,
+                                    motivoCancelacion: motivo_cancelacion,
+                                },
+                                idRef: solicitud.solicitud_id,
+                            })
+                        )
+                    );
+                    await procesarMailsPendientes({ ids: correos.map((c) => c.correo.id) });
+                }
+            } catch (emailErr) {
+                console.error("❌ Error encolando email de cancelación:", emailErr);
             }
-        } catch (emailErr) {
-            console.error("❌ Error encolando email de cancelación:", emailErr);
-        }
+        })();
 
         return res.json({ message: "Solicitud cancelada", solicitud });
     } catch (error) {
@@ -726,36 +728,38 @@ export const aprobarSolicitud = async (req, res) => {
             usuarioId,
         });
 
-        // Fire-and-forget: email al solicitante
-        try {
-            const [solicitante, municipio, pauta] = await Promise.all([
-                Usuario.findByPk(sol.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
-                Municipio.findByPk(sol.municipio_id, { attributes: ["municipio_nombre"] }),
-                PautaConvenio.findByPk(sol.pauta_id, { attributes: ["descripcion"] }),
-            ]);
+        // Fire-and-forget real: la respuesta no espera el envío de mails.
+        void (async () => {
+            try {
+                const [solicitante, municipio, pauta] = await Promise.all([
+                    Usuario.findByPk(sol.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
+                    Municipio.findByPk(sol.municipio_id, { attributes: ["municipio_nombre"] }),
+                    PautaConvenio.findByPk(sol.pauta_id, { attributes: ["descripcion"] }),
+                ]);
 
-            if (solicitante?.email) {
-                const correo = await encolarNotificacionSolicitudProrroga({
-                    tipo: "SOLICITUD_PRORROGA_APROBADA",
-                    destinatario: solicitante.email,
-                    nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                    asunto: `[OVIF - APP] Tu solicitud de prórroga fue aprobada - ${municipio?.municipio_nombre ?? ""}`,
-                    payload: {
+                if (solicitante?.email) {
+                    const correo = await encolarNotificacionSolicitudProrroga({
+                        tipo: "SOLICITUD_PRORROGA_APROBADA",
+                        destinatario: solicitante.email,
                         nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                        municipio: municipio?.municipio_nombre ?? `ID ${sol.municipio_id}`,
-                        ejercicio: sol.ejercicio,
-                        mes: sol.mes,
-                        pauta: pauta?.descripcion ?? `ID ${sol.pauta_id}`,
-                        fechaAprobada: toISODate(sol.fecha_cierre_aprobada),
-                        comentario: sol.comentario_resolucion,
-                    },
-                    idRef: sol.solicitud_id,
-                });
-                await procesarMailsPendientes({ ids: [correo.correo.id] });
+                        asunto: `[OVIF - APP] Tu solicitud de prórroga fue aprobada - ${municipio?.municipio_nombre ?? ""}`,
+                        payload: {
+                            nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
+                            municipio: municipio?.municipio_nombre ?? `ID ${sol.municipio_id}`,
+                            ejercicio: sol.ejercicio,
+                            mes: sol.mes,
+                            pauta: pauta?.descripcion ?? `ID ${sol.pauta_id}`,
+                            fechaAprobada: toISODate(sol.fecha_cierre_aprobada),
+                            comentario: sol.comentario_resolucion,
+                        },
+                        idRef: sol.solicitud_id,
+                    });
+                    await procesarMailsPendientes({ ids: [correo.correo.id] });
+                }
+            } catch (emailErr) {
+                console.error("❌ Error encolando email de aprobación:", emailErr);
             }
-        } catch (emailErr) {
-            console.error("❌ Error encolando email de aprobación:", emailErr);
-        }
+        })();
 
         return res.json({ message: "Solicitud aprobada", solicitud: sol });
     } catch (err) {
@@ -804,35 +808,37 @@ export const rechazarSolicitud = async (req, res) => {
             });
         });
 
-        // Fire-and-forget: email al solicitante
-        try {
-            const [solicitante, municipio, pauta] = await Promise.all([
-                Usuario.findByPk(solicitud.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
-                Municipio.findByPk(solicitud.municipio_id, { attributes: ["municipio_nombre"] }),
-                PautaConvenio.findByPk(solicitud.pauta_id, { attributes: ["descripcion"] }),
-            ]);
+        // Fire-and-forget real: la respuesta no espera el envío de mails.
+        void (async () => {
+            try {
+                const [solicitante, municipio, pauta] = await Promise.all([
+                    Usuario.findByPk(solicitud.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
+                    Municipio.findByPk(solicitud.municipio_id, { attributes: ["municipio_nombre"] }),
+                    PautaConvenio.findByPk(solicitud.pauta_id, { attributes: ["descripcion"] }),
+                ]);
 
-            if (solicitante?.email) {
-                const correo = await encolarNotificacionSolicitudProrroga({
-                    tipo: "SOLICITUD_PRORROGA_RECHAZADA",
-                    destinatario: solicitante.email,
-                    nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                    asunto: `[OVIF - APP] Tu solicitud de prórroga fue rechazada - ${municipio?.municipio_nombre ?? ""}`,
-                    payload: {
+                if (solicitante?.email) {
+                    const correo = await encolarNotificacionSolicitudProrroga({
+                        tipo: "SOLICITUD_PRORROGA_RECHAZADA",
+                        destinatario: solicitante.email,
                         nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                        municipio: municipio?.municipio_nombre ?? `ID ${solicitud.municipio_id}`,
-                        ejercicio: solicitud.ejercicio,
-                        mes: solicitud.mes,
-                        pauta: pauta?.descripcion ?? `ID ${solicitud.pauta_id}`,
-                        comentario: comentario_resolucion,
-                    },
-                    idRef: solicitud.solicitud_id,
-                });
-                await procesarMailsPendientes({ ids: [correo.correo.id] });
+                        asunto: `[OVIF - APP] Tu solicitud de prórroga fue rechazada - ${municipio?.municipio_nombre ?? ""}`,
+                        payload: {
+                            nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
+                            municipio: municipio?.municipio_nombre ?? `ID ${solicitud.municipio_id}`,
+                            ejercicio: solicitud.ejercicio,
+                            mes: solicitud.mes,
+                            pauta: pauta?.descripcion ?? `ID ${solicitud.pauta_id}`,
+                            comentario: comentario_resolucion,
+                        },
+                        idRef: solicitud.solicitud_id,
+                    });
+                    await procesarMailsPendientes({ ids: [correo.correo.id] });
+                }
+            } catch (emailErr) {
+                console.error("❌ Error encolando email de rechazo:", emailErr);
             }
-        } catch (emailErr) {
-            console.error("❌ Error encolando email de rechazo:", emailErr);
-        }
+        })();
 
         return res.json({ message: "Solicitud rechazada", solicitud });
     } catch (error) {
@@ -872,35 +878,37 @@ export const aprobarLote = async (req, res) => {
                     usuarioId,
                 });
 
-                // Fire-and-forget email
-                try {
-                    const [solicitante, municipio, pauta] = await Promise.all([
-                        Usuario.findByPk(sol.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
-                        Municipio.findByPk(sol.municipio_id, { attributes: ["municipio_nombre"] }),
-                        PautaConvenio.findByPk(sol.pauta_id, { attributes: ["descripcion"] }),
-                    ]);
-                    if (solicitante?.email) {
-                        const correo = await encolarNotificacionSolicitudProrroga({
-                            tipo: "SOLICITUD_PRORROGA_APROBADA",
-                            destinatario: solicitante.email,
-                            nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                            asunto: `[OVIF - APP] Tu solicitud de prórroga fue aprobada - ${municipio?.municipio_nombre ?? ""}`,
-                            payload: {
+                // Fire-and-forget real: el lote no espera el envío de mails.
+                void (async () => {
+                    try {
+                        const [solicitante, municipio, pauta] = await Promise.all([
+                            Usuario.findByPk(sol.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
+                            Municipio.findByPk(sol.municipio_id, { attributes: ["municipio_nombre"] }),
+                            PautaConvenio.findByPk(sol.pauta_id, { attributes: ["descripcion"] }),
+                        ]);
+                        if (solicitante?.email) {
+                            const correo = await encolarNotificacionSolicitudProrroga({
+                                tipo: "SOLICITUD_PRORROGA_APROBADA",
+                                destinatario: solicitante.email,
                                 nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                                municipio: municipio?.municipio_nombre ?? `ID ${sol.municipio_id}`,
-                                ejercicio: sol.ejercicio,
-                                mes: sol.mes,
-                                pauta: pauta?.descripcion ?? `ID ${sol.pauta_id}`,
-                                fechaAprobada: toISODate(sol.fecha_cierre_aprobada),
-                                comentario: sol.comentario_resolucion,
-                            },
-                            idRef: sol.solicitud_id,
-                        });
-                        await procesarMailsPendientes({ ids: [correo.correo.id] });
+                                asunto: `[OVIF - APP] Tu solicitud de prórroga fue aprobada - ${municipio?.municipio_nombre ?? ""}`,
+                                payload: {
+                                    nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
+                                    municipio: municipio?.municipio_nombre ?? `ID ${sol.municipio_id}`,
+                                    ejercicio: sol.ejercicio,
+                                    mes: sol.mes,
+                                    pauta: pauta?.descripcion ?? `ID ${sol.pauta_id}`,
+                                    fechaAprobada: toISODate(sol.fecha_cierre_aprobada),
+                                    comentario: sol.comentario_resolucion,
+                                },
+                                idRef: sol.solicitud_id,
+                            });
+                            await procesarMailsPendientes({ ids: [correo.correo.id] });
+                        }
+                    } catch (emailErr) {
+                        console.error(`❌ Error encolando email de aprobación para solicitud ${item.solicitud_id}:`, emailErr);
                     }
-                } catch (emailErr) {
-                    console.error(`❌ Error encolando email de aprobación para solicitud ${item.solicitud_id}:`, emailErr);
-                }
+                })();
 
                 resultados.push({ solicitud_id: item.solicitud_id, success: true });
             } catch (err) {
@@ -961,34 +969,36 @@ export const rechazarLote = async (req, res) => {
                     });
                 }), `rechazo de solicitud ${solicitud.solicitud_id}`);
 
-                // Fire-and-forget email
-                try {
-                    const [solicitante, municipio, pauta] = await Promise.all([
-                        Usuario.findByPk(solicitud.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
-                        Municipio.findByPk(solicitud.municipio_id, { attributes: ["municipio_nombre"] }),
-                        PautaConvenio.findByPk(solicitud.pauta_id, { attributes: ["descripcion"] }),
-                    ]);
-                    if (solicitante?.email) {
-                        const correo = await encolarNotificacionSolicitudProrroga({
-                            tipo: "SOLICITUD_PRORROGA_RECHAZADA",
-                            destinatario: solicitante.email,
-                            nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                            asunto: `[OVIF - APP] Tu solicitud de prórroga fue rechazada - ${municipio?.municipio_nombre ?? ""}`,
-                            payload: {
+                // Fire-and-forget real: el lote no espera el envío de mails.
+                void (async () => {
+                    try {
+                        const [solicitante, municipio, pauta] = await Promise.all([
+                            Usuario.findByPk(solicitud.solicitado_por, { attributes: ["nombre", "apellido", "email"] }),
+                            Municipio.findByPk(solicitud.municipio_id, { attributes: ["municipio_nombre"] }),
+                            PautaConvenio.findByPk(solicitud.pauta_id, { attributes: ["descripcion"] }),
+                        ]);
+                        if (solicitante?.email) {
+                            const correo = await encolarNotificacionSolicitudProrroga({
+                                tipo: "SOLICITUD_PRORROGA_RECHAZADA",
+                                destinatario: solicitante.email,
                                 nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
-                                municipio: municipio?.municipio_nombre ?? `ID ${solicitud.municipio_id}`,
-                                ejercicio: solicitud.ejercicio,
-                                mes: solicitud.mes,
-                                pauta: pauta?.descripcion ?? `ID ${solicitud.pauta_id}`,
-                                comentario: item.comentario_resolucion,
-                            },
-                            idRef: solicitud.solicitud_id,
-                        });
-                        await procesarMailsPendientes({ ids: [correo.correo.id] });
+                                asunto: `[OVIF - APP] Tu solicitud de prórroga fue rechazada - ${municipio?.municipio_nombre ?? ""}`,
+                                payload: {
+                                    nombre: `${solicitante.nombre} ${solicitante.apellido}`.trim(),
+                                    municipio: municipio?.municipio_nombre ?? `ID ${solicitud.municipio_id}`,
+                                    ejercicio: solicitud.ejercicio,
+                                    mes: solicitud.mes,
+                                    pauta: pauta?.descripcion ?? `ID ${solicitud.pauta_id}`,
+                                    comentario: item.comentario_resolucion,
+                                },
+                                idRef: solicitud.solicitud_id,
+                            });
+                            await procesarMailsPendientes({ ids: [correo.correo.id] });
+                        }
+                    } catch (emailErr) {
+                        console.error(`❌ Error encolando email de rechazo para solicitud ${item.solicitud_id}:`, emailErr);
                     }
-                } catch (emailErr) {
-                    console.error(`❌ Error encolando email de rechazo para solicitud ${item.solicitud_id}:`, emailErr);
-                }
+                })();
 
                 resultados.push({ solicitud_id: item.solicitud_id, success: true });
             } catch (err) {
