@@ -65,6 +65,8 @@ const includesBase = [
     { model: Usuario, as: "Resolutor", attributes: ["usuario_id", "nombre", "apellido"] },
 ];
 
+const TIPOS_SOLICITUD_PRORROGA = ["AMPLIACION_PLAZO", "CORRECCION_DATOS"];
+
 async function esMunicipioAsignado(usuarioId, municipioId) {
     const acceso = await UsuarioMunicipio.findOne({
         where: { usuario_id: usuarioId, municipio_id: municipioId },
@@ -110,7 +112,7 @@ async function obtenerEmailsAdmins() {
 }
 
 // Lógica de aprobación reutilizada por aprobar individual y lote
-async function ejecutarAprobacion({ solicitud, fecha_cierre_aprobada_raw, comentario_resolucion, usuarioId }) {
+async function ejecutarAprobacion({ solicitud, tipo, fecha_cierre_aprobada_raw, comentario_resolucion, usuarioId }) {
     const hoy = obtenerFechaActual();
 
     let fechaAprobada = fecha_cierre_aprobada_raw
@@ -159,6 +161,7 @@ async function ejecutarAprobacion({ solicitud, fecha_cierre_aprobada_raw, coment
                 pauta_id: sol.pauta_id,
             },
             transaction: t,
+            lock: true,
         });
 
         const fechaAnterior = prorroga ? toISODate(prorroga.fecha_fin_nueva) : toISODate(oficial.fecha_fin);
@@ -187,6 +190,7 @@ async function ejecutarAprobacion({ solicitud, fecha_cierre_aprobada_raw, coment
         };
 
         sol.estado = "APROBADA";
+        sol.tipo = tipo;
         sol.prorroga_id = prorroga.prorroga_id;
         sol.fecha_cierre_anterior = fechaAnterior;
         sol.fecha_cierre_aprobada = fechaAprobada;
@@ -203,6 +207,7 @@ async function ejecutarAprobacion({ solicitud, fecha_cierre_aprobada_raw, coment
             payload_anterior: payloadAnterior,
             payload_nuevo: {
                 estado: "APROBADA",
+                tipo,
                 fecha_cierre_anterior: fechaAnterior,
                 fecha_cierre_aprobada: fechaAprobada,
                 prorroga_id: prorroga.prorroga_id,
@@ -400,6 +405,7 @@ export const listarSolicitudes = async (req, res) => {
             mes,
             convenio_id,
             pauta_id,
+            tipo,
             fecha_solicitud_desde,
             fecha_solicitud_hasta,
             fecha_resolucion_desde,
@@ -416,6 +422,12 @@ export const listarSolicitudes = async (req, res) => {
         if (mes) where.mes = Number(mes);
         if (convenio_id) where.convenio_id = Number(convenio_id);
         if (pauta_id) where.pauta_id = Number(pauta_id);
+        if (tipo) {
+            if (!TIPOS_SOLICITUD_PRORROGA.includes(tipo)) {
+                return res.status(400).json({ error: "tipo debe ser AMPLIACION_PLAZO o CORRECCION_DATOS" });
+            }
+            where.tipo = tipo;
+        }
         if (fecha_solicitud_desde || fecha_solicitud_hasta) {
             where.fecha_solicitud = {};
             if (fecha_solicitud_desde) {
@@ -672,6 +684,7 @@ export const aprobarSolicitud = async (req, res) => {
 
         const sol = await ejecutarAprobacion({
             solicitud,
+            tipo: valid.data.tipo,
             fecha_cierre_aprobada_raw: valid.data.fecha_cierre_aprobada,
             comentario_resolucion: valid.data.comentario_resolucion,
             usuarioId,
@@ -810,6 +823,7 @@ export const aprobarLote = async (req, res) => {
 
                     const sol = await ejecutarAprobacion({
                         solicitud,
+                        tipo: valid.data.tipo,
                         fecha_cierre_aprobada_raw: item.fecha_cierre_aprobada,
                         comentario_resolucion: item.comentario_resolucion,
                         usuarioId,

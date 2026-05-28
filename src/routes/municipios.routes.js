@@ -26,7 +26,6 @@ import {
   generarInformeRecaudacionesRectificadasMunicipio,
   upsertRemuneracionesRectificadasMunicipio,
   generarInformeRemuneracionesRectificadasMunicipio,
-  crearProrrogaMunicipio,
   deleteMunicipio,
   borrarGastos,
   borrarRecursos,
@@ -220,13 +219,6 @@ router.get(
   validarMunicipioAsignado,
   validarRectificacionDisponible,
   generarInformeRemuneracionesRectificadasMunicipio
-);
-
-router.put(
-  "/:municipioId/ejercicios/:ejercicio/mes/:mes/prorroga",
-  escrituraMensual,
-  requireAdmin,
-  crearProrrogaMunicipio
 );
 
 // Buscar municipio por ID

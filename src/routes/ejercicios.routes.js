@@ -3,7 +3,6 @@ import {
   listarEjercicios,
   crearEjercicio,
   updateEjercicio,
-  prorrogarCierre,
   getFechaLimite,
   listarCierres,
   getCierreMunicipio,
@@ -40,9 +39,6 @@ router.post("/", crearEjercicio);
 router.put("/:ejercicio/mes/:mes", updateEjercicio); 
 // router.delete("/:ejercicio/mes/:mes", deleteEjercicio); 
 router.delete("/:ejercicio/mes/:mes", deleteEjercicio);
-
-// === Prórroga por municipio ===
-router.put("/:ejercicio/mes/:mes/municipios/:municipioId/prorroga", writeBurstLimiter, prorrogarCierre);
 
 // === Consultar fecha límite efectiva de un municipio ===
 router.get("/:ejercicio/mes/:mes/municipios/:municipioId", getFechaLimite);

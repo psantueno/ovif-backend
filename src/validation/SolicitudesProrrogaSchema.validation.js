@@ -4,6 +4,10 @@ const fechaDDMMYYYY = z
     .string({ message: "La fecha debe ser una cadena de texto" })
     .regex(/^\d{2}-\d{2}-\d{4}$/, { message: "La fecha debe tener formato DD-MM-YYYY" });
 
+const tipoProrroga = z.enum(["AMPLIACION_PLAZO", "CORRECCION_DATOS"], {
+    message: "tipo debe ser AMPLIACION_PLAZO o CORRECCION_DATOS",
+});
+
 const itemCrearSchema = z.object({
     municipio_id: z
         .number({ message: "municipio_id debe ser un número" })
@@ -48,6 +52,7 @@ export const CancelarSolicitudSchema = z.object({
 });
 
 export const AprobarSolicitudSchema = z.object({
+    tipo: tipoProrroga,
     fecha_cierre_aprobada: fechaDDMMYYYY.optional(),
     comentario_resolucion: z.string().optional(),
 });
@@ -67,6 +72,7 @@ const itemAprobarLoteSchema = z.object({
 });
 
 export const AprobarLoteSchema = z.object({
+    tipo: tipoProrroga,
     items: z
         .array(itemAprobarLoteSchema, { message: "items debe ser un array" })
         .min(1, { message: "Debe enviar al menos un ítem" }),
