@@ -41,6 +41,11 @@ const EnvioCorreo = sequelize.define("EnvioCorreo", {
     type: DataTypes.JSON,
     allowNull: false,
     comment: "Datos necesarios para renderizar el mail",
+    get() {
+      const value = this.getDataValue("payload");
+      if (typeof value !== "string") return value;
+      try { return JSON.parse(value); } catch { return {}; }
+    },
   },
   estado: {
     type: DataTypes.ENUM("PENDIENTE", "ENVIANDO", "ENVIADO", "ERROR"),

@@ -214,7 +214,7 @@ const agregarMailsParaCierre = async (mailsParaEnviar, municipioId, ejercicio, m
 
 // 🕑 Ejecutar todos los días a las 2 AM (hora Argentina)
 cron.schedule(
-  "34 19 * * *",
+  "30 10 * * *",
   //"/60 * * * * *",
   async () => {
     console.log(`🟡 [CRON ${new Date()}] Iniciando proceso de cierre automático...`);
