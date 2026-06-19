@@ -178,6 +178,8 @@ export const buildInformeRemuneraciones = ({
       margin: [0, 50, 0, 0],
     });
   } else {
+    const totalesPorRegimen = [];
+
     regimenOrder.forEach((regimenNombre) => {
       const categorySummary = Array.from((summaryByRegimen.get(regimenNombre) ?? new Map()).values())
         .sort((a, b) => a.categoria.localeCompare(b.categoria, "es", { sensitivity: "base" }));
@@ -220,6 +222,8 @@ export const buildInformeRemuneraciones = ({
       const totalDescPersonales = categorySummary.reduce((acc, item) => acc + toNumber(item.desc_personales), 0);
       const totalNeto = categorySummary.reduce((acc, item) => acc + toNumber(item.neto_a_cobrar), 0);
 
+      totalesPorRegimen.push({ regimen: regimenNombre, totalPersonas, totalSeguroVida, totalArt, totalIssn, totalDescPersonales, totalNeto });
+
       const totalRow = [
         { text: "TOTAL", style: "totalLabel" },
         { text: String(totalPersonas), style: "totalValue" },
@@ -251,6 +255,67 @@ export const buildInformeRemuneraciones = ({
         margin: [0, 0, 0, 6],
       });
     });
+
+    if (totalesPorRegimen.length > 0) {
+      const grandTotalPersonas = totalesPorRegimen.reduce((acc, r) => acc + r.totalPersonas, 0);
+      const grandTotalSeguroVida = totalesPorRegimen.reduce((acc, r) => acc + r.totalSeguroVida, 0);
+      const grandTotalArt = totalesPorRegimen.reduce((acc, r) => acc + r.totalArt, 0);
+      const grandTotalIssn = totalesPorRegimen.reduce((acc, r) => acc + r.totalIssn, 0);
+      const grandTotalDescPersonales = totalesPorRegimen.reduce((acc, r) => acc + r.totalDescPersonales, 0);
+      const grandTotalNeto = totalesPorRegimen.reduce((acc, r) => acc + r.totalNeto, 0);
+
+      const grandHeaderRow = [
+        { text: "RÉGIMEN", style: "tableHeader", valign: "middle" },
+        { text: "TOTAL PERSONAS", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "SEGURO DE VIDA", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "ART", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "ISSN", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "DESC. PERSONALES", style: "tableHeader", alignment: "right", valign: "middle" },
+        { text: "NETO A COBRAR", style: "tableHeader", alignment: "right", valign: "middle" },
+      ];
+
+      const grandRows = totalesPorRegimen.map((r) => [
+        { text: r.regimen, style: "itemDescripcion" },
+        { text: String(r.totalPersonas), alignment: "right", style: "itemImporte" },
+        { text: currencyFormatter.format(r.totalSeguroVida), alignment: "right", style: "itemImporte" },
+        { text: currencyFormatter.format(r.totalArt), alignment: "right", style: "itemImporte" },
+        { text: currencyFormatter.format(r.totalIssn), alignment: "right", style: "itemImporte" },
+        { text: currencyFormatter.format(r.totalDescPersonales), alignment: "right", style: "itemImporte" },
+        { text: currencyFormatter.format(r.totalNeto), alignment: "right", style: "itemImporte" },
+      ]);
+
+      const grandTotalRow = [
+        { text: "TOTAL GENERAL", style: "totalLabel" },
+        { text: String(grandTotalPersonas), style: "totalValue" },
+        { text: currencyFormatter.format(grandTotalSeguroVida), style: "totalValue" },
+        { text: currencyFormatter.format(grandTotalArt), style: "totalValue" },
+        { text: currencyFormatter.format(grandTotalIssn), style: "totalValue" },
+        { text: currencyFormatter.format(grandTotalDescPersonales), style: "totalValue" },
+        { text: currencyFormatter.format(grandTotalNeto), style: "totalValue" },
+      ];
+
+      const grandTableBody = [grandHeaderRow, ...grandRows, grandTotalRow];
+      const grandTotalRowIndex = grandTableBody.length - 1;
+
+      content.push({ text: "TOTAL GENERAL POR RÉGIMEN", style: "subtitulo", margin: [0, 16, 0, 6] });
+      content.push({
+        table: {
+          widths: [150, 70, 100, 70, 80, 100, 95],
+          headerRows: 1,
+          body: grandTableBody,
+        },
+        layout: {
+          fillColor: (rowIndex) => {
+            if (rowIndex === 0) return "#2B3E4C";
+            if (rowIndex === grandTotalRowIndex) return "#e9eef2";
+            return rowIndex % 2 === 0 ? "#f5f7f9" : null;
+          },
+          hLineColor: "#ccc",
+          vLineColor: "#ccc",
+        },
+        margin: [0, 0, 0, 6],
+      });
+    }
   }
 
   const _now = new Date();
@@ -262,7 +327,7 @@ export const buildInformeRemuneraciones = ({
   const docDefinition = {
     pageSize: "A4",
     pageOrientation: "landscape",
-    pageMargins: [8, HEADER_BASE64 ? 170 : 100, 8, 40],
+    pageMargins: [8, HEADER_BASE64 ? 190 : 100, 8, 40],
     header: headerContent,
     footer: (currentPage, pageCount) => ({
       columns: [
