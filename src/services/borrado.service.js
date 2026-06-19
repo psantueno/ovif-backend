@@ -128,23 +128,27 @@ export const ejecutarBorrado = async ({
     }
   }
 
-  // 4. Verificar que el módulo no esté cerrado oficialmente
-  const cierre = await CierreModulo.findOne({
-    where: {
-      municipio_id: Number(municipioId),
-      ejercicio: Number(ejercicio),
-      mes: Number(mes),
-      modulo,
-    },
-  });
+  // 4. Verificar que el módulo no esté cerrado oficialmente.
+  // Para RECTIFICACION se omite: la ventana ya fue validada por validarRectificacionDisponible
+  // y el cierre oficial aplica a la carga regular, no a las tablas rectificadas.
+  if (tipoCarga !== "RECTIFICACION") {
+    const cierre = await CierreModulo.findOne({
+      where: {
+        municipio_id: Number(municipioId),
+        ejercicio: Number(ejercicio),
+        mes: Number(mes),
+        modulo,
+      },
+    });
 
-  if (cierre) {
-    return {
-      code: "MODULE_CLOSED",
-      deleted_count: 0,
-      audit_id: null,
-      message: "El módulo ya fue cerrado oficialmente para este periodo. No se puede borrar.",
-    };
+    if (cierre) {
+      return {
+        code: "MODULE_CLOSED",
+        deleted_count: 0,
+        audit_id: null,
+        message: "El módulo ya fue cerrado oficialmente para este periodo. No se puede borrar.",
+      };
+    }
   }
 
   // 5. Ejecutar borrado y auditoría en una transacción
