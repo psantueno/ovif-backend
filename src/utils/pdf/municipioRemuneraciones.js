@@ -241,6 +241,7 @@ export const buildInformeRemuneraciones = ({
         table: {
           widths: [150, 70, 100, 70, 80, 100, 95],
           headerRows: 1,
+          keepWithHeaderRows: 1,
           body: tableBody,
         },
         layout: {
@@ -302,6 +303,7 @@ export const buildInformeRemuneraciones = ({
         table: {
           widths: [150, 70, 100, 70, 80, 100, 95],
           headerRows: 1,
+          keepWithHeaderRows: 1,
           body: grandTableBody,
         },
         layout: {
