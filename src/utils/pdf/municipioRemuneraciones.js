@@ -1,6 +1,7 @@
 import PdfPrinter from "pdfmake";
 import fs from "fs";
 import path from "path";
+import { aCentavos, desdeCentavos } from "../sumarDecimales.js";
 
 const resolveExistingPath = (candidates, label) => {
   for (const candidate of candidates) {
@@ -66,6 +67,10 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+// Los importes se acumulan en centavos enteros (ver sumarDecimales.js) para sumar de
+// forma exacta; este helper los convierte a string de moneda solo al renderizar.
+const formatCentavos = (centavos) => currencyFormatter.format(desdeCentavos(centavos));
+
 const normalizeText = (value, fallback = "Sin especificar") => {
   if (value === null || value === undefined) {
     return fallback;
@@ -96,12 +101,13 @@ const buildSummaryByRegimen = (remuneraciones = []) => {
       neto_a_cobrar: 0,
     };
 
+    // total_personas es un conteo entero; los importes se acumulan en centavos enteros.
     categoriaSummary.total_personas += 1;
-    categoriaSummary.seguro_vida += toNumber(item?.seguro_vida);
-    categoriaSummary.art += toNumber(item?.art);
-    categoriaSummary.issn += toNumber(item?.issn);
-    categoriaSummary.desc_personales += toNumber(item?.desc_personales);
-    categoriaSummary.neto_a_cobrar += toNumber(item?.neto_a_cobrar);
+    categoriaSummary.seguro_vida += aCentavos(item?.seguro_vida);
+    categoriaSummary.art += aCentavos(item?.art);
+    categoriaSummary.issn += aCentavos(item?.issn);
+    categoriaSummary.desc_personales += aCentavos(item?.desc_personales);
+    categoriaSummary.neto_a_cobrar += aCentavos(item?.neto_a_cobrar);
 
     categoriasMap.set(categoria, categoriaSummary);
   });
@@ -208,13 +214,14 @@ export const buildInformeRemuneraciones = ({
       const rows = categorySummary.map((item) => [
         { text: item.categoria, style: "itemDescripcion" },
         { text: String(item.total_personas), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(item.seguro_vida), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(item.art), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(item.issn), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(item.desc_personales), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(item.neto_a_cobrar), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(item.seguro_vida), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(item.art), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(item.issn), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(item.desc_personales), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(item.neto_a_cobrar), alignment: "right", style: "itemImporte" },
       ]);
 
+      // Los importes ya están en centavos enteros: la suma es exacta.
       const totalPersonas = categorySummary.reduce((acc, item) => acc + toNumber(item.total_personas), 0);
       const totalSeguroVida = categorySummary.reduce((acc, item) => acc + toNumber(item.seguro_vida), 0);
       const totalArt = categorySummary.reduce((acc, item) => acc + toNumber(item.art), 0);
@@ -227,11 +234,11 @@ export const buildInformeRemuneraciones = ({
       const totalRow = [
         { text: "TOTAL", style: "totalLabel" },
         { text: String(totalPersonas), style: "totalValue" },
-        { text: currencyFormatter.format(totalSeguroVida), style: "totalValue" },
-        { text: currencyFormatter.format(totalArt), style: "totalValue" },
-        { text: currencyFormatter.format(totalIssn), style: "totalValue" },
-        { text: currencyFormatter.format(totalDescPersonales), style: "totalValue" },
-        { text: currencyFormatter.format(totalNeto), style: "totalValue" },
+        { text: formatCentavos(totalSeguroVida), style: "totalValue" },
+        { text: formatCentavos(totalArt), style: "totalValue" },
+        { text: formatCentavos(totalIssn), style: "totalValue" },
+        { text: formatCentavos(totalDescPersonales), style: "totalValue" },
+        { text: formatCentavos(totalNeto), style: "totalValue" },
       ];
 
       const tableBody = [headerRow, ...rows, totalRow];
@@ -278,21 +285,21 @@ export const buildInformeRemuneraciones = ({
       const grandRows = totalesPorRegimen.map((r) => [
         { text: r.regimen, style: "itemDescripcion" },
         { text: String(r.totalPersonas), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(r.totalSeguroVida), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(r.totalArt), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(r.totalIssn), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(r.totalDescPersonales), alignment: "right", style: "itemImporte" },
-        { text: currencyFormatter.format(r.totalNeto), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(r.totalSeguroVida), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(r.totalArt), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(r.totalIssn), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(r.totalDescPersonales), alignment: "right", style: "itemImporte" },
+        { text: formatCentavos(r.totalNeto), alignment: "right", style: "itemImporte" },
       ]);
 
       const grandTotalRow = [
         { text: "TOTAL GENERAL", style: "totalLabel" },
         { text: String(grandTotalPersonas), style: "totalValue" },
-        { text: currencyFormatter.format(grandTotalSeguroVida), style: "totalValue" },
-        { text: currencyFormatter.format(grandTotalArt), style: "totalValue" },
-        { text: currencyFormatter.format(grandTotalIssn), style: "totalValue" },
-        { text: currencyFormatter.format(grandTotalDescPersonales), style: "totalValue" },
-        { text: currencyFormatter.format(grandTotalNeto), style: "totalValue" },
+        { text: formatCentavos(grandTotalSeguroVida), style: "totalValue" },
+        { text: formatCentavos(grandTotalArt), style: "totalValue" },
+        { text: formatCentavos(grandTotalIssn), style: "totalValue" },
+        { text: formatCentavos(grandTotalDescPersonales), style: "totalValue" },
+        { text: formatCentavos(grandTotalNeto), style: "totalValue" },
       ];
 
       const grandTableBody = [grandHeaderRow, ...grandRows, grandTotalRow];

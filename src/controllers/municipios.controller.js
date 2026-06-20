@@ -28,6 +28,7 @@ import {
 import sequelize from "../config/db.js";
 import { ejecutarBorrado } from "../services/borrado.service.js";
 import { BorradoParamsSchema } from "../validation/BorradoParamsSchema.validation.js";
+import { aCentavos, desdeCentavos, sumarDecimales } from "../utils/sumarDecimales.js";
 
 const toISODate = (value) => {
   if (!value) return null;
@@ -142,6 +143,7 @@ const agruparTotalesRecaudacionesPorCodigo = (conceptos = []) => {
     const acumulado = totalesPorCodigo.get(codigoTributo) ?? {
       codigo_tributo: codigoTributo,
       descripcion: concepto.descripcion ?? "",
+      // Se acumula en centavos enteros para sumar de forma exacta (ver sumarDecimales.js).
       importe_total_recaudacion: 0,
     };
 
@@ -149,21 +151,24 @@ const agruparTotalesRecaudacionesPorCodigo = (conceptos = []) => {
       acumulado.descripcion = concepto.descripcion;
     }
 
-    acumulado.importe_total_recaudacion += importeNumerico;
+    acumulado.importe_total_recaudacion += aCentavos(importeNumerico);
     totalesPorCodigo.set(codigoTributo, acumulado);
   });
 
-  return Array.from(totalesPorCodigo.values()).sort((a, b) => a.codigo_tributo - b.codigo_tributo);
+  return Array.from(totalesPorCodigo.values())
+    .map((item) => ({
+      ...item,
+      importe_total_recaudacion: desdeCentavos(item.importe_total_recaudacion),
+    }))
+    .sort((a, b) => a.codigo_tributo - b.codigo_tributo);
 };
 
 const calcularTotalImporteRecaudacion = (conceptos = []) =>
-  conceptos.reduce((acumulado, concepto) => {
-    const importeNumerico = obtenerImporteNumerico(concepto.importe_recaudacion);
-    if (importeNumerico === null) {
-      return acumulado;
-    }
-    return acumulado + importeNumerico;
-  }, 0);
+  sumarDecimales(
+    conceptos
+      .map((concepto) => obtenerImporteNumerico(concepto.importe_recaudacion))
+      .filter((importe) => importe !== null)
+  );
 
 const mapearDetalleDeterminacionTributaria = (determinacion) => ({
   cod_impuesto: Number(determinacion.cod_impuesto),
@@ -180,39 +185,26 @@ const mapearDetalleDeterminacionTributaria = (determinacion) => ({
   bajas_periodo: Number(determinacion.bajas_periodo),
 });
 
-const calcularResumenDeterminacionTributaria = (determinaciones = []) =>
-  determinaciones.reduce(
-    (acumulado, item) => ({
-      totalRegistros: acumulado.totalRegistros + 1,
-      totalLiquidadas: acumulado.totalLiquidadas + (Number(item.liquidadas) || 0),
-      totalImporteLiquidadas:
-        acumulado.totalImporteLiquidadas +
-        (obtenerImporteNumerico(item.importe_liquidadas) ?? 0),
-      totalImpagas: acumulado.totalImpagas + (Number(item.impagas) || 0),
-      totalImporteImpagas:
-        acumulado.totalImporteImpagas +
-        (obtenerImporteNumerico(item.importe_impagas) ?? 0),
-      totalPagadas: acumulado.totalPagadas + (Number(item.pagadas) || 0),
-      totalImportePagadas:
-        acumulado.totalImportePagadas +
-        (obtenerImporteNumerico(item.importe_pagadas) ?? 0),
-      totalAltasPeriodo:
-        acumulado.totalAltasPeriodo + (Number(item.altas_periodo) || 0),
-      totalBajasPeriodo:
-        acumulado.totalBajasPeriodo + (Number(item.bajas_periodo) || 0),
-    }),
-    {
-      totalRegistros: 0,
-      totalLiquidadas: 0,
-      totalImporteLiquidadas: 0,
-      totalImpagas: 0,
-      totalImporteImpagas: 0,
-      totalPagadas: 0,
-      totalImportePagadas: 0,
-      totalAltasPeriodo: 0,
-      totalBajasPeriodo: 0,
-    }
-  );
+const calcularResumenDeterminacionTributaria = (determinaciones = []) => {
+  // Los contadores (cantidades) son enteros y se suman directo; los importes con
+  // decimales se suman con sumarDecimales para evitar el drift de punto flotante.
+  const sumarEnteros = (key) =>
+    determinaciones.reduce((acc, item) => acc + (Number(item[key]) || 0), 0);
+  const sumarImportes = (key) =>
+    sumarDecimales(determinaciones.map((item) => obtenerImporteNumerico(item[key]) ?? 0));
+
+  return {
+    totalRegistros: determinaciones.length,
+    totalLiquidadas: sumarEnteros("liquidadas"),
+    totalImporteLiquidadas: sumarImportes("importe_liquidadas"),
+    totalImpagas: sumarEnteros("impagas"),
+    totalImporteImpagas: sumarImportes("importe_impagas"),
+    totalPagadas: sumarEnteros("pagadas"),
+    totalImportePagadas: sumarImportes("importe_pagadas"),
+    totalAltasPeriodo: sumarEnteros("altas_periodo"),
+    totalBajasPeriodo: sumarEnteros("bajas_periodo"),
+  };
+};
 
 const responderInformeSinDatos = (res) =>
   res.status(200).json({
@@ -1254,13 +1246,12 @@ export const generarInformeGastosMunicipio = async (req, res) => {
       return responderInformeSinDatos(res);
     }
 
-    const totales = gastos.reduce((acc, g) => {
-      acc.formulado += Number(g.formulado) || 0;
-      acc.modificado += Number(g.modificado) || 0;
-      acc.vigente += Number(g.vigente) || 0;
-      acc.devengado += Number(g.devengado) || 0;
-      return acc;
-    }, { formulado: 0, modificado: 0, vigente: 0, devengado: 0 });
+    const totales = {
+      formulado: sumarDecimales(gastos.map((g) => g.formulado)),
+      modificado: sumarDecimales(gastos.map((g) => g.modificado)),
+      vigente: sumarDecimales(gastos.map((g) => g.vigente)),
+      devengado: sumarDecimales(gastos.map((g) => g.devengado)),
+    };
 
     const userRequest = req.user ?? null;
     const user = await Usuario.findOne({where: { usuario_id: userRequest.usuario_id }});
@@ -1333,11 +1324,10 @@ export const generarInformeRecursosMunicipio = async (req, res) => {
       return responderInformeSinDatos(res);
     }
 
-    const totales = recursos.reduce((acc, r) => {
-      acc.vigente += Number(r.vigente) || 0;
-      acc.percibido += Number(r.percibido) || 0;
-      return acc;
-    }, { vigente: 0, percibido: 0 });
+    const totales = {
+      vigente: sumarDecimales(recursos.map((r) => r.vigente)),
+      percibido: sumarDecimales(recursos.map((r) => r.percibido)),
+    };
 
     const userRequest = req.user ?? null;
     const user = await Usuario.findOne({where: { usuario_id: userRequest.usuario_id }});

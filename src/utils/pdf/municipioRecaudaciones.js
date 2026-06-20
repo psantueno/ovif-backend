@@ -1,6 +1,7 @@
 import PdfPrinter from "pdfmake";
 import fs from "fs";
 import path from "path";
+import { aCentavos, desdeCentavos } from "../sumarDecimales.js";
 
 
 const resolveExistingPath = (candidates, label) => {
@@ -158,15 +159,21 @@ export const buildInformeRecaudaciones = ({
                     const acumulado = acumulados.get(codigoTributo) ?? {
                         codigo_tributo: codigoTributo,
                         descripcion: concepto.descripcion ?? "",
+                        // Se acumula en centavos enteros para sumar de forma exacta (ver sumarDecimales.js).
                         importe_total_recaudacion: 0,
                     };
                     if (!acumulado.descripcion && concepto.descripcion) {
                         acumulado.descripcion = concepto.descripcion;
                     }
-                    acumulado.importe_total_recaudacion += importeValido;
+                    acumulado.importe_total_recaudacion += aCentavos(importeValido);
                     acumulados.set(codigoTributo, acumulado);
                 });
-                return Array.from(acumulados.values()).sort((a, b) => a.codigo_tributo - b.codigo_tributo);
+                return Array.from(acumulados.values())
+                    .map((item) => ({
+                        ...item,
+                        importe_total_recaudacion: desdeCentavos(item.importe_total_recaudacion),
+                    }))
+                    .sort((a, b) => a.codigo_tributo - b.codigo_tributo);
             })();
 
         const totalesBody = [
