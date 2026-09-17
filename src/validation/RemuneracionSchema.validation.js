@@ -35,6 +35,8 @@ const decimalSchema = z.preprocess((value) => {
 },
 z.number({ error: 'El importe debe ser un número decimal válido' }));
 
+const decimalSchemaAbsoluto = decimalSchema.transform((valor) => Math.abs(valor));
+
 const cantidadHorasExtraSchema = z.preprocess((value) => {
     if (typeof value === "number") {
         return value;
@@ -89,7 +91,7 @@ export const RemuneracionSchema = z.object({
     total_ropa: decimalSchema,
     total_bonos: decimalSchema,
     asignaciones_familiares: decimalSchema,
-    total_descuentos: decimalSchema,
+    total_descuentos: decimalSchemaAbsoluto,
     total_issn: decimalSchema,
     art: decimalSchema,
     seguro_vida_obligatorio: decimalSchema,

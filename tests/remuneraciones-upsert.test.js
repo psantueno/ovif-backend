@@ -246,6 +246,17 @@ describe("upsertRemuneracionesMunicipio", () => {
     expect(res.statusCode).toBe(409);
     expect(res.body.error).toBe("Duplicate entry");
   });
+
+  it("normaliza total_descuentos a positivo aunque venga en negativo", async () => {
+    const res = crearRes();
+    await upsertRemuneracionesMunicipio(crearReq([remuneracionBase({ total_descuentos: -1500 })]), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(mockRemuneracionCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ total_descuentos: 1500 }),
+      expect.any(Object)
+    );
+  });
 });
 
 describe("upsertRemuneracionesRectificadasMunicipio", () => {
