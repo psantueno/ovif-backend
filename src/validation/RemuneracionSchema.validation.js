@@ -1,11 +1,13 @@
 import { z } from 'zod';
+import { repararMojibake, detectarMojibake } from '../utils/textoCodificacion.js';
 
 const obtenerNumeroDecimal = (value) => Number(String(value).replace(',', '.'));
 
 const stringTrimSchema = (tipo, requerido, maxLength = 100) =>
     z.preprocess((value) => {
         if (typeof value === 'string' || typeof value === 'number') {
-            return String(value).trim();
+            const { valor } = repararMojibake(String(value).trim());
+            return valor;
         }
 
         return value;
@@ -13,7 +15,10 @@ const stringTrimSchema = (tipo, requerido, maxLength = 100) =>
     z
         .string(`${tipo} debe ser una cadena de carateres`)
         .min(1, requerido)
-        .max(maxLength, `${tipo} no puede exceder ${maxLength} caracteres`));
+        .max(maxLength, `${tipo} no puede exceder ${maxLength} caracteres`)
+        .refine((valor) => !detectarMojibake(valor), {
+            message: `${tipo} tiene caracteres con codificación inválida y no pudo corregirse automáticamente. Revisá el archivo de origen.`,
+        }));
 
 const decimalSchema = z.preprocess((value) => {
     // si ya es número (Excel lo parseó)

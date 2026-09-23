@@ -1,0 +1,67 @@
+[
+  {
+    "original": "1. TASA DE ACTUACIÃ“N ADMINISTRATIVA POR TRÃMITE EN GENERAL",
+    "esperado": "1. TASA DE ACTUACIÓN ADMINISTRATIVA POR TRÁMITE EN GENERAL",
+    "reparado": true
+  },
+  {
+    "original": "12. POR CADA CERTIFICADO DE BAJA DE VEHÃCULO",
+    "esperado": "12. POR CADA CERTIFICADO DE BAJA DE VEHÍCULO",
+    "reparado": true
+  },
+  {
+    "original": "13. POR CADA INSCRIPCIÃ“N/TRANSFERENCIA DE RODADO/MOTO.",
+    "esperado": "13. POR CADA INSCRIPCIÓN/TRANSFERENCIA DE RODADO/MOTO.",
+    "reparado": true
+  },
+  {
+    "original": "28. POR COPIA DE EXÃMENES DE LICENCIA DE CONDUCIR",
+    "esperado": "28. POR COPIA DE EXÁMENES DE LICENCIA DE CONDUCIR",
+    "reparado": true
+  },
+  {
+    "original": "5.2 POR CADA CERTIFICADO DE LIBRE DEUDA TRAMITADO EN OFICINA O DEPENDENCIA MUNICIPAL, OTORGADO EN EL DÃA",
+    "esperado": "5.2 POR CADA CERTIFICADO DE LIBRE DEUDA TRAMITADO EN OFICINA O DEPENDENCIA MUNICIPAL, OTORGADO EN EL DÍA",
+    "reparado": true
+  },
+  {
+    "original": "ARTÃCULO 11. CON ESTABLECIMIENTO. LA TASA DE INSCRIPCIÃ“N O TRANSFERENCIA POR ACTIVIDAD PRINCIPAL. SIENDO REQUISITO NECESARIO, EN LAS ACTIVIDADES CON LOCAL EL PLANO DE USO CONFORME A OBRA.-",
+    "esperado": "ARTÍCULO 11. CON ESTABLECIMIENTO. LA TASA DE INSCRIPCIÓN O TRANSFERENCIA POR ACTIVIDAD PRINCIPAL. SIENDO REQUISITO NECESARIO, EN LAS ACTIVIDADES CON LOCAL EL PLANO DE USO CONFORME A OBRA.-",
+    "reparado": true
+  },
+  {
+    "original": "ARTÃCULO 14: LA TASA POR BAJA",
+    "esperado": "ARTÍCULO 14: LA TASA POR BAJA",
+    "reparado": true
+  },
+  {
+    "original": "B.1 AUTOMÃ“VILES, UTILITARIOS, CAMIONETAS Y CASAS RODANTES MOTORIZADAS HASTA 3500 KG DE PESO TOTAL",
+    "esperado": "B.1 AUTOMÓVILES, UTILITARIOS, CAMIONETAS Y CASAS RODANTES MOTORIZADAS HASTA 3500 KG DE PESO TOTAL",
+    "reparado": true
+  },
+  {
+    "original": "CONTROL DE INGRESOS AL PUESTO DE CONTROL BROMATOLOGICO DE RUTA PROVINCIAL NÂ°7, DISTRIBUIDORES MAYORISTAS DE OTRAS JURISDICCIONES.",
+    "esperado": "CONTROL DE INGRESOS AL PUESTO DE CONTROL BROMATOLOGICO DE RUTA PROVINCIAL N°7, DISTRIBUIDORES MAYORISTAS DE OTRAS JURISDICCIONES.",
+    "reparado": true
+  },
+  {
+    "original": "DERECHO DE CREMACION DE FETOS HASTA 5 AÃ‘OS DE PADRES DOMICILIADOS EN OTRA JURISDICCION",
+    "esperado": "DERECHO DE CREMACION DE FETOS HASTA 5 AÑOS DE PADRES DOMICILIADOS EN OTRA JURISDICCION",
+    "reparado": true
+  },
+  {
+    "original": "INHUMACIÃ“N, A TIERRA POR ÃšNICA VEZ, DE ESTA JURISDICCIÃ“N",
+    "esperado": "INHUMACIÓN, A TIERRA POR ÚNICA VEZ, DE ESTA JURISDICCIÓN",
+    "reparado": true
+  },
+  {
+    "original": "MigraciÃ³n Planes de Pago",
+    "esperado": "Migración Planes de Pago",
+    "reparado": true
+  },
+  {
+    "original": "Tasa de actuaciÃ³n administrativa por trÃ¡mite en General",
+    "esperado": "Tasa de actuación administrativa por trámite en General",
+    "reparado": true
+  }
+]

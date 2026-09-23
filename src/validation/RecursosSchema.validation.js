@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { textoCarga } from './textoCargaSchema.js';
 
 const decimalField = (label) =>
   z.number({ message: `${label} debe ser un número` }).refine((value) => {
@@ -10,9 +11,9 @@ const decimalField = (label) =>
 
 export const RecursosSchema = z.object({
   codigo_recurso: z.number({ message: "El código del recurso debe ser un número entero" }).int({ message: "El código del recurso debe ser un número entero" }),
-  descripcion: z.string({ message: "La descripción es requerida" }).max(255, { message: "La descripción no puede superar los 255 caracteres" }),
+  descripcion: textoCarga("La descripción es requerida", 255),
   codigo_fuente_financiera: z.number({ message: "El código de fuente financiera debe ser un número entero" }).int({ message: "El código de fuente financiera debe ser un número entero" }),
-  descripcion_fuente: z.string({ message: "La descripción de fuente es requerida" }).max(255, { message: "La descripción de fuente no puede superar los 255 caracteres" }),
+  descripcion_fuente: textoCarga("La descripción de fuente es requerida", 255),
   vigente: decimalField("Vigente"),
   percibido: decimalField("Percibido"),
 });
