@@ -129,7 +129,13 @@ export const listarPendientesRecaudacion = async (query) => {
     if (!partidaPorCodigo.has(m.codigo_tributo)) partidaPorCodigo.set(m.codigo_tributo, m.partida_recursos_codigo);
   }
 
-  const pendientes = informados.filter((fila) => !clavesHomologadas.has(`${fila.codigo_tributo}||${fila.descripcion_normalizada}`));
+  let pendientes = informados.filter((fila) => !clavesHomologadas.has(`${fila.codigo_tributo}||${fila.descripcion_normalizada}`));
+
+  const search = typeof query.search === "string" ? query.search.trim().toLowerCase() : "";
+  if (search) {
+    pendientes = pendientes.filter((fila) => (fila.descripcion_tributo ?? "").toLowerCase().includes(search));
+  }
+
   const total = pendientes.length;
   const paginaSlice = pendientes.slice(offset, offset + limite);
 

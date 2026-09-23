@@ -90,10 +90,18 @@ export const listarPendientesRecursos = async (query) => {
   });
   const homologadosSet = new Set(codigosHomologados.map((c) => c.codigo_recurso));
 
-  const pendientes = codigosInformados
+  let pendientes = codigosInformados
     .map((c) => c.codigo_recurso)
     .filter((codigo) => !homologadosSet.has(codigo))
     .sort((a, b) => a - b);
+
+  // Búsqueda por código exacto (recursos se homologa solo por código, sin
+  // descripción, ver minuta 2.4), igual criterio que listarMatrizRecursos.
+  const search = typeof query.search === "string" ? query.search.trim() : "";
+  if (search) {
+    const searchNum = Number(search);
+    pendientes = Number.isInteger(searchNum) ? pendientes.filter((codigo) => codigo === searchNum) : [];
+  }
 
   const paginaSlice = pendientes.slice(offset, offset + limite);
 
