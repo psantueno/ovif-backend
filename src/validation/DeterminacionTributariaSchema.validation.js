@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { textoCarga } from "./textoCargaSchema.js";
 
 const buildIntegerField = (label) =>
   z
@@ -18,11 +19,7 @@ const buildDecimalField = (label) =>
 
 export const DeterminacionTributariaSchema = z.object({
   cod_impuesto: buildIntegerField("cod_impuesto"),
-  descripcion: z
-    .string({ message: "La descripcion es obligatoria" })
-    .trim()
-    .min(1, { message: "La descripcion es obligatoria" })
-    .max(255, { message: "La descripcion no puede superar los 255 caracteres" }),
+  descripcion: textoCarga("La descripcion es obligatoria", 255),
   anio: buildIntegerField("anio"),
   cuota: buildIntegerField("cuota"),
   liquidadas: buildIntegerField("liquidadas"),

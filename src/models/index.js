@@ -48,6 +48,10 @@ import ApiRequestMetricHourly from './observabilidad/ApiRequestMetricHourly.js';
 import SolicitudProrroga from './SolicitudProrroga.js';
 import SolicitudProrrogaEstados from './SolicitudProrrogaEstados.js';
 import AuditoriaBorrado from './moduloCargaDatos/AuditoriaBorrado.js';
+import MtzRecursosPartida from './matrices/MtzRecursosPartida.js';
+import MtzRecaudacionPartida from './matrices/MtzRecaudacionPartida.js';
+import MtzRecursosPartidaHistorial from './matrices/MtzRecursosPartidaHistorial.js';
+import MtzRecaudacionPartidaHistorial from './matrices/MtzRecaudacionPartidaHistorial.js';
 
 // Relación muchos a muchos con Rol
 Usuario.belongsToMany(Rol, {
@@ -183,7 +187,26 @@ EconomicoRecurso.hasMany(RecursoEconomico, {
   sourceKey: "cod_economico"
 });
 
+// Matrices de homogeneización (Etapa 1 - OVIF)
+MtzRecursosPartida.belongsTo(Municipio, { foreignKey: "municipio_id" });
+MtzRecursosPartida.belongsTo(PartidaRecurso, {
+  foreignKey: "partida_recursos_codigo",
+  targetKey: "partidas_recursos_codigo"
+});
+MtzRecursosPartida.belongsTo(Usuario, { as: "UsuarioAlta", foreignKey: "usuario_alta_id" });
+MtzRecursosPartida.belongsTo(Usuario, { as: "UsuarioModificacion", foreignKey: "usuario_modificacion_id" });
+MtzRecursosPartida.hasMany(MtzRecursosPartidaHistorial, { foreignKey: "matriz_id", sourceKey: "id", as: "Historial" });
+MtzRecursosPartidaHistorial.belongsTo(Usuario, { foreignKey: "usuario_id" });
 
+MtzRecaudacionPartida.belongsTo(Municipio, { foreignKey: "municipio_id" });
+MtzRecaudacionPartida.belongsTo(PartidaRecurso, {
+  foreignKey: "partida_recursos_codigo",
+  targetKey: "partidas_recursos_codigo"
+});
+MtzRecaudacionPartida.belongsTo(Usuario, { as: "UsuarioAlta", foreignKey: "usuario_alta_id" });
+MtzRecaudacionPartida.belongsTo(Usuario, { as: "UsuarioModificacion", foreignKey: "usuario_modificacion_id" });
+MtzRecaudacionPartida.hasMany(MtzRecaudacionPartidaHistorial, { foreignKey: "matriz_id", sourceKey: "id", as: "Historial" });
+MtzRecaudacionPartidaHistorial.belongsTo(Usuario, { foreignKey: "usuario_id" });
 
 export {
   Usuario, 
@@ -228,5 +251,9 @@ export {
   ApiRequestMetricHourly,
   SolicitudProrroga,
   SolicitudProrrogaEstados,
-  AuditoriaBorrado
+  AuditoriaBorrado,
+  MtzRecursosPartida,
+  MtzRecaudacionPartida,
+  MtzRecursosPartidaHistorial,
+  MtzRecaudacionPartidaHistorial
 };
