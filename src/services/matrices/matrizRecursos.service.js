@@ -122,7 +122,7 @@ export const listarPendientesRecursos = async (query) => {
       municipio_id: municipioId,
       codigo_recurso: codigo,
       partida_sugerida: partidasPorCodigo.get(codigo) ?? null,
-      motivo_sugerencia: partidasPorCodigo.has(codigo) ? "El código coincide con el catálogo provincial" : null,
+      motivo_sugerencia: partidasPorCodigo.has(codigo) ? "Coincide por código de la partida de recursos" : null,
     })),
   };
 };

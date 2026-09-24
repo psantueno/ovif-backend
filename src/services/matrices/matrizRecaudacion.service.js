@@ -139,36 +139,53 @@ export const listarPendientesRecaudacion = async (query) => {
   const total = pendientes.length;
   const paginaSlice = pendientes.slice(offset, offset + limite);
 
-  const codigosPartidaSugeridos = new Set(
-    paginaSlice
-      .map((f) => partidaPorDescripcion.get(f.descripcion_normalizada) ?? partidaPorCodigo.get(f.codigo_tributo))
-      .filter(Boolean)
-  );
-  const partidas = codigosPartidaSugeridos.size
-    ? await PartidaRecurso.findAll({
-        where: { partidas_recursos_codigo: { [Op.in]: [...codigosPartidaSugeridos] } },
-        attributes: ["partidas_recursos_codigo", "partidas_recursos_descripcion"],
-        raw: true,
-      })
-    : [];
-  const partidasPorCodigo = new Map(partidas.map((p) => [p.partidas_recursos_codigo, p]));
+  // Catálogo provincial imputable con la descripción normalizada con la misma
+  // expresión que la columna generada de ovif_recaudaciones.
+  const [catalogo] = paginaSlice.length
+    ? await sequelize.query(
+        `SELECT partidas_recursos_codigo, partidas_recursos_descripcion,
+                UPPER(TRIM(TRAILING '.' FROM TRIM(REGEXP_REPLACE(REPLACE(partidas_recursos_descripcion, '°', 'º'), '[[:space:]]+', ' ')))) AS descripcion_normalizada
+           FROM ovif_partidas_recursos
+          WHERE partidas_recursos_carga = 1
+          ORDER BY partidas_recursos_codigo`
+      )
+    : [[]];
+
+  const catalogoPorCodigo = new Map();
+  const catalogoPorDescripcion = new Map();
+  for (const p of catalogo) {
+    const partida = { partidas_recursos_codigo: p.partidas_recursos_codigo, partidas_recursos_descripcion: p.partidas_recursos_descripcion };
+    catalogoPorCodigo.set(p.partidas_recursos_codigo, partida);
+    if (!catalogoPorDescripcion.has(p.descripcion_normalizada)) catalogoPorDescripcion.set(p.descripcion_normalizada, partida);
+  }
+
+  const partidaDesdeMatriz = (codigo) => catalogoPorCodigo.get(codigo) ?? { partidas_recursos_codigo: codigo };
+
+  // Orden: catálogo por código -> catálogo por descripción normalizada ->
+  // correspondencias ya cargadas del municipio -> sin sugerencia.
+  const sugerir = (fila) => {
+    if (catalogoPorCodigo.has(fila.codigo_tributo)) {
+      return [catalogoPorCodigo.get(fila.codigo_tributo), "Coincide por código de la partida de recursos"];
+    }
+    if (catalogoPorDescripcion.has(fila.descripcion_normalizada)) {
+      return [catalogoPorDescripcion.get(fila.descripcion_normalizada), "Coincide por descripción de la partida de recursos"];
+    }
+    if (partidaPorDescripcion.has(fila.descripcion_normalizada)) {
+      return [partidaDesdeMatriz(partidaPorDescripcion.get(fila.descripcion_normalizada)), "La misma descripción ya está asignada con otro código en este municipio"];
+    }
+    if (partidaPorCodigo.has(fila.codigo_tributo)) {
+      return [partidaDesdeMatriz(partidaPorCodigo.get(fila.codigo_tributo)), "Revisar: el código ya está asignado pero con otra descripción"];
+    }
+    return [null, null];
+  };
 
   const data = paginaSlice.map((fila) => {
-    let partidaCodigo = null;
-    let motivo = null;
-    if (partidaPorDescripcion.has(fila.descripcion_normalizada)) {
-      partidaCodigo = partidaPorDescripcion.get(fila.descripcion_normalizada);
-      motivo = "La misma descripción ya está homologada con otro código en este municipio";
-    } else if (partidaPorCodigo.has(fila.codigo_tributo)) {
-      partidaCodigo = partidaPorCodigo.get(fila.codigo_tributo);
-      motivo = "Revisar: el código ya está homologado pero con otra descripción";
-    }
-
+    const [partidaSugerida, motivo] = sugerir(fila);
     return {
       municipio_id: municipioId,
       codigo_tributo: fila.codigo_tributo,
       descripcion_tributo: fila.descripcion_tributo,
-      partida_sugerida: partidaCodigo ? partidasPorCodigo.get(partidaCodigo) ?? { partidas_recursos_codigo: partidaCodigo } : null,
+      partida_sugerida: partidaSugerida,
       motivo_sugerencia: motivo,
     };
   });
