@@ -107,7 +107,7 @@ export const listarPendientesRecursos = async (query) => {
 
   // Sugerencia: el propio código existe en el catálogo provincial imputable.
   const partidasCatalogo = await PartidaRecurso.findAll({
-    where: { partidas_recursos_codigo: { [Op.in]: paginaSlice }, partidas_recursos_carga: true },
+    where: { partidas_recursos_codigo: { [Op.in]: paginaSlice }, partidas_recursos_carga: true, activo: true },
     attributes: ["partidas_recursos_codigo", "partidas_recursos_descripcion"],
     raw: true,
   });
@@ -135,7 +135,7 @@ export const crearMatrizRecursos = async (datos, usuarioId) => {
 
   return sequelize.transaction(async (transaction) => {
     await validarMunicipioExiste(municipio_id);
-    await validarPartidaImputable(partida_recursos_codigo);
+    await validarPartidaImputable(partida_recursos_codigo, transaction);
 
     const existente = await buscarExistente(municipio_id, codigo_recurso, transaction);
     if (existente) {
@@ -188,7 +188,7 @@ export const crearLoteMatrizRecursos = async (filas, usuarioId) => {
         municipiosValidados.add(municipio_id);
       }
       if (!partidasValidadas.has(partida_recursos_codigo)) {
-        await validarPartidaImputable(partida_recursos_codigo);
+        await validarPartidaImputable(partida_recursos_codigo, transaction);
         partidasValidadas.add(partida_recursos_codigo);
       }
 
@@ -233,7 +233,12 @@ export const actualizarMatrizRecursos = async (id, datos, usuarioId) => {
       throw new MatrizError(404, "La correspondencia indicada no existe");
     }
 
-    await validarPartidaImputable(partida_recursos_codigo);
+    // Si la partida no cambia no se revalida: editar las observaciones de
+    // una correspondencia existente no debe depender del estado actual de
+    // su partida.
+    if (partida_recursos_codigo !== registro.partida_recursos_codigo) {
+      await validarPartidaImputable(partida_recursos_codigo, transaction);
+    }
 
     const partidaAnterior = registro.partida_recursos_codigo;
     registro.partida_recursos_codigo = partida_recursos_codigo;

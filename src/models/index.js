@@ -9,6 +9,7 @@ import Municipio from './Municipio.js';
 import EjercicioMes from './moduloEjercicios/EjercicioMes.js';
 import PartidaGasto from './partidas/PartidaGasto.js';
 import PartidaRecurso from './partidas/PartidaRecurso.js';
+import PartidaRecursoAuditoria from './partidas/PartidaRecursoAuditoria.js';
 import Recurso from './moduloCargaDatos/Recurso.js';
 import Gasto from './moduloCargaDatos/Gasto.js';
 import Archivo from './moduloCargaDatos/Archivo.js';
@@ -218,6 +219,7 @@ export {
   Archivo,
   PartidaGasto,
   PartidaRecurso, 
+  PartidaRecursoAuditoria,
   SituacionRevista,
   PartidaEconomico,
   EconomicoGasto,

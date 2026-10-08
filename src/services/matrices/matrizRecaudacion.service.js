@@ -147,6 +147,7 @@ export const listarPendientesRecaudacion = async (query) => {
                 UPPER(TRIM(TRAILING '.' FROM TRIM(REGEXP_REPLACE(REPLACE(partidas_recursos_descripcion, '°', 'º'), '[[:space:]]+', ' ')))) AS descripcion_normalizada
            FROM ovif_partidas_recursos
           WHERE partidas_recursos_carga = 1
+            AND activo = 1
           ORDER BY partidas_recursos_codigo`
       )
     : [[]];
@@ -219,7 +220,7 @@ export const crearMatrizRecaudacion = async (datos, usuarioId) => {
 
   return sequelize.transaction(async (transaction) => {
     await validarMunicipioExiste(municipio_id);
-    await validarPartidaImputable(partida_recursos_codigo);
+    await validarPartidaImputable(partida_recursos_codigo, transaction);
 
     const existente = await buscarPorClaveNormalizada(municipio_id, codigo_tributo, descripcion_tributo, transaction);
     if (existente) {
@@ -274,7 +275,7 @@ export const crearLoteMatrizRecaudacion = async (filas, usuarioId) => {
         municipiosValidados.add(municipio_id);
       }
       if (!partidasValidadas.has(partida_recursos_codigo)) {
-        await validarPartidaImputable(partida_recursos_codigo);
+        await validarPartidaImputable(partida_recursos_codigo, transaction);
         partidasValidadas.add(partida_recursos_codigo);
       }
 
@@ -321,7 +322,12 @@ export const actualizarMatrizRecaudacion = async (id, datos, usuarioId) => {
       throw new MatrizError(404, "La correspondencia indicada no existe");
     }
 
-    await validarPartidaImputable(partida_recursos_codigo);
+    // Si la partida no cambia no se revalida: editar las observaciones de
+    // una correspondencia existente no debe depender del estado actual de
+    // su partida.
+    if (partida_recursos_codigo !== registro.partida_recursos_codigo) {
+      await validarPartidaImputable(partida_recursos_codigo, transaction);
+    }
 
     const partidaAnterior = registro.partida_recursos_codigo;
     registro.partida_recursos_codigo = partida_recursos_codigo;
