@@ -1,5 +1,6 @@
 import { ConceptoRecaudacion, PartidaRecurso, Recaudacion, RecaudacionRectificada } from "../models/index.js";
 import { Op } from "sequelize";
+import sequelize from "../config/db.js";
 import { ConceptosRecaudacionSchema } from "../validation/ConceptosRecaudacionSchema.validation.js";
 import { zodErrorsToArray } from "../utils/zodErrorMessages.js";
 
@@ -110,21 +111,32 @@ export const crearConcepto = async (req, res) => {
             }
         }
 
-        if (cod_recurso) {
-            const recurso = await PartidaRecurso.findOne({ where: { partidas_recursos_codigo: cod_recurso } })
-            if (!recurso) {
-                return res.status(400).json({ error: "No existe el recurso seleccionado" });
+        // La partida se lee con bloqueo compartido dentro de la misma
+        // transacción que el alta: una baja concurrente en el ABM de partidas
+        // (FOR UPDATE) queda serializada y ve este concepto.
+        const resultado = await sequelize.transaction(async (transaction) => {
+            if (cod_recurso) {
+                const recurso = await PartidaRecurso.findOne({
+                    where: { partidas_recursos_codigo: cod_recurso },
+                    transaction,
+                    lock: transaction.LOCK.SHARE,
+                });
+                if (!recurso) return { error: "No existe el recurso seleccionado" };
+                if (!recurso.activo) return { error: "La partida de recursos seleccionada está dada de baja" };
             }
-            if (!recurso.activo) {
-                return res.status(400).json({ error: "La partida de recursos seleccionada está dada de baja" });
-            }
-        }
 
-        const concepto = await ConceptoRecaudacion.create({
-            descripcion: descripcion,
-            cod_concepto: cod_concepto,
-            cod_recurso: cod_recurso ?? null
-        })
+            const concepto = await ConceptoRecaudacion.create({
+                descripcion: descripcion,
+                cod_concepto: cod_concepto,
+                cod_recurso: cod_recurso ?? null
+            }, { transaction });
+            return { concepto };
+        });
+
+        if (resultado.error) {
+            return res.status(400).json({ error: resultado.error });
+        }
+        const { concepto } = resultado;
 
         return res.json({
             message: "Concepto creado correctamente",
@@ -167,18 +179,6 @@ export const actualizarConcepto = async (req, res) => {
             return res.status(400).json({ error: zodErrorsToArray(valid.error.issues).join(',') })
         }
 
-        if (cod_recurso) {
-            const recurso = await PartidaRecurso.findOne({ where: { partidas_recursos_codigo: cod_recurso } })
-            if (!recurso) {
-                return res.status(400).json({ error: "No existe el recurso seleccionado" });
-            }
-            // Solo se exige partida activa si cambia: mantener la partida
-            // actual de un concepto no depende de su estado.
-            if (!recurso.activo && Number(cod_recurso) !== concepto.cod_recurso) {
-                return res.status(400).json({ error: "La partida de recursos seleccionada está dada de baja" });
-            }
-        }
-
         if (descripcion && descripcion !== concepto.descripcion) {
             const conceptoDuplicado = await ConceptoRecaudacion.findOne({ where: { descripcion: descripcion } });
 
@@ -199,9 +199,32 @@ export const actualizarConcepto = async (req, res) => {
             concepto.cod_concepto = cod_concepto;
         }
 
-        if (cod_recurso != undefined && cod_recurso != null) concepto.cod_recurso = cod_recurso;
-        if (cod_recurso === null) concepto.cod_recurso = null;
-        await concepto.save();
+        // Mismo criterio que el alta: la partida se valida con bloqueo
+        // compartido en la transacción del guardado.
+        const errorPartida = await sequelize.transaction(async (transaction) => {
+            if (cod_recurso) {
+                const recurso = await PartidaRecurso.findOne({
+                    where: { partidas_recursos_codigo: cod_recurso },
+                    transaction,
+                    lock: transaction.LOCK.SHARE,
+                });
+                if (!recurso) return "No existe el recurso seleccionado";
+                // Solo se exige partida activa si cambia: mantener la partida
+                // actual de un concepto no depende de su estado.
+                if (!recurso.activo && Number(cod_recurso) !== concepto.cod_recurso) {
+                    return "La partida de recursos seleccionada está dada de baja";
+                }
+            }
+
+            if (cod_recurso != undefined && cod_recurso != null) concepto.cod_recurso = cod_recurso;
+            if (cod_recurso === null) concepto.cod_recurso = null;
+            await concepto.save({ transaction });
+            return null;
+        });
+
+        if (errorPartida) {
+            return res.status(400).json({ error: errorPartida });
+        }
         concepto.modificable = modificable;
 
         return res.json({
