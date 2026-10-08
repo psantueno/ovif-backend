@@ -83,7 +83,7 @@ El pedido tiene que cubrir **exactamente** las referencias actuales; si no, 409 
 | Método y ruta | Uso |
 | --- | --- |
 | `GET /select?imputables=1&incluir=<codigo>` | Catálogo para selects: solo activas; `incluir` agrega una inactiva para mostrar el valor actual en un diálogo |
-| `GET /` | Listado paginado (`search`, `estado`, `imputable`) con `en_uso`, `codigo_editable`, `referencias`, `hijas_activas` |
+| `GET /` | Listado paginado (`search`, `estado`, `imputable`) con `en_uso`, `codigo_editable`, `referencias`, `hijas_activas`. Con `todas=1` devuelve el catálogo completo sin paginar (tope 2000); es lo que usa la pantalla, que muestra un árbol y filtra en el cliente |
 | `POST /` | Alta |
 | `PUT /:codigo` | Modificación, con `original` |
 | `PATCH /:codigo/estado` | Baja o reactivación, con `original` |
