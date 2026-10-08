@@ -423,6 +423,14 @@ export const actualizarPartida = async (codigo, datos, usuarioId) =>
         throw new PartidaRecursoError(409, `Ya existe la partida ${nuevoCodigo}`);
       }
       padre = derivarPadre(nuevoCodigo);
+      // Ej.: 13200000 → 13210000. El padre derivado sería la propia fila, que
+      // tras el UPDATE deja de existir: la partida quedaría huérfana.
+      if (padre === codigo) {
+        throw new PartidaRecursoError(
+          409,
+          `El código ${nuevoCodigo} corresponde a una desagregación de la propia partida ${codigo}. Para desagregarla creá una partida nueva del nivel inferior.`
+        );
+      }
       if (padre !== antes.padre) {
         await validarPadreParaHija(padre, transaction);
       }

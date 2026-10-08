@@ -48,7 +48,7 @@ Principio: **nunca dejar una correspondencia de matriz o un concepto apuntando a
 | Operación | Regla |
 | --- | --- |
 | Alta | Código nuevo y válido; padre derivado existente y activo. **No** se crea una hija bajo un padre imputable: eso es "Abrir partida" |
-| Cambio de código | Solo si la partida nunca fue usada: ni en matrices, ni en sus historiales, ni en conceptos, ni en legacy, ni en clasificación económica, ni como padre de otra partida |
+| Cambio de código | Nunca a un código cuyo padre derivado sea la propia partida (13200000 → 13210000 la dejaría huérfana). Solo si la partida nunca fue usada: ni en matrices, ni en sus historiales, ni en conceptos, ni en legacy, ni en clasificación económica, ni como padre de otra partida |
 | Cambio de descripción | Permitido; la UI confirma si está en uso porque las matrices muestran la descripción vigente |
 | `carga` 1 → 0 | Bloqueado mientras la usen matrices o conceptos |
 | `carga` 0 → 1 | Bloqueado si tiene hijas activas |
@@ -76,6 +76,7 @@ El pedido tiene que cubrir **exactamente** las referencias actuales; si no, 409 
 - **Auditoría de solo inserción.** `ovif_partidas_recursos_auditoria` tiene triggers que abortan `UPDATE` y `DELETE`. Nunca la reescribas. El historial de una partida se arma con `reconstruirHistorialPartida`: sigue los cambios de código hacia atrás por `partida_codigo_anterior`, cortando por `id`, para no mezclar un código reutilizado.
 - **Todo cambio de partida pasa por el servicio**, en transacción, con `FOR UPDATE` sobre la fila y la auditoría en la misma transacción. Nada de `UPDATE` directos sobre `ovif_partidas_recursos`: un cambio hecho por fuera no queda auditado.
 - **No se borran partidas físicamente.**
+- **Conceptos de recaudación:** el alta y la edición validan la partida dentro de una transacción con `LOCK.SHARE`, igual que las matrices.
 - **`validarPartidaImputable(codigo, transaction)` se llama siempre con la transacción.** Lee la partida con `LOCK IN SHARE MODE`; así una baja o un "quitar imputable" concurrente (que toma `FOR UPDATE`) queda serializado y ve la asignación. Sin la transacción vuelve la carrera que dejaba correspondencias inválidas.
 - Al actualizar una correspondencia **sin cambiar su partida** no se revalida la partida: editar observaciones no debe depender del estado de la partida.
 - **Concurrencia por valores originales:** `PUT`, `PATCH .../estado` y la apertura reciben `original` (descripción, sl, carga, activo tal como se leyeron) y responden 409 con `detalle.motivo = "concurrencia"` si la fila cambió.
