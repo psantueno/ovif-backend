@@ -193,6 +193,7 @@ const conTransaccion = (fn) =>
 // ---------------------------------------------------------------------------
 
 const COLUMNA_CODIGO = "`PartidaRecurso`.`partidas_recursos_codigo`";
+const LIMITE_CATALOGO_COMPLETO = 2000;
 
 const ATRIBUTOS_LISTADO = {
   include: [
@@ -268,19 +269,23 @@ export const listarPartidas = async (query = {}) => {
     where[Op.or] = condiciones;
   }
 
+  // ?todas=1 devuelve el catálogo completo (129 filas a 2026-10): la pantalla
+  // lo muestra como árbol y filtra en el cliente, y la paginación cortaría la
+  // jerarquía. El tope evita respuestas desmedidas si el catálogo creciera.
+  const todas = query.todas === "1" || query.todas === "true";
   const { rows, count } = await PartidaRecurso.findAndCountAll({
     where,
     attributes: ATRIBUTOS_LISTADO,
     order: [["partidas_recursos_codigo", "ASC"]],
-    limit: limite,
-    offset,
+    limit: todas ? LIMITE_CATALOGO_COMPLETO : limite,
+    offset: todas ? 0 : offset,
   });
 
   return {
     total: count,
-    pagina,
-    limite,
-    totalPaginas: limite > 0 ? Math.ceil(count / limite) : 0,
+    pagina: todas ? 1 : pagina,
+    limite: todas ? LIMITE_CATALOGO_COMPLETO : limite,
+    totalPaginas: todas ? 1 : limite > 0 ? Math.ceil(count / limite) : 0,
     data: rows.map(presentarFila),
   };
 };
