@@ -54,7 +54,7 @@ const DESCRIPCION_USOS = {
   matriz_recursos: "correspondencias de la matriz de recursos",
   matriz_recaudacion: "correspondencias de la matriz de recaudación",
   conceptos: "conceptos de recaudación",
-  hijas: "partidas hijas",
+  hijas: "partidas de su desagregación",
   historial_matriz_recursos: "el historial de la matriz de recursos",
   historial_matriz_recaudacion: "el historial de la matriz de recaudación",
   carga_historica: "la carga histórica de recursos",
@@ -146,7 +146,7 @@ const validarPadreParaHija = async (padre, transaction) => {
   if (filaPadre.partidas_recursos_carga) {
     throw new PartidaRecursoError(
       409,
-      `La partida padre ${padre} es imputable. Para crearle aperturas usá "Abrir partida", que reasigna sus correspondencias.`
+      `La partida padre ${padre} es imputable. Para desagregarla usá "Abrir partida", que reasigna sus correspondencias.`
     );
   }
   return filaPadre;
@@ -438,7 +438,7 @@ export const actualizarPartida = async (codigo, datos, usuarioId) =>
     if (!antes.carga && datos.partidas_recursos_carga && usos.hijas_activas > 0) {
       throw new PartidaRecursoError(
         409,
-        `No se puede marcar como imputable: la partida tiene ${usos.hijas_activas} hija(s) activa(s) y es una partida agrupadora.`,
+        `No se puede marcar como imputable: la partida posee desagregación activa (${usos.hijas_activas} partida(s) del nivel inferior).`,
         { motivo: "tiene_hijas", usos }
       );
     }
@@ -496,7 +496,7 @@ export const cambiarEstadoPartida = async (codigo, datos, usuarioId) =>
       if (usos.hijas_activas > 0) {
         throw new PartidaRecursoError(
           409,
-          `No se puede dar de baja: la partida tiene ${usos.hijas_activas} hija(s) activa(s). Dalas de baja primero.`,
+          `No se puede dar de baja: la partida posee desagregación activa (${usos.hijas_activas} partida(s) del nivel inferior). Dalas de baja primero.`,
           { motivo: "tiene_hijas", usos }
         );
       }
@@ -561,7 +561,7 @@ export const abrirPartida = async (codigo, datos, usuarioId) =>
     if (!padre.partidas_recursos_carga) {
       throw new PartidaRecursoError(
         409,
-        `La partida ${codigo} ya es agrupadora. Sus hijas se crean con el alta común.`
+        `La partida ${codigo} no es imputable. Su desagregación se crea con el alta común ("Agregar desagregación").`
       );
     }
     if (!admiteHijas(codigo)) {
@@ -572,7 +572,7 @@ export const abrirPartida = async (codigo, datos, usuarioId) =>
     const codigosHijas = datos.hijas.map((hija) => hija.partidas_recursos_codigo);
     const fueraDeLaPartida = codigosHijas.filter((hijaCodigo) => derivarPadre(hijaCodigo) !== codigo);
     if (fueraDeLaPartida.length) {
-      throw new PartidaRecursoError(400, `Estos códigos no corresponden a hijas de ${codigo}: ${fueraDeLaPartida.join(", ")}.`);
+      throw new PartidaRecursoError(400, `Estos códigos no corresponden al nivel inferior de ${codigo}: ${fueraDeLaPartida.join(", ")}.`);
     }
     const existentes = await PartidaRecurso.findAll({
       where: { partidas_recursos_codigo: codigosHijas },
@@ -723,7 +723,7 @@ export const abrirPartida = async (codigo, datos, usuarioId) =>
 
     // 5. Auditoría como un único evento
     const resumen =
-      `${observacion}: ${hijasCreadas.length} hija(s), ` +
+      `${observacion}: ${hijasCreadas.length} partida(s) de desagregación, ` +
       `${reasignaciones.recursos.length} correspondencia(s) de recursos, ` +
       `${reasignaciones.recaudacion.length} de recaudación y ${conceptos.length} concepto(s) reasignados.` +
       (datos.observaciones ? ` ${datos.observaciones}` : "");

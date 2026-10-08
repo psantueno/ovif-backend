@@ -2,17 +2,20 @@
 applyTo: "src/controllers/partidas-recursos.controller.js,src/routes/partidasRecursos.routes.js,src/services/partidasRecursos.service.js,src/services/matrices/**,src/models/partidas/**,src/models/matrices/**,src/utils/partidasRecursos.js,src/validation/PartidasRecursosSchema.validation.js,src/validation/MatricesSchema.validation.js,src/controllers/matrices.controller.js,src/controllers/conceptosRecaudacion.controller.js,scripts/sql/*partidas*,scripts/sql/*matrices*,tests/partidasRecursos.test.js"
 ---
 
-# Catálogo de partidas de recursos (`ovif_partidas_recursos`) y su ABM
+# Clasificador de Recursos por Rubros (`ovif_partidas_recursos`) y su ABM
 
 Este archivo da el contexto para modificar el catálogo de partidas de recursos, su ABM y todo lo que depende de él (matrices de homogeneización y conceptos de recaudación). Leelo entero antes de tocar cualquiera de esos archivos: casi todas las reglas existen para no dejar referencias inválidas.
 
-## Qué es el catálogo
+## Qué es el clasificador
 
 Es la lista de partidas provinciales con la que OVIF clasifica los recursos que informan los municipios: 129 partidas al 2026-10, 87 imputables. Es una adaptación municipal del clasificador de recursos por rubro del *Manual de Clasificaciones Presupuestarias para el Sector Público Provincial* de Neuquén (2011).
 
 ### Estructura del código
 
-8 dígitos: `TT C K SS 00` = tipo (2) + clase (1) + concepto (1) + subconcepto (2) + `00` fijo.
+En la UI y en los mensajes al usuario se habla de **desagregación**, no de "hijas": "Desagrega en 3 clases", "Sin desagregación", "posee desagregación". En el código y en este archivo, "hija" = partida del nivel inferior.
+
+
+8 dígitos: `TT C K SS 00`. El manual define 6: tipo (2) + clase (1) + concepto (1) + subconcepto (2). El `00` final es una convención de OVIF que se ve en los datos; el manual no la establece.
 
 - El padre se **deduce** del código poniendo en cero el último campo no nulo: `11310100 → 11310000 → 11300000 → 11000000 → 0`. Nunca se edita a mano.
 - El subconcepto (nivel 4) no admite hijas.
