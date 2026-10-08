@@ -44,19 +44,30 @@ export const validarMunicipioExiste = async (municipioId) => {
 };
 
 /**
- * Valida que la partida exista y sea imputable (partidas_recursos_carga=1):
- * no se puede homologar contra partidas padre/agregadoras.
+ * Valida que la partida exista, esté activa y sea imputable
+ * (partidas_recursos_carga=1): no se puede homologar contra partidas
+ * padre/agregadoras ni dadas de baja.
+ *
+ * Con `transaction` la lee con bloqueo compartido: así una baja o un "quitar
+ * imputable" del ABM de partidas (que bloquea la fila FOR UPDATE) espera a
+ * que esta asignación termine, o esta asignación ve el cambio ya confirmado.
+ * Sin ese bloqueo ambas operaciones podían confirmar y dejar una
+ * correspondencia apuntando a una partida no asignable.
  */
-export const validarPartidaImputable = async (partidaCodigo) => {
+export const validarPartidaImputable = async (partidaCodigo, transaction = null) => {
   const id = Number(partidaCodigo);
   if (!Number.isInteger(id) || id <= 0) {
     throw new MatrizError(400, "La partida indicada no es válida");
   }
   const partida = await PartidaRecurso.findByPk(id, {
-    attributes: ["partidas_recursos_codigo", "partidas_recursos_descripcion", "partidas_recursos_carga"],
+    attributes: ["partidas_recursos_codigo", "partidas_recursos_descripcion", "partidas_recursos_carga", "activo"],
+    ...(transaction ? { transaction, lock: transaction.LOCK.SHARE } : {}),
   });
   if (!partida) {
     throw new MatrizError(404, "La partida indicada no existe");
+  }
+  if (!partida.activo) {
+    throw new MatrizError(400, "La partida indicada está dada de baja");
   }
   if (!partida.partidas_recursos_carga) {
     throw new MatrizError(400, "La partida indicada no es imputable (es una partida padre/agregadora)");

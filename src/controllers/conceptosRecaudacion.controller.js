@@ -115,6 +115,9 @@ export const crearConcepto = async (req, res) => {
             if (!recurso) {
                 return res.status(400).json({ error: "No existe el recurso seleccionado" });
             }
+            if (!recurso.activo) {
+                return res.status(400).json({ error: "La partida de recursos seleccionada está dada de baja" });
+            }
         }
 
         const concepto = await ConceptoRecaudacion.create({
@@ -168,6 +171,11 @@ export const actualizarConcepto = async (req, res) => {
             const recurso = await PartidaRecurso.findOne({ where: { partidas_recursos_codigo: cod_recurso } })
             if (!recurso) {
                 return res.status(400).json({ error: "No existe el recurso seleccionado" });
+            }
+            // Solo se exige partida activa si cambia: mantener la partida
+            // actual de un concepto no depende de su estado.
+            if (!recurso.activo && Number(cod_recurso) !== concepto.cod_recurso) {
+                return res.status(400).json({ error: "La partida de recursos seleccionada está dada de baja" });
             }
         }
 
