@@ -265,6 +265,7 @@ export const getMunicipios = async (req, res) => {
           municipio_ubge: m.municipio_ubge,
           municipio_subir_archivos: m.municipio_subir_archivos,
           municipio_poblacion: m.municipio_poblacion,
+          municipio_categoria: m.municipio_categoria,
           modificable: modificable
         };
       })
@@ -617,15 +618,17 @@ export const createMunicipio = async (req, res) => {
     municipio_ubge,
     municipio_subir_archivos,
     municipio_poblacion,
+    municipio_categoria,
   } = req.body;
 
   try {
-    const valid = MunicipiosSchema.safeParse({ 
+    const valid = MunicipiosSchema.safeParse({
       municipio_nombre,
       municipio_spar,
       municipio_ubge,
       municipio_subir_archivos,
-      municipio_poblacion, 
+      municipio_poblacion,
+      municipio_categoria,
     });
 
     if (!valid.success) {
@@ -646,6 +649,7 @@ export const createMunicipio = async (req, res) => {
       municipio_ubge,
       municipio_subir_archivos,
       municipio_poblacion,
+      municipio_categoria,
     });
 
     res.status(201).json({
@@ -667,6 +671,7 @@ export const updateMunicipio = async (req, res) => {
     municipio_ubge,
     municipio_subir_archivos,
     municipio_poblacion,
+    municipio_categoria,
   } = req.body;
 
   try {
@@ -676,12 +681,13 @@ export const updateMunicipio = async (req, res) => {
       return res.status(404).json({ error: "Municipio no encontrado" });
     }
 
-    const valid = MunicipiosSchema.safeParse({ 
+    const valid = MunicipiosSchema.safeParse({
       municipio_nombre,
       municipio_spar,
       municipio_ubge,
       municipio_subir_archivos,
-      municipio_poblacion, 
+      municipio_poblacion,
+      municipio_categoria,
     });
 
     if (!valid.success) {
@@ -710,6 +716,7 @@ export const updateMunicipio = async (req, res) => {
     if (municipio_subir_archivos !== undefined)
       municipio.municipio_subir_archivos = municipio_subir_archivos;
     if (municipio_poblacion !== undefined) municipio.municipio_poblacion = municipio_poblacion;
+    if (municipio_categoria !== undefined) municipio.municipio_categoria = municipio_categoria;
 
     await municipio.save();
 

@@ -40,6 +40,8 @@ import matricesRoutes from "./routes/matrices.routes.js";
 
 // === Importación de CRON cierre automático del ejercicio/mes ===
 import "./cron/cierreAutomatico.js";
+// === Importación de CRON recordatorio previo al cierre ===
+import "./cron/recordatorioCierre.js";
 
 
 // Cargar variables de entorno

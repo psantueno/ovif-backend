@@ -9,6 +9,7 @@
  *
  * Funciones exportadas:
  *   - encolarEnvioCierreModulos()  → Encola notificación de cierre de módulos
+ *   - encolarRecordatorioCierre()  → Encola recordatorio previo al vencimiento de una pauta
  *   - procesarMailsPendientes()    → Procesa lote de correos pendientes con retry
  *   - sendResetMail()              → Envía correo de restablecimiento de contraseña
  */
@@ -345,6 +346,122 @@ export async function encolarNotificacionSolicitudProrroga({ tipo, destinatario,
 
     throw error;
   }
+}
+
+// ─── Recordatorio de cierre ──────────────────────────────────────────────────
+
+const formatearFechaDDMMYYYY = (fechaISO) => {
+  const match = String(fechaISO ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "Sin especificar";
+};
+
+// Quita saltos de línea para que ningún dato pueda alterar los headers del mail.
+const sanitizarAsunto = (texto) => String(texto ?? "").replace(/[\r\n]+/g, " ").trim().substring(0, 255);
+
+export const armarAsuntoRecordatorioCierre = (prefijo, { ejercicio, mes, fecha_cierre }, modulos) =>
+  sanitizarAsunto(
+    `${prefijo} Recordatorio: vence el ${formatearFechaDDMMYYYY(fecha_cierre)} la carga de ${modulos.map(getModuloCierreLabel).join(", ")} - ${obtenerNombreMes(mes)} ${ejercicio}`
+  );
+
+const armarPayloadRecordatorioCierre = ({ nombre, municipioNombre, periodo, modulos }) => ({
+  nombre,
+  municipio: municipioNombre,
+  ejercicio: periodo.ejercicio,
+  mes: periodo.mes,
+  modulos,
+  fecha_cierre: periodo.fecha_cierre,
+  tiene_prorroga: Boolean(periodo.tiene_prorroga),
+});
+
+/**
+ * Clave idempotente del recordatorio: un único mail por destinatario, municipio,
+ * pauta del período y fecha de cierre efectiva. Si una prórroga cambia la fecha,
+ * corresponde un recordatorio nuevo para la nueva fecha.
+ */
+export function calcularClaveRecordatorioCierre({ destinatario, municipioId, periodo }) {
+  const raw = [
+    "RECORDATORIO_CIERRE",
+    String(destinatario ?? "").trim().toLowerCase(),
+    municipioId,
+    periodo.ejercicio,
+    periodo.mes,
+    periodo.convenio_id ?? "null",
+    periodo.pauta_id ?? "null",
+    periodo.fecha_cierre,
+  ].join("|");
+  return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+/**
+ * Encola el recordatorio de vencimiento de una pauta para un destinatario.
+ * Idempotente: si ya existe devuelve el registro existente con created: false.
+ *
+ * @param {object} params
+ * @param {string} params.destinatario
+ * @param {string} params.nombre
+ * @param {number} params.municipioId
+ * @param {string} params.municipioNombre
+ * @param {object} params.periodo - período regular (ejercicio, mes, convenio_id, pauta_id, fecha_cierre, tiene_prorroga)
+ * @param {string[]} params.modulos
+ * @returns {Promise<{ correo: EnvioCorreo, created: boolean }>}
+ */
+export async function encolarRecordatorioCierre({ destinatario, nombre, municipioId, municipioNombre, periodo, modulos }) {
+  const modulosNormalizados = [...modulos].sort();
+  const idempotencyKey = calcularClaveRecordatorioCierre({ destinatario, municipioId, periodo });
+
+  const datos = {
+    idempotency_key: idempotencyKey,
+    tipo: "RECORDATORIO_CIERRE",
+    destinatario,
+    nombre_destinatario: nombre,
+    asunto: armarAsuntoRecordatorioCierre("[OVIF - APP]", periodo, modulosNormalizados),
+    payload: armarPayloadRecordatorioCierre({ nombre, municipioNombre, periodo, modulos: modulosNormalizados }),
+    estado: "PENDIENTE",
+    next_retry_at: new Date(),
+  };
+
+  try {
+    const correo = await EnvioCorreo.create(datos);
+    return { correo, created: true };
+  } catch (error) {
+    if (!(error instanceof UniqueConstraintError) && error?.name !== "SequelizeUniqueConstraintError") {
+      throw error;
+    }
+
+    const existente = await EnvioCorreo.findOne({ where: { idempotency_key: idempotencyKey } });
+    if (existente) {
+      return { correo: existente, created: false };
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Encola una muestra del recordatorio (tipo RECORDATORIO_CIERRE_TEST) para EMAIL_TEST.
+ * La clave incluye un UUID: no interfiere con la idempotencia de los envíos reales.
+ */
+export async function encolarRecordatorioCierreTest({ destinatario, nombre, municipioNombre, periodo, modulos, fechaReferencia = null }) {
+  const modulosNormalizados = [...modulos].sort();
+  const raw = `RECORDATORIO_CIERRE_TEST|${destinatario}|${periodo.ejercicio}|${periodo.mes}|${periodo.pauta_id}|${crypto.randomUUID()}`;
+  const idempotencyKey = crypto.createHash("sha256").update(raw).digest("hex");
+
+  const correo = await EnvioCorreo.create({
+    idempotency_key: idempotencyKey,
+    tipo: "RECORDATORIO_CIERRE_TEST",
+    destinatario,
+    nombre_destinatario: nombre,
+    asunto: armarAsuntoRecordatorioCierre("[OVIF - TEST]", periodo, modulosNormalizados),
+    payload: {
+      ...armarPayloadRecordatorioCierre({ nombre, municipioNombre, periodo, modulos: modulosNormalizados }),
+      // La muestra refleja la fecha simulada (los envíos reales calculan los días al enviar)
+      ...(fechaReferencia ? { fecha_referencia: fechaReferencia } : {}),
+    },
+    estado: "PENDIENTE",
+    next_retry_at: new Date(),
+  });
+
+  return { correo, created: true };
 }
 
 // ─── Envío directo (sin outbox) ──────────────────────────────────────────────
