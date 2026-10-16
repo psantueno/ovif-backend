@@ -370,7 +370,7 @@ export const armarAsuntoRecordatorioCierre = (prefijo, { ejercicio, mes }, modul
   const periodo = `${String(mes).padStart(2, "0")}/${ejercicio}`;
 
   return sanitizarAsunto(
-    `${ICONO_ALERTA_ASUNTO} ${prefijo} - RECORDATORIO DE VTO: ${modulosTexto} - ${periodo}`
+    `${ICONO_ALERTA_ASUNTO} ${prefijo} - RECORDATORIO DE CIERRE: ${modulosTexto} - ${periodo}`
   );
 };
 
