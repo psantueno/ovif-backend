@@ -135,7 +135,7 @@ describe("emailService — recordatorio de cierre", () => {
 
     expect(created).toBe(true);
     expect(correo.tipo).toBe("RECORDATORIO_CIERRE");
-    expect(correo.asunto).toBe("\u26A0\uFE0F [OVIF - APP] - RECORDATORIO DE VTO: GASTOS Y RECURSOS - 09/2026");
+    expect(correo.asunto).toBe("\u26A0\uFE0F [OVIF - APP] - RECORDATORIO DE CIERRE: GASTOS Y RECURSOS - 09/2026");
     expect(correo.payload).toMatchObject({ municipio: "Zapala", modulos: ["GASTOS", "RECURSOS"], fecha_cierre: "2026-10-20" });
     expect(correo.payload).not.toHaveProperty("fecha_referencia");
   });
