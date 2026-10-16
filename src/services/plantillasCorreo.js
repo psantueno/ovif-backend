@@ -242,6 +242,176 @@ function renderCierreModulos(payload) {
 };
 }
 
+// ─── Plantilla: Recordatorio de cierre ───────────────────────────────────────
+// Avisa al municipio que se acerca el vencimiento del plazo de carga de una pauta
+// (un mail por pauta, con los módulos que agrupa). Mismo encabezado y pie que el
+// aviso de cierre de módulos.
+
+const escaparHtml = (valor) =>
+  String(valor ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+// Días calendario entre dos fechas YYYY-MM-DD (sin horas ni zona horaria).
+const diasEntreFechas = (desdeISO, hastaISO) => {
+  const parse = (str) => {
+    const match = String(str ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;
+  };
+  const desde = parse(desdeISO);
+  const hasta = parse(hastaISO);
+  if (desde === null || hasta === null) return null;
+  return Math.round((hasta - desde) / 86400000);
+};
+
+const leyendaDiasRestantes = (dias) => {
+  if (dias === null || dias < 0) return "";
+  if (dias === 0) return "Hoy es el último día para realizar la carga.";
+  if (dias === 1) return "Mañana es el último día para realizar la carga.";
+  return `Faltan ${dias} días para el vencimiento.`;
+};
+
+function renderRecordatorioCierre(payload) {
+  const {
+    nombre,
+    municipio,
+    ejercicio,
+    mes,
+    modulos = [],
+    fecha_cierre: fechaCierre,
+    tiene_prorroga: tieneProrroga,
+    fecha_referencia: fechaReferencia,
+  } = payload ?? {};
+
+  const modulosLabels = (Array.isArray(modulos) ? modulos : [])
+    .map((m) => getModuloCierreLabel(m))
+    .filter(Boolean);
+  const modulosTexto = new Intl.ListFormat("es-AR", { style: "long", type: "conjunction" })
+    .format(modulosLabels);
+  const periodoTexto = `${obtenerNombreMes(Number(mes))} ${ejercicio ?? ""}`.trim();
+  const fechaCierreTexto = getDDMMYYYY(fechaCierre) ?? "Sin especificar";
+
+  // Los días se calculan al momento de enviar (un reintento posterior muestra el dato vigente).
+  const hoy = fechaReferencia ?? new Date().toLocaleDateString("sv-SE", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
+  const leyenda = leyendaDiasRestantes(diasEntreFechas(hoy, fechaCierre));
+
+  const nombreSeguro = escaparHtml(nombre);
+  const municipioSeguro = escaparHtml(municipio);
+  const modulosSeguro = escaparHtml(modulosTexto);
+  const periodoSeguro = escaparHtml(periodoTexto);
+  const fechaSegura = escaparHtml(fechaCierreTexto);
+
+  return { html: `
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background-color:#ffffff; padding:20px 0;"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="632"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="
+              max-width:632px;
+              width:632px;
+              background-color:#F4E0B6;
+              border-radius:20px;
+              overflow:hidden;
+              border-collapse:separate;
+            "
+          >
+            ${BANNER}
+            <tr>
+              <td style="font-family:Arial, sans-serif; color:#2b3e4c; padding:32px;">
+                <p style="margin-top:0;">Hola ${nombreSeguro},</p>
+                <p>
+                  Le recordamos que el plazo de entrega de información del período
+                  <b>${periodoSeguro}</b>, correspondiente ${modulosLabels.length === 1 ? "al módulo" : "a los módulos"}
+                  <b>${modulosSeguro}</b>, vence el <b>${fechaSegura}</b>.
+                </p>
+                ${leyenda ? `<p style="font-weight:bold;">${escaparHtml(leyenda)}</p>` : ""}
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="
+                    max-width:565px;
+                    background:#2b3e4c;
+                    color:#ffffff;
+                    border-radius:8px;
+                    overflow:hidden;
+                    margin:20px auto;
+                  "
+                >
+                  ${municipioSeguro ? `
+                  <tr>
+                    <td style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Municipio</div>
+                      <div style="font-size:20px; font-weight:700;">${municipioSeguro}</div>
+                    </td>
+                  </tr>` : ""}
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Período</div>
+                      <div style="font-size:20px; font-weight:700;">${periodoSeguro}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Módulo/s</div>
+                      <div style="font-size:20px; font-weight:700;">${modulosSeguro}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:14px 20px;">
+                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Fecha de vencimiento${tieneProrroga ? " (con prórroga)" : ""}</div>
+                      <div style="font-size:20px; font-weight:700;">${fechaSegura}</div>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:16px 0;">
+                  Puede realizar la carga ingresando a la
+                  <a
+                    href="https://ovif.economianqn.gob.ar"
+                    style="color:#1a73e8; text-decoration:none; font-weight:bold;"
+                    target="_blank"
+                  >
+                    OVIF
+                  </a>
+                </p>
+                <p style="margin-top:24px; font-size:13px; color:#6b7280;">
+                  Este mensaje fue generado automáticamente por OVIF - APP.
+                  Por favor, no responder este correo.
+                </p>
+              </td>
+            </tr>
+            ${FOOTER}
+          </table>
+        </td>
+      </tr>
+    </table>`,
+    attachments: [
+      { filename: "ovif-logo.png", path: "./src/assets/emails/ovif-logo.png", cid: "ovif-logo" },
+      { filename: "gobierno-logo.png", path: "./src/assets/emails/gobierno-logo.png", cid: "gobierno-logo" },
+      { filename: "neuquen-logo.png", path: "./src/assets/emails/neuquen-logo.png", cid: "neuquen-logo" },
+    ],
+  };
+}
+
 // ─── Plantilla: Restablecimiento de contraseña ──────────────────────────────
 // Envía un botón con enlace de reset válido por 1 hora.
 function renderResetPassword(payload) {
@@ -780,6 +950,8 @@ function renderSolicitudProrrogaRechazada(payload) {
 const renderers = {
   CIERRE_MODULOS: renderCierreModulos,
   CIERRE_MODULOS_TEST: renderCierreModulos,
+  RECORDATORIO_CIERRE: renderRecordatorioCierre,
+  RECORDATORIO_CIERRE_TEST: renderRecordatorioCierre,
   RESET_PASSWORD: renderResetPassword,
   SOLICITUD_PRORROGA_CREADA: renderSolicitudProrrogaCreada,
   SOLICITUD_PRORROGA_CANCELADA: renderSolicitudProrrogaCancelada,

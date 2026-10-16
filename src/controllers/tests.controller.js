@@ -17,7 +17,19 @@ import {
   generarNumero,
 } from "../services/cierreService.js";
 import { renderizarCorreoHtml } from "../services/plantillasCorreo.js";
-import { encolarMailTestCierre, procesarMailsPendientes } from "../services/emailService.js";
+import {
+  encolarMailTestCierre,
+  procesarMailsPendientes,
+  armarAsuntoRecordatorioCierre,
+  calcularClaveRecordatorioCierre,
+  encolarRecordatorioCierreTest,
+} from "../services/emailService.js";
+import { SimularRecordatorioCierreSchema } from "../validation/TestsRecordatorioCierreSchema.validation.js";
+import { obtenerConfigRecordatorioCierre } from "../utils/parametrosSistema.js";
+import { obtenerFechaActual } from "../utils/obtenerFechaActual.js";
+import { obtenerRecordatorios } from "../services/recordatorioCierreService.js";
+
+const MAX_MUESTRAS_RECORDATORIO = 5;
 
 const MESES = {
   1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
@@ -224,5 +236,185 @@ export const simularCierreModulos = async (req, res) => {
   } catch (error) {
     console.error("❌ Error en simulación de cierre de módulos:", error);
     return res.status(500).json({ error: "Error interno al simular el cierre de módulos" });
+  }
+};
+
+// Simula el recordatorio de cierre para una fecha: lista qué se enviaría y a quién,
+// sin escribir en la cola real. Con enviar_mail, envía muestras (tipo _TEST) sólo a EMAIL_TEST.
+export const simularRecordatorioCierre = async (req, res) => {
+  const result = SimularRecordatorioCierreSchema.safeParse(req.body ?? {});
+  if (!result.success) {
+    return res.status(400).json({ error: zodErrorsToArray(result.error.issues).join(", ") });
+  }
+
+  const { municipio_id, enviar_mail } = result.data;
+  const fechaReferencia = result.data.fecha_referencia ?? obtenerFechaActual();
+
+  try {
+    const config = await obtenerConfigRecordatorioCierre();
+    const diasPrevios = result.data.dias_previos ?? config.diasPrevios;
+
+    if (!diasPrevios) {
+      return res.status(400).json({
+        error: "No hay un valor válido configurado para los días previos. Indique dias_previos o corrija el parámetro.",
+      });
+    }
+
+    if (municipio_id) {
+      const municipio = await Municipio.findByPk(municipio_id, { attributes: ["municipio_id"] });
+      if (!municipio) {
+        return res.status(404).json({ error: "Municipio no encontrado" });
+      }
+    }
+
+    const items = await obtenerRecordatorios({
+      fechaReferencia,
+      diasPrevios,
+      municipioId: municipio_id ?? null,
+    });
+
+    // Estado de envío real (si ya existe el recordatorio en la cola) por destinatario
+    const clavesPorItem = items.map((item) =>
+      item.destinatarios.map((dest) =>
+        calcularClaveRecordatorioCierre({
+          destinatario: dest.email,
+          municipioId: item.municipio_id,
+          periodo: item.periodo,
+        })
+      )
+    );
+    const todasLasClaves = clavesPorItem.flat();
+    const existentes = todasLasClaves.length
+      ? await EnvioCorreo.findAll({
+          where: { idempotency_key: todasLasClaves },
+          attributes: ["idempotency_key", "estado"],
+        })
+      : [];
+    const estadoPorClave = new Map(existentes.map((c) => [c.idempotency_key, c.estado]));
+
+    const recordatorios = items.map((item, index) => ({
+      municipio_id: item.municipio_id,
+      municipio_nombre: item.municipio_nombre,
+      ejercicio: item.periodo.ejercicio,
+      mes: item.periodo.mes,
+      convenio_id: item.periodo.convenio_id,
+      convenio_nombre: item.periodo.convenio_nombre,
+      pauta_id: item.periodo.pauta_id,
+      pauta_descripcion: item.periodo.pauta_descripcion,
+      tipo_pauta_nombre: item.periodo.tipo_pauta_nombre,
+      modulos: item.modulos,
+      fecha_cierre: item.periodo.fecha_cierre,
+      tiene_prorroga: Boolean(item.periodo.tiene_prorroga),
+      dias_restantes: item.dias_restantes,
+      asunto: armarAsuntoRecordatorioCierre("[OVIF - APP]", item.periodo, item.modulos),
+      destinatarios: item.destinatarios.map((dest, destIndex) => {
+        const estado = estadoPorClave.get(clavesPorItem[index][destIndex]) ?? null;
+        return {
+          email: dest.email,
+          nombre: dest.nombre,
+          ya_enviado: estado === "ENVIADO",
+          estado_envio: estado,
+        };
+      }),
+    }));
+
+    // Muestras: HTML de los primeros ítems y, opcionalmente, envío a EMAIL_TEST
+    const emailTest = process.env.EMAIL_TEST;
+    const puedeEnviar = enviar_mail && !!emailTest;
+    let mailTestError = null;
+    if (enviar_mail && !emailTest) {
+      mailTestError = "EMAIL_TEST no configurado en el servidor";
+    }
+
+    const muestras = [];
+    const idsParaProcesar = [];
+
+    for (const item of items.slice(0, MAX_MUESTRAS_RECORDATORIO)) {
+      const nombre = item.destinatarios[0]?.nombre ?? item.municipio_nombre;
+      const mailData = renderizarCorreoHtml("RECORDATORIO_CIERRE_TEST", {
+        nombre,
+        municipio: item.municipio_nombre,
+        ejercicio: item.periodo.ejercicio,
+        mes: item.periodo.mes,
+        modulos: item.modulos,
+        fecha_cierre: item.periodo.fecha_cierre,
+        tiene_prorroga: Boolean(item.periodo.tiene_prorroga),
+        fecha_referencia: fechaReferencia,
+      });
+
+      const muestra = {
+        municipio_nombre: item.municipio_nombre,
+        ejercicio: item.periodo.ejercicio,
+        mes: item.periodo.mes,
+        modulos: item.modulos,
+        asunto: armarAsuntoRecordatorioCierre("[OVIF - TEST]", item.periodo, item.modulos),
+        html: mailData.html,
+      };
+
+      if (puedeEnviar) {
+        try {
+          const { correo } = await encolarRecordatorioCierreTest({
+            destinatario: emailTest,
+            nombre,
+            municipioNombre: item.municipio_nombre,
+            periodo: item.periodo,
+            modulos: item.modulos,
+            fechaReferencia,
+          });
+          idsParaProcesar.push(Number(correo.id));
+          muestra.id_envio_correo = Number(correo.id);
+          muestra.enviado = null;
+          muestra.error = null;
+        } catch (err) {
+          muestra.id_envio_correo = null;
+          muestra.enviado = false;
+          muestra.error = err.message;
+        }
+      }
+
+      muestras.push(muestra);
+    }
+
+    let resumenEnvio = null;
+    if (puedeEnviar && idsParaProcesar.length > 0) {
+      resumenEnvio = await procesarMailsPendientes({ ids: idsParaProcesar, maxAttemptsPerRun: 3 });
+
+      const correosFinales = await EnvioCorreo.findAll({
+        where: { id: idsParaProcesar },
+        attributes: ["id", "estado", "ultimo_error"],
+      });
+      const estadoPorId = new Map(correosFinales.map((c) => [Number(c.id), c]));
+
+      for (const muestra of muestras) {
+        if (muestra.id_envio_correo != null) {
+          const correo = estadoPorId.get(muestra.id_envio_correo);
+          muestra.enviado = correo?.estado === "ENVIADO";
+          muestra.error = correo?.estado !== "ENVIADO" ? (correo?.ultimo_error ?? "Error desconocido") : null;
+        }
+      }
+    }
+
+    return res.json({
+      config: {
+        habilitado: config.habilitado,
+        dias_previos: config.diasPrevios,
+        horario: config.horario,
+        motivo: config.motivo,
+      },
+      fecha_referencia: fechaReferencia,
+      dias_previos: diasPrevios,
+      recordatorios,
+      mail_test: {
+        destinatario_test: puedeEnviar ? emailTest : null,
+        total_recordatorios: items.length,
+        max_muestras: MAX_MUESTRAS_RECORDATORIO,
+        muestras,
+        ...(resumenEnvio !== null ? { resumen_envio: resumenEnvio } : {}),
+        ...(mailTestError ? { error: mailTestError } : {}),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error en simulación de recordatorio de cierre:", error);
+    return res.status(500).json({ error: "Error interno al simular el recordatorio de cierre" });
   }
 };

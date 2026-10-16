@@ -3,6 +3,8 @@ import { DataTypes } from "sequelize";
 import sequelize from "../config/db.js";
 
 
+export const MUNICIPIO_CATEGORIAS = ['primera', 'segunda', 'tercera', 'comunidad_fomento'];
+
 const Municipio = sequelize.define('Municipio', {
   municipio_id: {
     type: DataTypes.INTEGER,
@@ -28,6 +30,10 @@ const Municipio = sequelize.define('Municipio', {
   municipio_poblacion: {
     type: DataTypes.INTEGER,
     allowNull: false
+  },
+  municipio_categoria: {
+    type: DataTypes.ENUM(...MUNICIPIO_CATEGORIAS),
+    allowNull: true
   }
 }, {
   tableName: 'ovif_municipios',

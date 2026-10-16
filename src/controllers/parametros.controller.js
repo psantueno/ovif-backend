@@ -1,5 +1,9 @@
 import { Op } from "sequelize";
 import { Parametros, Usuario } from "../models/index.js";
+import {
+  esParametroSistema,
+  validarValorParametroSistema,
+} from "../utils/parametrosSistema.js";
 
 const toBoolean = (value, defaultValue = true) => {
   if (typeof value === "boolean") return value;
@@ -147,9 +151,14 @@ export const crearParametro = async (req, res) => {
       return res.status(400).json({ error: "Ya existe un parámetro con ese nombre" });
     }
 
+    const validacionValor = validarValorParametroSistema(nombreNormalizado, valor);
+    if (!validacionValor.ok) {
+      return res.status(400).json({ error: validacionValor.error });
+    }
+
     const parametro = await Parametros.create({
       nombre: nombreNormalizado,
-      valor: String(valor).trim(),
+      valor: validacionValor.valor,
       descripcion:
         descripcion === null || descripcion === undefined || String(descripcion).trim().length === 0
           ? null
@@ -187,6 +196,12 @@ export const actualizarParametro = async (req, res) => {
       }
 
       if (nombreNormalizado !== parametro.nombre) {
+        if (esParametroSistema(parametro.nombre)) {
+          return res.status(400).json({
+            error: "Este parámetro es utilizado por el sistema y no puede renombrarse",
+          });
+        }
+
         const existeNombre = await Parametros.findOne({ where: { nombre: nombreNormalizado } });
         if (existeNombre && existeNombre.parametro_id !== parametro.parametro_id) {
           return res.status(400).json({ error: "Ya existe un parámetro con ese nombre" });
@@ -203,6 +218,14 @@ export const actualizarParametro = async (req, res) => {
       }
       parametro.valor = valorNormalizado;
     }
+
+    // Validar el valor final contra el nombre final: cubre cambios de valor en
+    // parámetros de sistema y renombres de otro parámetro hacia un nombre de sistema.
+    const validacionValor = validarValorParametroSistema(parametro.nombre, parametro.valor);
+    if (!validacionValor.ok) {
+      return res.status(400).json({ error: validacionValor.error });
+    }
+    parametro.valor = validacionValor.valor;
 
     if (descripcion !== undefined) {
       const descripcionNormalizada = String(descripcion ?? "").trim();
