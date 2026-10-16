@@ -153,6 +153,8 @@ async function enviarCorreo(correo, { nextRetryAt = null } = {}) {
       subject: correo.asunto,
       html: mailData.html,
       attachments: mailData.attachments || [],
+      // Sólo las plantillas que lo piden (ej: recordatorio de vencimiento) salen como importantes
+      ...(mailData.priority ? { priority: mailData.priority } : {}),
     });
 
     const enviadoAt = new Date();
@@ -358,10 +360,19 @@ const formatearFechaDDMMYYYY = (fechaISO) => {
 // Quita saltos de línea para que ningún dato pueda alterar los headers del mail.
 const sanitizarAsunto = (texto) => String(texto ?? "").replace(/[\r\n]+/g, " ").trim().substring(0, 255);
 
-export const armarAsuntoRecordatorioCierre = (prefijo, { ejercicio, mes, fecha_cierre }, modulos) =>
-  sanitizarAsunto(
-    `${prefijo} Recordatorio: vence el ${formatearFechaDDMMYYYY(fecha_cierre)} la carga de ${modulos.map(getModuloCierreLabel).join(", ")} - ${obtenerNombreMes(mes)} ${ejercicio}`
+// Ícono de alerta al inicio del asunto (UTF-8: nodemailer lo codifica en el header)
+const ICONO_ALERTA_ASUNTO = "\u26A0\uFE0F";
+
+export const armarAsuntoRecordatorioCierre = (prefijo, { ejercicio, mes }, modulos) => {
+  const modulosTexto = new Intl.ListFormat("es-AR", { style: "long", type: "conjunction" })
+    .format(modulos.map(getModuloCierreLabel))
+    .toUpperCase();
+  const periodo = `${String(mes).padStart(2, "0")}/${ejercicio}`;
+
+  return sanitizarAsunto(
+    `${ICONO_ALERTA_ASUNTO} ${prefijo} - RECORDATORIO DE VTO: ${modulosTexto} - ${periodo}`
   );
+};
 
 const armarPayloadRecordatorioCierre = ({ nombre, municipioNombre, periodo, modulos }) => ({
   nombre,
