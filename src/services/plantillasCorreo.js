@@ -298,13 +298,23 @@ function renderRecordatorioCierre(payload) {
   const hoy = fechaReferencia ?? new Date().toLocaleDateString("sv-SE", {
     timeZone: "America/Argentina/Buenos_Aires",
   });
-  const leyenda = leyendaDiasRestantes(diasEntreFechas(hoy, fechaCierre));
+  const dias = diasEntreFechas(hoy, fechaCierre);
+  const leyenda = leyendaDiasRestantes(dias);
 
   const nombreSeguro = escaparHtml(nombre);
   const municipioSeguro = escaparHtml(municipio);
   const modulosSeguro = escaparHtml(modulosTexto);
   const periodoSeguro = escaparHtml(periodoTexto);
   const fechaSegura = escaparHtml(fechaCierreTexto);
+  const leyendaSegura = escaparHtml(leyenda);
+
+  const filaDetalle = (rotulo, valor, ultima = false) => `
+                    <tr>
+                      <td style="padding:12px 20px;${ultima ? "" : " border-bottom:1px solid #ead9ae;"}">
+                        <div style="font-size:12px; line-height:16px; color:#5a6b78; text-transform:uppercase; letter-spacing:0.5px;">${rotulo}</div>
+                        <div style="font-size:18px; line-height:24px; font-weight:700; color:#2b3e4c;">${valor}</div>
+                      </td>
+                    </tr>`;
 
   return { html: `
     <table
@@ -334,66 +344,80 @@ function renderRecordatorioCierre(payload) {
           >
             ${BANNER}
             <tr>
-              <td style="font-family:Arial, sans-serif; color:#2b3e4c; padding:32px;">
-                <p style="margin-top:0;">Hola ${nombreSeguro},</p>
-                <p>
+              <td style="font-family:Arial, sans-serif; color:#2b3e4c; padding:28px 32px 32px 32px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px 0;">
+                  <tr>
+                    <td style="vertical-align:middle; padding-right:12px;">
+                      <img src="cid:megafono" alt="Megáfono" width="44" height="44" style="display:block; width:44px; height:44px; border:0;">
+                    </td>
+                    <td style="vertical-align:middle; font-family:Arial, sans-serif; font-size:22px; line-height:28px; font-weight:700; color:#2b3e4c;">
+                      RECORDATORIO DE CIERRE DE MÓDULOS
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 18px 0; font-size:16px; line-height:24px;">Hola ${nombreSeguro},</p>
+                <p style="margin:0 0 20px 0; font-size:16px; line-height:24px;">
                   Le recordamos que el plazo de entrega de información del período
                   <b>${periodoSeguro}</b>, correspondiente ${modulosLabels.length === 1 ? "al módulo" : "a los módulos"}
                   <b>${modulosSeguro}</b>, vence el <b>${fechaSegura}</b>.
                 </p>
-                ${leyenda ? `<p style="font-weight:bold;">${escaparHtml(leyenda)}</p>` : ""}
+
                 <table
                   role="presentation"
                   width="100%"
                   cellpadding="0"
                   cellspacing="0"
                   border="0"
-                  style="
-                    max-width:565px;
-                    background:#2b3e4c;
-                    color:#ffffff;
-                    border-radius:8px;
-                    overflow:hidden;
-                    margin:20px auto;
-                  "
+                  style="background-color:#fffaf0; border:2px solid #E0A100; border-radius:12px; border-collapse:separate; overflow:hidden;"
                 >
-                  ${municipioSeguro ? `
                   <tr>
-                    <td style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
-                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Municipio</div>
-                      <div style="font-size:20px; font-weight:700;">${municipioSeguro}</div>
-                    </td>
-                  </tr>` : ""}
-                  <tr>
-                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
-                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Período</div>
-                      <div style="font-size:20px; font-weight:700;">${periodoSeguro}</div>
+                    <td style="background-color:#E0A100; padding:8px 20px; font-family:Arial, sans-serif; font-size:13px; line-height:18px; font-weight:700; letter-spacing:1px; color:#2b3e4c; text-transform:uppercase;">
+                      Atención &middot; Vencimiento próximo
                     </td>
                   </tr>
                   <tr>
-                    <td style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.35);">
-                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Módulo/s</div>
-                      <div style="font-size:20px; font-weight:700;">${modulosSeguro}</div>
+                    <td style="padding:20px 20px 8px 20px;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                          <td width="96" style="width:96px; vertical-align:middle;">
+                            <img src="cid:alerta-triangulo" alt="Signo de advertencia" width="88" height="88" style="display:block; width:88px; height:88px; border:0;">
+                          </td>
+                          <td style="vertical-align:middle; font-family:Arial, sans-serif; padding-left:4px;">
+                            <div style="font-size:20px; line-height:26px; font-weight:700; color:#2b3e4c;">Vence el ${fechaSegura}${tieneProrroga ? " (Prórroga)" : ""}</div>
+                            ${leyenda ? `<div style="font-size:15px; line-height:22px; color:#2b3e4c; margin-top:4px;">${leyendaSegura}</div>` : ""}
+                          </td>
+                        </tr>
+                      </table>
                     </td>
                   </tr>
                   <tr>
-                    <td style="padding:14px 20px;">
-                      <div style="font-size:12px; color:#d0d0d0; margin-bottom:4px;">Fecha de vencimiento${tieneProrroga ? " (con prórroga)" : ""}</div>
-                      <div style="font-size:20px; font-weight:700;">${fechaSegura}</div>
+                    <td style="padding:8px 0 8px 0;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #ead9ae;">
+                        ${municipioSeguro ? filaDetalle("Municipio", municipioSeguro) : ""}
+                        ${filaDetalle("Período", periodoSeguro)}
+                        ${filaDetalle("Módulo/s", modulosSeguro)}
+                        ${filaDetalle(`Fecha de vencimiento${tieneProrroga ? " (Prórroga)" : ""}`, fechaSegura, true)}
+                      </table>
                     </td>
                   </tr>
                 </table>
-                <p style="margin:16px 0;">
-                  Puede realizar la carga ingresando a la
-                  <a
-                    href="https://ovif.economianqn.gob.ar"
-                    style="color:#1a73e8; text-decoration:none; font-weight:bold;"
-                    target="_blank"
-                  >
-                    OVIF
-                  </a>
+
+                <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:26px auto 0 auto;">
+                  <tr>
+                    <td align="center" bgcolor="#2b3e4c" style="background-color:#2b3e4c; border-radius:8px;">
+                      <a
+                        href="https://ovif.economianqn.gob.ar"
+                        target="_blank"
+                        style="display:inline-block; padding:14px 40px; font-family:Arial, sans-serif; font-size:16px; line-height:20px; font-weight:700; color:#f4e0b6; text-decoration:none; border-radius:8px;"
+                      >IR A OVIF</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:16px 0 0 0; text-align:center; font-size:13px; line-height:18px; color:#2b3e4c;">
+                  o puede pegar la siguiente URL en su navegador: <a href="https://ovif.economianqn.gob.ar" target="_blank" style="color:#1a73e8; text-decoration:underline;">https://ovif.economianqn.gob.ar</a>
                 </p>
-                <p style="margin-top:24px; font-size:13px; color:#6b7280;">
+
+                <p style="margin:24px 0 0 0; font-size:13px; line-height:18px; color:#4b5560; font-style:italic">
                   Este mensaje fue generado automáticamente por OVIF - APP.
                   Por favor, no responder este correo.
                 </p>
@@ -404,10 +428,13 @@ function renderRecordatorioCierre(payload) {
         </td>
       </tr>
     </table>`,
+    priority: "high", // se envía con X-Priority / Importance: High
     attachments: [
       { filename: "ovif-logo.png", path: "./src/assets/emails/ovif-logo.png", cid: "ovif-logo" },
       { filename: "gobierno-logo.png", path: "./src/assets/emails/gobierno-logo.png", cid: "gobierno-logo" },
       { filename: "neuquen-logo.png", path: "./src/assets/emails/neuquen-logo.png", cid: "neuquen-logo" },
+      { filename: "alerta-triangulo.png", path: "./src/assets/emails/alerta-triangulo.png", cid: "alerta-triangulo" },
+      { filename: "megafono.png", path: "./src/assets/emails/megafono.png", cid: "megafono" },
     ],
   };
 }

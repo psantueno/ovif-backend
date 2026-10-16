@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import fs from "fs";
+import path from "path";
 
 const mockCreate = vi.fn();
 const mockFindOne = vi.fn();
@@ -57,7 +59,21 @@ describe("plantillasCorreo — RECORDATORIO_CIERRE", () => {
     for (const cid of ["cid:ovif-logo", "cid:gobierno-logo", "cid:neuquen-logo"]) {
       expect(html).toContain(cid);
     }
-    expect(attachments.map((a) => a.cid)).toEqual(cierre.attachments.map((a) => a.cid));
+    const cids = attachments.map((a) => a.cid);
+    for (const a of cierre.attachments) expect(cids).toContain(a.cid);
+  });
+
+  it("adjunta las imágenes de alerta y cada cid usado tiene su archivo", () => {
+    const { html, attachments, priority } = render();
+    const cids = attachments.map((a) => a.cid);
+    expect(priority).toBe("high");
+    expect(cids).toEqual(expect.arrayContaining(["alerta-triangulo", "megafono"]));
+
+    const usados = [...html.matchAll(/cid:([\w-]+)/g)].map((m) => m[1]);
+    for (const cid of new Set(usados)) expect(cids).toContain(cid);
+    for (const a of attachments) expect(fs.existsSync(path.resolve(a.path))).toBe(true);
+    expect(html).toContain("https://ovif.economianqn.gob.ar");
+    expect(html).toContain("IR A OVIF");
   });
 
   it("muestra período, módulos de la pauta, fecha y días restantes", () => {
@@ -67,13 +83,13 @@ describe("plantillasCorreo — RECORDATORIO_CIERRE", () => {
     expect(html).toContain("Gastos y Recursos");
     expect(html).toContain("20/10/2026");
     expect(html).toContain("Faltan 3 días");
-    expect(html).not.toContain("(con prórroga)");
+    expect(html).not.toContain("(Prórroga)");
   });
 
   it("ajusta la leyenda para mañana, hoy y prórroga", () => {
     expect(render({ fecha_referencia: "2026-10-19" }).html).toContain("Mañana es el último día");
     expect(render({ fecha_referencia: "2026-10-20" }).html).toContain("Hoy es el último día");
-    expect(render({ tiene_prorroga: true }).html).toContain("(con prórroga)");
+    expect(render({ tiene_prorroga: true }).html).toContain("(Prórroga)");
     expect(render({ modulos: ["DETERMINACION_TRIBUTARIA"] }).html).toContain("al módulo");
   });
 
@@ -119,7 +135,7 @@ describe("emailService — recordatorio de cierre", () => {
 
     expect(created).toBe(true);
     expect(correo.tipo).toBe("RECORDATORIO_CIERRE");
-    expect(correo.asunto).toBe("[OVIF - APP] Recordatorio: vence el 20/10/2026 la carga de Gastos, Recursos - Septiembre 2026");
+    expect(correo.asunto).toBe("\u26A0\uFE0F [OVIF - APP] - RECORDATORIO DE VTO: GASTOS Y RECURSOS - 09/2026");
     expect(correo.payload).toMatchObject({ municipio: "Zapala", modulos: ["GASTOS", "RECURSOS"], fecha_cierre: "2026-10-20" });
     expect(correo.payload).not.toHaveProperty("fecha_referencia");
   });
