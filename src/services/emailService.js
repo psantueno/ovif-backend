@@ -449,7 +449,7 @@ export async function encolarRecordatorioCierre({ destinatario, nombre, municipi
 }
 
 /**
- * Encola una muestra del recordatorio (tipo RECORDATORIO_CIERRE_TEST) para EMAIL_TEST.
+ * Encola una muestra del recordatorio (tipo RECORDATORIO_CIERRE_TEST) para un destinatario de prueba.
  * La clave incluye un UUID: no interfiere con la idempotencia de los envíos reales.
  */
 export async function encolarRecordatorioCierreTest({ destinatario, nombre, municipioNombre, periodo, modulos, fechaReferencia = null }) {
@@ -483,7 +483,7 @@ export async function encolarRecordatorioCierreTest({ destinatario, nombre, muni
  * sin colisionar con registros anteriores.
  *
  * @param {object} params
- * @param {string} params.destinatario - EMAIL_TEST
+ * @param {string} params.destinatario - destinatario de prueba
  * @param {string} params.nombre
  * @param {number} params.ejercicio
  * @param {number} params.mes

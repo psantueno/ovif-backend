@@ -695,6 +695,11 @@ export const updateMunicipio = async (req, res) => {
     }
 
     if (municipio_nombre && municipio_nombre !== municipio.municipio_nombre) {
+      const modificable = await esMunicipioModificable(municipio.municipio_id);
+      if (!modificable) {
+        return res.status(400).json({ error: "El municipio está asociado a otros datos y su nombre no puede ser modificado" });
+      }
+
       const municipioDuplicado = await Municipio.findOne({ where: { municipio_nombre } });
 
       if (municipioDuplicado && municipioDuplicado.municipio_id !== municipio.municipio_id) {
@@ -703,13 +708,6 @@ export const updateMunicipio = async (req, res) => {
 
       municipio.municipio_nombre = municipio_nombre;
     }
-
-    const modificable = esMunicipioModificable(municipio.municipio_id);
-    if(!modificable){
-      return res.status(400).json({ error: "El municipio está asociado a otros datos y no puede ser actualizado" });
-    }
-
-    municipio.modificable = modificable;
 
     if (municipio_spar !== undefined) municipio.municipio_spar = municipio_spar;
     if (municipio_ubge !== undefined) municipio.municipio_ubge = municipio_ubge;

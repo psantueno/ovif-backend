@@ -25,7 +25,7 @@ import {
   encolarRecordatorioCierreTest,
 } from "../services/emailService.js";
 import { SimularRecordatorioCierreSchema } from "../validation/TestsRecordatorioCierreSchema.validation.js";
-import { obtenerConfigRecordatorioCierre } from "../utils/parametrosSistema.js";
+import { obtenerConfigRecordatorioCierre, obtenerEmailsPrueba } from "../utils/parametrosSistema.js";
 import { obtenerFechaActual } from "../utils/obtenerFechaActual.js";
 import { obtenerRecordatorios } from "../services/recordatorioCierreService.js";
 
@@ -37,6 +37,62 @@ const MESES = {
   9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
 };
 const obtenerNombreMes = (mesNumero) => MESES[mesNumero] || "Sin especificar";
+
+/**
+ * Encola cada muestra para todos los destinatarios de prueba, procesa el envío y
+ * deja en cada muestra el detalle por destinatario (envios) y el estado agregado.
+ *
+ * @param {object[]} muestras - se mutan agregando envios / enviado / error
+ * @param {string[]} destinatarios
+ * @param {(muestra: object, destinatario: string, index: number) => Promise<{ correo: object }>} encolar
+ * @returns {Promise<object|null>} resumen de procesarMailsPendientes
+ */
+const enviarMuestrasPrueba = async (muestras, destinatarios, encolar) => {
+  const idsParaProcesar = [];
+
+  for (const [index, muestra] of muestras.entries()) {
+    muestra.envios = [];
+    for (const destinatario of destinatarios) {
+      try {
+        const { correo } = await encolar(muestra, destinatario, index);
+        idsParaProcesar.push(Number(correo.id));
+        muestra.envios.push({ destinatario, id_envio_correo: Number(correo.id), enviado: null, error: null });
+      } catch (err) {
+        muestra.envios.push({ destinatario, id_envio_correo: null, enviado: false, error: err.message });
+      }
+    }
+  }
+
+  let resumenEnvio = null;
+  if (idsParaProcesar.length > 0) {
+    resumenEnvio = await procesarMailsPendientes({ ids: idsParaProcesar, maxAttemptsPerRun: 3 });
+
+    const correosFinales = await EnvioCorreo.findAll({
+      where: { id: idsParaProcesar },
+      attributes: ["id", "estado", "ultimo_error"],
+    });
+    const estadoPorId = new Map(correosFinales.map((c) => [Number(c.id), c]));
+
+    for (const muestra of muestras) {
+      for (const envio of muestra.envios) {
+        if (envio.id_envio_correo == null) continue;
+        const correo = estadoPorId.get(envio.id_envio_correo);
+        envio.enviado = correo?.estado === "ENVIADO";
+        envio.error = envio.enviado ? null : (correo?.ultimo_error ?? "Error desconocido");
+      }
+    }
+  }
+
+  for (const muestra of muestras) {
+    const fallidos = muestra.envios.filter((envio) => !envio.enviado);
+    muestra.enviado = fallidos.length === 0;
+    muestra.error = fallidos.length
+      ? fallidos.map((envio) => `${envio.destinatario}: ${envio.error}`).join(" | ")
+      : null;
+  }
+
+  return resumenEnvio;
+};
 
 export const simularCierreModulos = async (req, res) => {
   const result = SimularCierreModulosSchema.safeParse(req.body);
@@ -148,20 +204,10 @@ export const simularCierreModulos = async (req, res) => {
       }
     }
 
-    // Construir mail_test: HTML por grupo, encolar y enviar si se solicitó
-    const emailTest = process.env.EMAIL_TEST;
-    const puedeEnviar = enviar_mail && !!emailTest;
+    // Construir mail_test: HTML por grupo y, si se solicitó, envío a los destinatarios de prueba
     const nombreParaHtml = municipioMails[0]?.nombre ?? municipio.municipio_nombre;
 
-    let mailTestError = null;
-    if (enviar_mail && !emailTest) {
-      mailTestError = "EMAIL_TEST no configurado en el servidor";
-    }
-
-    const gruposResultado = [];
-    const idsParaProcesar = [];
-
-    for (const grupo of gruposMailMap.values()) {
+    const gruposResultado = [...gruposMailMap.values()].map((grupo) => {
       const modulosOrdenados = [...grupo.modulos].sort();
       const mailData = renderizarCorreoHtml("CIERRE_MODULOS_TEST", {
         nombre: nombreParaHtml,
@@ -170,58 +216,27 @@ export const simularCierreModulos = async (req, res) => {
         modulos: modulosOrdenados,
         esProrroga: false,
       });
+      return { modulos: modulosOrdenados, html: mailData.html };
+    });
 
-      const grupoEntry = { modulos: modulosOrdenados, html: mailData.html };
-
-      if (puedeEnviar) {
-        try {
-          const { correo } = await encolarMailTestCierre({
-            destinatario: emailTest,
+    const destinatariosTest = enviar_mail ? await obtenerEmailsPrueba() : [];
+    const resumenEnvio = enviar_mail
+      ? await enviarMuestrasPrueba(gruposResultado, destinatariosTest, (grupo, destinatario) =>
+          encolarMailTestCierre({
+            destinatario,
             nombre: nombreParaHtml,
             ejercicio,
             mes,
-            modulos: modulosOrdenados,
+            modulos: grupo.modulos,
             esProrroga: false,
-          });
-          idsParaProcesar.push(Number(correo.id));
-          grupoEntry.id_envio_correo = Number(correo.id);
-          grupoEntry.enviado = null;
-          grupoEntry.error = null;
-        } catch (err) {
-          grupoEntry.id_envio_correo = null;
-          grupoEntry.enviado = false;
-          grupoEntry.error = err.message;
-        }
-      }
-
-      gruposResultado.push(grupoEntry);
-    }
-
-    // Procesar todos los correos encolados y actualizar estado por grupo
-    let resumenEnvio = null;
-    if (puedeEnviar && idsParaProcesar.length > 0) {
-      resumenEnvio = await procesarMailsPendientes({ ids: idsParaProcesar, maxAttemptsPerRun: 3 });
-
-      const correosFinales = await EnvioCorreo.findAll({
-        where: { id: idsParaProcesar },
-        attributes: ["id", "estado", "ultimo_error"],
-      });
-      const estadoPorId = new Map(correosFinales.map((c) => [Number(c.id), c]));
-
-      for (const entry of gruposResultado) {
-        if (entry.id_envio_correo != null) {
-          const correo = estadoPorId.get(entry.id_envio_correo);
-          entry.enviado = correo?.estado === "ENVIADO";
-          entry.error = correo?.estado !== "ENVIADO" ? (correo?.ultimo_error ?? "Error desconocido") : null;
-        }
-      }
-    }
+          })
+        )
+      : null;
 
     const mailTest = {
-      destinatario_test: puedeEnviar ? emailTest : null,
+      destinatarios_test: destinatariosTest,
       grupos: gruposResultado,
       ...(resumenEnvio !== null ? { resumen_envio: resumenEnvio } : {}),
-      ...(mailTestError ? { error: mailTestError } : {}),
     };
 
     return res.json({
@@ -240,7 +255,7 @@ export const simularCierreModulos = async (req, res) => {
 };
 
 // Simula el recordatorio de cierre para una fecha: lista qué se enviaría y a quién,
-// sin escribir en la cola real. Con enviar_mail, envía muestras (tipo _TEST) sólo a EMAIL_TEST.
+// sin escribir en la cola real. Con enviar_mail, envía muestras (tipo _TEST) sólo a los destinatarios de prueba.
 export const simularRecordatorioCierre = async (req, res) => {
   const result = SimularRecordatorioCierreSchema.safeParse(req.body ?? {});
   if (!result.success) {
@@ -318,21 +333,11 @@ export const simularRecordatorioCierre = async (req, res) => {
       }),
     }));
 
-    // Muestras: HTML de los primeros ítems y, opcionalmente, envío a EMAIL_TEST
-    const emailTest = process.env.EMAIL_TEST;
-    const puedeEnviar = enviar_mail && !!emailTest;
-    let mailTestError = null;
-    if (enviar_mail && !emailTest) {
-      mailTestError = "EMAIL_TEST no configurado en el servidor";
-    }
-
-    const muestras = [];
-    const idsParaProcesar = [];
-
-    for (const item of items.slice(0, MAX_MUESTRAS_RECORDATORIO)) {
-      const nombre = item.destinatarios[0]?.nombre ?? item.municipio_nombre;
+    // Muestras: HTML de los primeros ítems y, opcionalmente, envío a los destinatarios de prueba
+    const itemsMuestra = items.slice(0, MAX_MUESTRAS_RECORDATORIO);
+    const muestras = itemsMuestra.map((item) => {
       const mailData = renderizarCorreoHtml("RECORDATORIO_CIERRE_TEST", {
-        nombre,
+        nombre: item.destinatarios[0]?.nombre ?? item.municipio_nombre,
         municipio: item.municipio_nombre,
         ejercicio: item.periodo.ejercicio,
         mes: item.periodo.mes,
@@ -342,7 +347,7 @@ export const simularRecordatorioCierre = async (req, res) => {
         fecha_referencia: fechaReferencia,
       });
 
-      const muestra = {
+      return {
         municipio_nombre: item.municipio_nombre,
         ejercicio: item.periodo.ejercicio,
         mes: item.periodo.mes,
@@ -350,49 +355,22 @@ export const simularRecordatorioCierre = async (req, res) => {
         asunto: armarAsuntoRecordatorioCierre("[OVIF - TEST]", item.periodo, item.modulos),
         html: mailData.html,
       };
+    });
 
-      if (puedeEnviar) {
-        try {
-          const { correo } = await encolarRecordatorioCierreTest({
-            destinatario: emailTest,
-            nombre,
+    const destinatariosTest = enviar_mail ? await obtenerEmailsPrueba() : [];
+    const resumenEnvio = enviar_mail
+      ? await enviarMuestrasPrueba(muestras, destinatariosTest, (_muestra, destinatario, index) => {
+          const item = itemsMuestra[index];
+          return encolarRecordatorioCierreTest({
+            destinatario,
+            nombre: item.destinatarios[0]?.nombre ?? item.municipio_nombre,
             municipioNombre: item.municipio_nombre,
             periodo: item.periodo,
             modulos: item.modulos,
             fechaReferencia,
           });
-          idsParaProcesar.push(Number(correo.id));
-          muestra.id_envio_correo = Number(correo.id);
-          muestra.enviado = null;
-          muestra.error = null;
-        } catch (err) {
-          muestra.id_envio_correo = null;
-          muestra.enviado = false;
-          muestra.error = err.message;
-        }
-      }
-
-      muestras.push(muestra);
-    }
-
-    let resumenEnvio = null;
-    if (puedeEnviar && idsParaProcesar.length > 0) {
-      resumenEnvio = await procesarMailsPendientes({ ids: idsParaProcesar, maxAttemptsPerRun: 3 });
-
-      const correosFinales = await EnvioCorreo.findAll({
-        where: { id: idsParaProcesar },
-        attributes: ["id", "estado", "ultimo_error"],
-      });
-      const estadoPorId = new Map(correosFinales.map((c) => [Number(c.id), c]));
-
-      for (const muestra of muestras) {
-        if (muestra.id_envio_correo != null) {
-          const correo = estadoPorId.get(muestra.id_envio_correo);
-          muestra.enviado = correo?.estado === "ENVIADO";
-          muestra.error = correo?.estado !== "ENVIADO" ? (correo?.ultimo_error ?? "Error desconocido") : null;
-        }
-      }
-    }
+        })
+      : null;
 
     return res.json({
       config: {
@@ -405,12 +383,11 @@ export const simularRecordatorioCierre = async (req, res) => {
       dias_previos: diasPrevios,
       recordatorios,
       mail_test: {
-        destinatario_test: puedeEnviar ? emailTest : null,
+        destinatarios_test: destinatariosTest,
         total_recordatorios: items.length,
         max_muestras: MAX_MUESTRAS_RECORDATORIO,
         muestras,
         ...(resumenEnvio !== null ? { resumen_envio: resumenEnvio } : {}),
-        ...(mailTestError ? { error: mailTestError } : {}),
       },
     });
   } catch (error) {

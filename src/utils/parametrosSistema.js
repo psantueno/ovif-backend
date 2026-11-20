@@ -12,7 +12,11 @@ export const PARAMETROS_SISTEMA = {
   DIRECTORIO_INFORMES: "Directorio de Informes",
   RECORDATORIO_DIAS_PREVIOS: "Recordatorio de cierre - Días previos",
   RECORDATORIO_HORARIO: "Recordatorio de cierre - Horario",
+  EMAILS_PRUEBA: "Tests - Emails de prueba",
 };
+
+// Destinatario fijo de los mails de prueba (desarrollador). Se suma a los del parámetro EMAILS_PRUEBA.
+export const EMAIL_PRUEBA_DESARROLLADOR = "seba.antueno@gmail.com";
 
 export const RECORDATORIO_DIAS_MIN = 1;
 export const RECORDATORIO_DIAS_MAX = 30;
@@ -43,12 +47,32 @@ const HorarioSchema = z
     message: "El horario debe tener formato 24 hs HH:mm (por ejemplo 09:00 o 18:30)",
   });
 
+const EmailSchema = z.string().email();
+
+// Lista de emails separados por coma; se normaliza a "a@x.com, b@y.com"
+const EmailsPruebaSchema = z
+  .string()
+  .trim()
+  .transform((valor) => valor.split(",").map((email) => email.trim()).filter(Boolean))
+  .superRefine((emails, ctx) => {
+    if (!emails.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ingresá al menos un email (separados por coma)" });
+      return;
+    }
+    const invalidos = emails.filter((email) => !EmailSchema.safeParse(email).success);
+    if (invalidos.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Emails inválidos: ${invalidos.join(", ")}` });
+    }
+  })
+  .transform((emails) => emails.join(", "));
+
 // null = parámetro de sistema sin validación de formato (sólo se protege el nombre)
 const VALIDADORES = {
   [PARAMETROS_SISTEMA.DIRECTORIO_BASE]: null,
   [PARAMETROS_SISTEMA.DIRECTORIO_INFORMES]: null,
   [PARAMETROS_SISTEMA.RECORDATORIO_DIAS_PREVIOS]: DiasPreviosSchema,
   [PARAMETROS_SISTEMA.RECORDATORIO_HORARIO]: HorarioSchema,
+  [PARAMETROS_SISTEMA.EMAILS_PRUEBA]: EmailsPruebaSchema,
 };
 
 export const esParametroSistema = (nombre) =>
@@ -130,4 +154,31 @@ export const obtenerConfigRecordatorioCierre = async () => {
   }
 
   return resultado(true);
+};
+
+/**
+ * Destinatarios de los mails de prueba: el email fijo del desarrollador más los
+ * del parámetro EMAILS_PRUEBA (sólo si existe, está activo y es válido). Sin duplicados.
+ * @returns {Promise<string[]>}
+ */
+export const obtenerEmailsPrueba = async () => {
+  const emails = [EMAIL_PRUEBA_DESARROLLADOR];
+
+  const parametro = await Parametros.findOne({ where: { nombre: PARAMETROS_SISTEMA.EMAILS_PRUEBA } });
+  if (parametro?.estado) {
+    const validacion = validarValorParametroSistema(parametro.nombre, parametro.valor);
+    if (validacion.ok) {
+      emails.push(...validacion.valor.split(",").map((email) => email.trim()));
+    } else {
+      console.warn(`⚠️ Parámetro "${parametro.nombre}" con valor inválido, se ignora: ${validacion.error}`);
+    }
+  }
+
+  const vistos = new Set();
+  return emails.filter((email) => {
+    const clave = email.toLowerCase();
+    if (vistos.has(clave)) return false;
+    vistos.add(clave);
+    return true;
+  });
 };
